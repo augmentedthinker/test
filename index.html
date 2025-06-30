@@ -8,16 +8,28 @@
         margin: 0;
         overflow: hidden; /* Hide scrollbars */
       }
-      /* Temporarily make Tetris canvas visible for debugging */
+      /* Hide the Tetris canvas from the 2D view, but allow it to render for A-Frame */
       #tetrisCanvas {
-        /* No hiding properties for now */
+        position: absolute;
+        left: -9999px;
+        top: -9999px;
       }
       #game-info, #game-over {
-          /* No hiding properties for now */
+          display: none; /* Hide game info and game over screen from 2D view */
       }
     </style>
   </head>
   <body>
+    <script>
+      // A-Frame component to update canvas texture
+      AFRAME.registerComponent('canvas-updater', {
+        tick: function () {
+          if (this.el.getObject3D('mesh')) {
+            this.el.getObject3D('mesh').material.map.needsUpdate = true;
+          }
+        }
+      });
+    </script>
     <!-- Tetris Game HTML (hidden from 2D view) -->
     <div id="game-info">
         Score: <span id="score">0</span>
@@ -92,6 +104,7 @@
         height="4.8" 
         src="#tetrisCanvas"
         color="#FFFFFF"
+        canvas-updater
       ></a-plane>
 
       <a-entity camera look-controls wasd-controls position="0 1.6 0">
