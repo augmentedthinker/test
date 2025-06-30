@@ -9,6 +9,26 @@
         overflow: hidden; /* Hide scrollbars */
       }
     </style>
+    <script>
+      // Custom A-Frame component to handle video playback on click
+      AFRAME.registerComponent('video-player', {
+        init: function () {
+          var video = document.querySelector('#arcadeVideo');
+          var el = this.el; // The a-video entity
+
+          // Listen for a click event on the a-video entity
+          el.addEventListener('click', function () {
+            if (video.paused) {
+              video.play();
+              console.log('Video started playing!');
+            } else {
+              video.pause();
+              console.log('Video paused!');
+            }
+          });
+        }
+      });
+    </script>
   </head>
   <body>
     <a-scene>
@@ -16,11 +36,12 @@
         <video
           id="arcadeVideo"
           src="https://raw.githubusercontent.com/augmentedthinker/test/main/video.mp4"
-          autoplay="true"
+          autoplay="false"
           loop="true"
           crossorigin="anonymous"
           playsinline
           webkit-playsinline
+          muted
         ></video>
         </a-assets>
 
@@ -40,8 +61,8 @@
         height="4.5"
         position="0 2.5 -4.9"
         material="shader: flat;"
+        video-player
       ></a-video>
-
       <a-box
         position="-5 2.5 0"
         rotation="0 90 0"
@@ -76,8 +97,8 @@
       ></a-plane>
 
       <a-entity camera look-controls wasd-controls position="0 1.6 0">
-        <a-cursor></a-cursor>
-      </a-entity>
+        <a-cursor raycaster="objects: [video-player];"></a-cursor>
+        </a-entity>
     </a-scene>
   </body>
 </html>
