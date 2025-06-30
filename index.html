@@ -1,552 +1,325 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>VR Tetris Arcade</title>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VR Cube Room</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe.min.js"></script>
     <style>
-      body {
-        margin: 0;
-        overflow: hidden; /* Hide scrollbars */
-      }
-      /* Hide the Tetris canvas from the 2D view, but allow it to render for A-Frame */
-      #tetrisCanvas {
-        position: absolute;
-        left: -9999px;
-        top: -9999px;
-      }
-      #game-info, #game-over {
-          display: none; /* Hide game info and game over screen from 2D view */
-      }
-    </style>
-  </head>
-  <body>
-    <script>
-      // A-Frame component to update canvas texture
-      AFRAME.registerComponent('canvas-updater', {
-        tick: function () {
-          if (this.el.getObject3D('mesh')) {
-            this.el.getObject3D('mesh').material.map.needsUpdate = true;
-          }
+        body {
+            margin: 0;
+            font-family: 'Courier New', monospace;
         }
-      });
-    </script>
-    <!-- Tetris Game HTML (hidden from 2D view) -->
-    <div id="game-info">
-        Score: <span id="score">0</span>
+        
+        .ui-overlay {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
+            font-size: 14px;
+        }
+        
+        .enter-vr-button {
+            background: #00ff00 !important;
+            color: black !important;
+            font-family: 'Courier New', monospace !important;
+            font-weight: bold !important;
+            border: 2px solid #00ff00 !important;
+            border-radius: 5px !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="ui-overlay">
+        <div><strong>VR Cube Room</strong></div>
+        <div>Look around • Click objects</div>
+        <div>WASD + Mouse (Desktop)</div>
+        <div>VR: Use controllers</div>
     </div>
-    <canvas id="tetrisCanvas" width="240" height="480"></canvas>
 
-    <div id="game-over">
-        <h2>Game Over!</h2>
-        <p>Your Score: <span id="final-score">0</span></p>
-        <button id="restartButton">Play Again</button>
-    </div>
+    <a-scene 
+        background="color: #001122"
+        vr-mode-ui="enabled: true"
+        cursor="rayOrigin: mouse"
+        raycaster="objects: .interactive">
+        
+        <!-- Assets -->
+        <a-assets>
+            <a-mixin id="interactive-wall" 
+                     geometry="primitive: plane; width: 10; height: 10" 
+                     material="color: #1a1a2e; metalness: 0.2; roughness: 0.8"
+                     class="interactive">
+            </a-mixin>
+            
+            <a-mixin id="neon-glow"
+                     material="color: #00ff00; emissive: #004400; emissiveIntensity: 0.3">
+            </a-mixin>
+        </a-assets>
 
-    <!-- A-Frame Scene -->
-    <a-scene>
-      <a-sky color="#6e6e6e"></a-sky>
+        <!-- Lighting -->
+        <a-light type="ambient" color="#0f0f2f" intensity="0.4"></a-light>
+        <a-light type="point" position="0 8 0" color="#00ffff" intensity="0.8" distance="20"></a-light>
+        <a-light type="point" position="5 3 5" color="#ff00ff" intensity="0.6" distance="15"></a-light>
+        <a-light type="point" position="-5 3 -5" color="#ffff00" intensity="0.6" distance="15"></a-light>
 
-      <!-- Floor -->
-      <a-plane
-        position="0 0 -4"
-        rotation="-90 0 0"
-        width="10"
-        height="10"
-        color="#7BC8A4"
-      ></a-plane>
+        <!-- Room Walls -->
+        <!-- Front Wall (where Tetris will go) -->
+        <a-plane 
+            id="front-wall"
+            mixin="interactive-wall"
+            position="0 5 -5"
+            rotation="0 0 0"
+            material="color: #2a2a4e"
+            sound="src: url(data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAZAjiEy+nWjT4LIIzS9t2QQAoUXrTp66hVFApGn+DyvmAZAjiEy+nWjT4LMnvMrIVLGjRTp+jBrGQaAziMx+fSkCQJHGrM5+DwXEIJJXbH8N2QQAoUXrTp66hVFAo=); on: click; autoplay: false"
+            animation__hover="property: material.emissiveIntensity; to: 0.2; startEvents: mouseenter; dur: 200"
+            animation__unhover="property: material.emissiveIntensity; to: 0; startEvents: mouseleave; dur: 200"
+            text="value: TETRIS ARCADE\nReady For Integration; align: center; color: #00ff00; position: 0 2 0.01; font: dejavu">
+        </a-plane>
 
-      <!-- Walls -->
-      <a-box
-        position="0 2.5 -5"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#4CC3D9"
-      ></a-box>
-      <a-box
-        position="-5 2.5 0"
-        rotation="0 90 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#F16745"
-      ></a-box>
-      <a-box
-        position="5 2.5 0"
-        rotation="0 -90 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#FCB93A"
-      ></a-box>
-      <a-box
-        position="0 2.5 5"
-        rotation="0 180 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#FFEB3B"
-      ></a-box>
+        <!-- Back Wall -->
+        <a-plane 
+            id="back-wall"
+            mixin="interactive-wall"
+            position="0 5 5"
+            rotation="0 180 0"
+            animation__click="property: material.color; to: #ff6b6b; startEvents: click; dur: 500; direction: alternate"
+            text="value: BACK WALL\nClick Me!; align: center; color: #ff6b6b; position: 0 0 0.01; font: dejavu">
+        </a-plane>
 
-      <!-- Ceiling -->
-      <a-plane
-        position="0 5 -4"
-        rotation="90 0 0"
-        width="10"
-        height="10"
-        color="#AAAAAA"
-      ></a-plane>
+        <!-- Left Wall -->
+        <a-plane 
+            id="left-wall"
+            mixin="interactive-wall"
+            position="-5 5 0"
+            rotation="0 90 0"
+            animation__click="property: material.color; to: #4ecdc4; startEvents: click; dur: 500; direction: alternate"
+            text="value: LEFT WALL\nInteractive; align: center; color: #4ecdc4; position: 0 0 0.01; font: dejavu">
+        </a-plane>
 
-      <!-- Tetris Game Display Plane -->
-      <a-plane
-        position="0 2.5 -4.9"
-        width="2.4" 
-        height="4.8" 
-        src="#tetrisCanvas"
-        color="#FFFFFF"
-        canvas-updater
-      ></a-plane>
+        <!-- Right Wall -->
+        <a-plane 
+            id="right-wall"
+            mixin="interactive-wall"
+            position="5 5 0"
+            rotation="0 -90 0"
+            animation__click="property: material.color; to: #ffe66d; startEvents: click; dur: 500; direction: alternate"
+            text="value: RIGHT WALL\nClickable; align: center; color: #ffe66d; position: 0 0 0.01; font: dejavu">
+        </a-plane>
 
-      <a-entity camera look-controls wasd-controls position="0 1.6 0">
-        <a-cursor></a-cursor>
-      </a-entity>
+        <!-- Ceiling -->
+        <a-plane 
+            id="ceiling"
+            geometry="primitive: plane; width: 10; height: 10"
+            position="0 10 0"
+            rotation="90 0 0"
+            material="color: #0f0f2f; metalness: 0.8; roughness: 0.2"
+            class="interactive"
+            animation__click="property: material.color; to: #6b5b95; startEvents: click; dur: 1000; direction: alternate">
+        </a-plane>
+
+        <!-- Floor -->
+        <a-plane 
+            id="floor"
+            geometry="primitive: plane; width: 10; height: 10"
+            position="0 0 0"
+            rotation="-90 0 0"
+            material="color: #16213e; metalness: 0.1; roughness: 0.9"
+            class="interactive">
+        </a-plane>
+
+        <!-- Decorative Elements -->
+        <!-- Floating Cubes -->
+        <a-box 
+            id="cube1"
+            position="2 3 -2"
+            rotation="45 45 45"
+            scale="0.5 0.5 0.5"
+            mixin="neon-glow"
+            class="interactive"
+            animation="property: rotation; to: 405 405 405; loop: true; dur: 10000"
+            animation__click="property: scale; to: 1 1 1; startEvents: click; dur: 500; direction: alternate">
+        </a-box>
+
+        <a-box 
+            id="cube2"
+            position="-2 3 2"
+            rotation="0 45 0"
+            scale="0.3 0.3 0.3"
+            material="color: #ff00ff; emissive: #440044; emissiveIntensity: 0.3"
+            class="interactive"
+            animation="property: rotation; to: 360 405 360; loop: true; dur: 8000"
+            animation__click="property: material.color; to: #00ff00; startEvents: click; dur: 500; direction: alternate">
+        </a-box>
+
+        <!-- Floating Sphere -->
+        <a-sphere 
+            id="orb"
+            position="0 7 0"
+            radius="0.3"
+            material="color: #00ffff; emissive: #004444; emissiveIntensity: 0.5; metalness: 0.8; roughness: 0.2"
+            class="interactive"
+            animation="property: position; to: 0 8 0; loop: true; dur: 3000; direction: alternate; easing: easeInOutSine"
+            animation__click="property: radius; to: 0.6; startEvents: click; dur: 300; direction: alternate">
+        </a-sphere>
+
+        <!-- Tetris-style Blocks (decorative) -->
+        <a-box 
+            id="tetris-block-1"
+            position="3 1.5 -3"
+            scale="0.5 0.5 0.5"
+            material="color: #00ffff; emissive: #004444; emissiveIntensity: 0.2"
+            class="interactive"
+            animation__click="property: rotation; to: 0 360 0; startEvents: click; dur: 1000">
+        </a-box>
+
+        <a-box 
+            id="tetris-block-2"
+            position="3.5 1.5 -3"
+            scale="0.5 0.5 0.5"
+            material="color: #00ffff; emissive: #004444; emissiveIntensity: 0.2"
+            class="interactive"
+            animation__click="property: rotation; to: 0 360 0; startEvents: click; dur: 1000">
+        </a-box>
+
+        <a-box 
+            id="tetris-block-3"
+            position="4 1.5 -3"
+            scale="0.5 0.5 0.5"
+            material="color: #00ffff; emissive: #004444; emissiveIntensity: 0.2"
+            class="interactive"
+            animation__click="property: rotation; to: 0 360 0; startEvents: click; dur: 1000">
+        </a-box>
+
+        <a-box 
+            id="tetris-block-4"
+            position="4.5 1.5 -3"
+            scale="0.5 0.5 0.5"
+            material="color: #00ffff; emissive: #004444; emissiveIntensity: 0.2"
+            class="interactive"
+            animation__click="property: rotation; to: 0 360 0; startEvents: click; dur: 1000">
+        </a-box>
+
+        <!-- Camera with Controls -->
+        <a-entity 
+            id="player"
+            position="0 1.6 3"
+            movement-controls="fly: false; constrainToNavMesh: false">
+            
+            <!-- Desktop Camera -->
+            <a-camera 
+                look-controls="pointerLockEnabled: true"
+                wasd-controls="acceleration: 20"
+                position="0 0 0">
+                
+                <!-- Cursor for desktop interaction -->
+                <a-cursor 
+                    id="cursor"
+                    geometry="primitive: ring; radiusInner: 0.005; radiusOuter: 0.01"
+                    material="color: #00ff00; opacity: 0.8"
+                    animation__click="property: scale; startEvents: click; from: 1 1 1; to: 0.5 0.5 0.5; dur: 150"
+                    animation__fusing="property: material.color; startEvents: fusing; from: #00ff00; to: #ff0000; dur: 1500"
+                    animation__mouseleave="property: material.color; startEvents: mouseleave; to: #00ff00; dur: 150"
+                    raycaster="objects: .interactive; far: 20">
+                </a-cursor>
+            </a-camera>
+
+            <!-- VR Controllers -->
+            <a-entity 
+                id="leftHand" 
+                hand-controls="hand: left; handModelStyle: lowPoly; color: #00ff00"
+                laser-controls="hand: left"
+                raycaster="objects: .interactive; far: 20; lineColor: #00ff00; lineOpacity: 0.5">
+            </a-entity>
+            
+            <a-entity 
+                id="rightHand" 
+                hand-controls="hand: right; handModelStyle: lowPoly; color: #00ff00"
+                laser-controls="hand: right"
+                raycaster="objects: .interactive; far: 20; lineColor: #00ff00; lineOpacity: 0.5">
+            </a-entity>
+        </a-entity>
+
+        <!-- Background Music Toggle -->
+        <a-sound 
+            id="ambient-sound"
+            src="url(data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAZAjiEy+nWjT4LIIzS9t2QQAoUXrTp66hVFApGn+DyvmAZAjiEy+nWjT4L)"
+            autoplay="false"
+            loop="true"
+            volume="0.3"
+            position="0 5 0">
+        </a-sound>
     </a-scene>
 
-    <!-- Tetris Game JavaScript -->
     <script>
-        const canvas = document.getElementById('tetrisCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreDisplay = document.getElementById('score');
-        const gameOverScreen = document.getElementById('game-over');
-        const finalScoreDisplay = document.getElementById('final-score');
-        const restartButton = document.getElementById('restartButton');
+        // Scene interaction logic
+        document.addEventListener('DOMContentLoaded', function() {
+            const scene = document.querySelector('a-scene');
+            
+            // Wait for scene to load
+            scene.addEventListener('loaded', function() {
+                console.log('VR Cube Room loaded successfully!');
+                
+                // Add click sound to all interactive elements
+                const interactiveElements = document.querySelectorAll('.interactive');
+                interactiveElements.forEach(element => {
+                    element.addEventListener('click', function() {
+                        // Create click sound effect
+                        const clickSound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmAZAjiEy+nWjT4L');
+                        clickSound.volume = 0.2;
+                        clickSound.play().catch(e => console.log('Audio play prevented'));
+                    });
+                });
 
-        const ROW = 20;
-        const COL = 10;
-        const SQ = 24; // Size of a square
-        const VACANT = 'BLACK'; // Color of an empty square
+                // Front wall special interaction (future Tetris integration point)
+                const frontWall = document.getElementById('front-wall');
+                frontWall.addEventListener('click', function() {
+                    console.log('Front wall clicked - ready for Tetris integration!');
+                    
+                    // Visual feedback for the integration point
+                    frontWall.setAttribute('animation__flash', {
+                        property: 'material.emissiveIntensity',
+                        to: 0.5,
+                        dur: 200,
+                        direction: 'alternate',
+                        repeat: 3
+                    });
+                });
 
-        let board = [];
-        let score = 0;
-        let dropStart = Date.now();
-        let gameOver = false;
-        let dropInterval = 1000; // Initial drop speed
-
-        // Load a retro font (optional, requires internet)
-        const link = document.createElement('link');
-        link.href = 'https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap';
-        link.rel = 'stylesheet';
-        document.head.appendChild(link);
-
-        // Create the board
-        function initBoard() {
-            for (r = 0; r < ROW; r++) {
-                board[r] = [];
-                for (c = 0; c < COL; c++) {
-                    board[r][c] = VACANT;
-                }
-            }
-        }
-
-        // Draw a square
-        function drawSquare(x, y, color) {
-            ctx.fillStyle = color;
-            ctx.fillRect(x * SQ, y * SQ, SQ, SQ);
-            ctx.strokeStyle = '#333';
-            ctx.strokeRect(x * SQ, y * SQ, SQ, SQ);
-        }
-
-        // Draw the board
-        function drawBoard() {
-            for (r = 0; r < ROW; r++) {
-                for (c = 0; c < COL; c++) {
-                    drawSquare(c, r, board[r][c]);
-                }
-            }
-        }
-
-        // Tetromino shapes (defined as arrays of rotations)
-        const Z = [
-            [
-                [1, 1, 0],
-                [0, 1, 1],
-                [0, 0, 0]
-            ],
-            [
-                [0, 0, 1],
-                [0, 1, 1],
-                [0, 1, 0]
-            ],
-            [
-                [0, 0, 0],
-                [1, 1, 0],
-                [0, 1, 1]
-            ],
-            [
-                [0, 1, 0],
-                [1, 1, 0],
-                [1, 0, 0]
-            ]
-        ];
-        const S = [
-            [
-                [0, 1, 1],
-                [1, 1, 0],
-                [0, 0, 0]
-            ],
-            [
-                [1, 0, 0],
-                [1, 1, 0],
-                [0, 1, 0]
-            ],
-            [
-                [0, 0, 0],
-                [0, 1, 1],
-                [1, 1, 0]
-            ],
-            [
-                [0, 1, 0],
-                [0, 1, 1],
-                [0, 0, 1]
-            ]
-        ];
-        const T = [
-            [
-                [0, 1, 0],
-                [1, 1, 1],
-                [0, 0, 0]
-            ],
-            [
-                [0, 1, 0],
-                [0, 1, 1],
-                [0, 1, 0]
-            ],
-            [
-                [0, 0, 0],
-                [1, 1, 1],
-                [0, 1, 0]
-            ],
-            [
-                [0, 1, 0],
-                [1, 1, 0],
-                [0, 1, 0]
-            ]
-        ];
-        const O = [
-            [
-                [1, 1],
-                [1, 1]
-            ]
-        ];
-        const L = [
-            [
-                [1, 0, 0],
-                [1, 0, 0],
-                [1, 1, 0]
-            ],
-            [
-                [0, 0, 1],
-                [1, 1, 1],
-                [0, 0, 0]
-            ],
-            [
-                [0, 1, 1],
-                [0, 0, 1],
-                [0, 0, 1]
-            ],
-            [
-                [0, 0, 0],
-                [1, 1, 1],
-                [1, 0, 0]
-            ]
-        ];
-        const I = [
-            [
-                [0, 0, 0, 0],
-                [1, 1, 1, 1],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0]
-            ],
-            [
-                [0, 1, 0, 0],
-                [0, 1, 0, 0],
-                [0, 1, 0, 0],
-                [0, 1, 0, 0]
-            ],
-            [
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [1, 1, 1, 1],
-                [0, 0, 0, 0]
-            ],
-            [
-                [0, 0, 1, 0],
-                [0, 0, 1, 0],
-                [0, 0, 1, 0],
-                [0, 0, 1, 0]
-            ]
-        ];
-        const J = [
-            [
-                [0, 1, 0, 0],
-                [0, 1, 0, 0],
-                [1, 1, 0, 0],
-                [0, 0, 0, 0]
-            ],
-            [
-                [1, 0, 0, 0],
-                [1, 1, 1, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0]
-            ],
-            [
-                [0, 1, 1, 0],
-                [0, 1, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 0, 0]
-            ],
-            [
-                [0, 0, 0, 0],
-                [1, 1, 1, 0],
-                [0, 0, 1, 0],
-                [0, 0, 0, 0]
-            ]
-        ];
-
-        // Tetrominoes and their colors
-        const PIECES = [
-            [Z, 'red'],
-            [S, 'green'],
-            [T, 'purple'],
-            [O, 'yellow'],
-            [L, 'orange'],
-            [I, 'cyan'],
-            [J, 'blue']
-        ];
-
-        // Generate random piece
-        function randomPiece() {
-            let r = Math.floor(Math.random() * PIECES.length);
-            return new Piece(PIECES[r][0], PIECES[r][1]);
-        }
-
-        // The Piece object
-        function Piece(tetromino, color) {
-            this.tetromino = tetromino;
-            this.color = color;
-            this.tetrominoN = 0; // Start with the first rotation
-            this.activeTetromino = this.tetromino[this.tetrominoN];
-
-            // Position
-            this.x = 3;
-            this.y = -2; // Start slightly above the board
-        }
-
-        // Fill function
-        Piece.prototype.fill = function(color) {
-            for (r = 0; r < this.activeTetromino.length; r++) {
-                for (c = 0; c < this.activeTetromino.length; c++) {
-                    if (this.activeTetromino[r][c]) {
-                        drawSquare(this.x + c, this.y + r, color);
-                    }
-                }
-            }
-        };
-
-        // Draw a piece to the board
-        Piece.prototype.draw = function() {
-            this.fill(this.color);
-        };
-
-        // Undraw a piece
-        Piece.prototype.undraw = function() {
-            this.fill(VACANT);
-        };
-
-        // Move down the piece
-        Piece.prototype.moveDown = function() {
-            if (!this.collision(0, 1, this.activeTetromino)) {
-                this.undraw();
-                this.y++;
-                this.draw();
-            } else {
-                this.lock();
-                p = randomPiece();
-            }
-        };
-
-        // Move right the piece
-        Piece.prototype.moveRight = function() {
-            if (!this.collision(1, 0, this.activeTetromino)) {
-                this.undraw();
-                this.x++;
-                this.draw();
-            }
-        };
-
-        // Move left the piece
-        Piece.prototype.moveLeft = function() {
-            if (!this.collision(-1, 0, this.activeTetromino)) {
-                this.undraw();
-                this.x--;
-                this.draw();
-            }
-        };
-
-        // Rotate the piece
-        Piece.prototype.rotate = function() {
-            let nextTetromino = this.tetromino[(this.tetrominoN + 1) % this.tetromino.length];
-            let kick = 0;
-
-            if (this.collision(0, 0, nextTetromino)) {
-                if (this.x > COL / 2) {
-                    // If piece is on the right, move it left
-                    kick = -1;
-                } else {
-                    // If piece is on the left, move it right
-                    kick = 1;
-                }
-            }
-
-            if (!this.collision(kick, 0, nextTetromino)) {
-                this.undraw();
-                this.x += kick;
-                this.tetrominoN = (this.tetrominoN + 1) % this.tetromino.length;
-                this.activeTetromino = this.tetromino[this.tetrominoN];
-                this.draw();
-            }
-        };
-
-        // Collision detection
-        Piece.prototype.collision = function(x, y, piece) {
-            for (r = 0; r < piece.length; r++) {
-                for (c = 0; c < piece.length; c++) {
-                    if (!piece[r][c]) {
-                        continue;
-                    }
-
-                    let newX = this.x + c + x;
-                    let newY = this.y + r + y;
-
-                    if (newX < 0 || newX >= COL || newY >= ROW) {
-                        return true;
-                    }
-
-                    if (newY < 0) continue; // Ignore negative Y for initial spawn
-
-                    if (board[newY][newX] != VACANT) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        };
-
-        // Lock the piece
-        Piece.prototype.lock = function() {
-            for (r = 0; r < this.activeTetromino.length; r++) {
-                for (c = 0; c < this.activeTetromino.length; c++) {
-                    if (!this.activeTetromino[r][c]) {
-                        continue;
-                    }
-
-                    if (this.y + r < 0) {
-                        gameOver = true;
-                        finalScoreDisplay.textContent = score;
-                        gameOverScreen.style.display = 'block';
-                        cancelAnimationFrame(animationFrameId); // Stop the game loop
-                        return;
-                    }
-                    board[this.y + r][this.x + c] = this.color;
-                }
-            }
-
-            // Check for completed lines
-            for (r = 0; r < ROW; r++) {
-                let isRowFull = true;
-                for (c = 0; c < COL; c++) {
-                    if (board[r][c] == VACANT) {
-                        isRowFull = false;
-                        break;
-                    }
-                }
-                if (isRowFull) {
-                    // Move all rows above down
-                    for (y = r; y > 1; y--) {
-                        for (c = 0; c < COL; c++) {
-                            board[y][c] = board[y - 1][c];
+                // Music toggle functionality
+                let musicPlaying = false;
+                const ambientSound = document.getElementById('ambient-sound');
+                
+                document.addEventListener('keydown', function(event) {
+                    if (event.key === 'm' || event.key === 'M') {
+                        if (musicPlaying) {
+                            ambientSound.components.sound.pauseSound();
+                            musicPlaying = false;
+                            console.log('Music paused');
+                        } else {
+                            ambientSound.components.sound.playSound();
+                            musicPlaying = true;
+                            console.log('Music playing');
                         }
                     }
-                    // Top row becomes vacant
-                    for (c = 0; c < COL; c++) {
-                        board[0][c] = VACANT;
-                    }
-                    score += 10; // Increase score
-                }
-            }
-            drawBoard();
-            scoreDisplay.textContent = score;
-        };
+                });
+            });
 
-        let p = randomPiece();
-        let animationFrameId;
+            // VR enter/exit detection
+            scene.addEventListener('enter-vr', function() {
+                console.log('Entered VR mode!');
+                document.querySelector('.ui-overlay').style.display = 'none';
+            });
 
-        // Game loop
-        function drop() {
-            let now = Date.now();
-            let delta = now - dropStart;
-
-            if (delta > dropInterval) {
-                p.moveDown();
-                dropStart = Date.now();
-            }
-            if (!gameOver) {
-                animationFrameId = requestAnimationFrame(drop);
-            }
-        }
-
-        // Control the piece
-        document.addEventListener('keydown', CONTROL);
-
-        function CONTROL(event) {
-            if (gameOver) return;
-
-            if (event.keyCode == 37) { // Left arrow
-                p.moveLeft();
-            } else if (event.keyCode == 38) { // Up arrow (rotate)
-                p.rotate();
-            } else if (event.keyCode == 39) { // Right arrow
-                p.moveRight();
-            } else if (event.keyCode == 40) { // Down arrow (soft drop)
-                p.moveDown();
-            } else if (event.keyCode == 32) { // Spacebar (hard drop)
-                while (!p.collision(0, 1, p.activeTetromino)) {
-                    p.undraw();
-                    p.y++;
-                    p.draw();
-                }
-                p.lock();
-                p = randomPiece();
-            }
-        }
-
-        restartButton.addEventListener('click', () => {
-            gameOver = false;
-            gameOverScreen.style.display = 'none';
-            score = 0;
-            scoreDisplay.textContent = score;
-            dropInterval = 1000;
-            initBoard();
-            drawBoard();
-            p = randomPiece();
-            dropStart = Date.now();
-            drop(); // Restart the game loop
+            scene.addEventListener('exit-vr', function() {
+                console.log('Exited VR mode!');
+                document.querySelector('.ui-overlay').style.display = 'block';
+            });
         });
-
-        // Initialize and start the game
-        initBoard();
-        drawBoard();
-        drop();
     </script>
-  </body>
+</body>
 </html>
