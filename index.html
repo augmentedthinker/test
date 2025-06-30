@@ -1,88 +1,86 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>VR Tetris Arcade</title>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tetris Clone</title>
     <style>
-      body {
-        margin: 0;
-        overflow: hidden; /* Hide scrollbars */
-      }
-      /* CSS from tetris_game.html */
-      .game-container {
-          display: flex;
-          gap: 20px;
-          align-items: center;
-          position: absolute; /* Hide from 2D view */
-          top: 0;
-          left: 0;
-          z-index: -1;
-      }
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            font-family: 'Courier New', monospace;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            color: white;
+        }
 
-      #gameCanvas {
-          border: 3px solid #00ff00;
-          box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-          background: #000;
-          position: absolute; /* Hide from 2D view */
-          top: 0;
-          left: 0;
-          z-index: -1;
-      }
+        .game-container {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
 
-      .info-panel {
-          background: rgba(0, 0, 0, 0.8);
-          padding: 20px;
-          border-radius: 10px;
-          border: 2px solid #00ff00;
-          min-width: 150px;
-      }
+        .game-board {
+            border: 3px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
+            background: #000;
+        }
 
-      .score {
-          font-size: 18px;
-          margin-bottom: 10px;
-      }
+        .info-panel {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            border: 2px solid #00ff00;
+            min-width: 150px;
+        }
 
-      .controls {
-          margin-top: 20px;
-          font-size: 14px;
-          line-height: 1.6;
-      }
+        .score {
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
 
-      #gameOver {
-          position: absolute;
-          top: 0;
-          left: 0;
-          transform: translate(-50%, -50%);
-          background: rgba(0, 0, 0, 0.9);
-          color: #ff0000;
-          padding: 30px;
-          border-radius: 10px;
-          border: 2px solid #ff0000;
-          text-align: center;
-          font-size: 24px;
-          display: none;
-          z-index: -1; /* Hide from 2D view */
-      }
+        .controls {
+            margin-top: 20px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
 
-      .start-button {
-          background: #00ff00;
-          color: black;
-          border: none;
-          padding: 10px 20px;
-          font-size: 16px;
-          font-family: inherit;
-          cursor: pointer;
-          border-radius: 5px;
-          margin-top: 10px;
-      }
+        .game-over {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.9);
+            color: #ff0000;
+            padding: 30px;
+            border-radius: 10px;
+            border: 2px solid #ff0000;
+            text-align: center;
+            font-size: 24px;
+            display: none;
+        }
 
-      .start-button:hover {
-          background: #00cc00;
-      }
+        .start-button {
+            background: #00ff00;
+            color: black;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-family: inherit;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-top: 10px;
+        }
+
+        .start-button:hover {
+            background: #00cc00;
+        }
     </style>
-  </head>
-  <body>
-    <!-- Tetris Game HTML (hidden from 2D view) -->
+</head>
+<body>
     <div class="game-container">
         <canvas id="gameCanvas" class="game-board" width="300" height="600"></canvas>
         <div class="info-panel">
@@ -107,76 +105,6 @@
         <button class="start-button" onclick="startGame()">Play Again</button>
     </div>
 
-    <!-- A-Frame Scene -->
-    <a-scene>
-      <a-sky color="#6e6e6e"></a-sky>
-
-      <!-- Floor -->
-      <a-plane
-        position="0 0 -4"
-        rotation="-90 0 0"
-        width="10"
-        height="10"
-        color="#7BC8A4"
-      ></a-plane>
-
-      <!-- Walls -->
-      <a-box
-        position="0 2.5 -5"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#4CC3D9"
-      ></a-box>
-      <a-box
-        position="-5 2.5 0"
-        rotation="0 90 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#F16745"
-      ></a-box>
-      <a-box
-        position="5 2.5 0"
-        rotation="0 -90 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#FCB93A"
-      ></a-box>
-      <a-box
-        position="0 2.5 5"
-        rotation="0 180 0"
-        width="10"
-        height="5"
-        depth="0.1"
-        color="#FFEB3B"
-      ></a-box>
-
-      <!-- Ceiling -->
-      <a-plane
-        position="0 5 -4"
-        rotation="90 0 0"
-        width="10"
-        height="10"
-        color="#AAAAAA"
-      ></a-plane>
-
-      <!-- Tetris Game Display Plane -->
-      <a-plane
-        position="0 2.5 -4.9"
-        width="3.0" 
-        height="6.0" 
-        src="#gameCanvas"
-        color="#FFFFFF"
-      ></a-plane>
-
-      <a-entity camera look-controls wasd-controls position="0 1.6 0">
-        <a-cursor></a-cursor>
-      </a-entity>
-    </a-scene>
-
-    <!-- Tetris Game JavaScript -->
     <script>
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
@@ -537,7 +465,6 @@
         // Initialize
         initBoard();
         drawBoard();
-        startGame();
     </script>
-  </body>
+</body>
 </html>
