@@ -1,33 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>10×10 Green Floor – Version 1</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <style>
-    body { margin: 0; overflow: hidden; }
-  </style>
-</head>
-<body>
-<a-scene>
-  <!-- Ground plane -->
-  <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
-  <!-- Light -->
-  <a-light type="hemisphere" intensity="0.8"></a-light>
-  
-  <!-- Camera rig (camera + both hands with lasers) -->
-  <a-entity id="rig" position="0 1.6 0">
-    <a-camera>
-      <!-- Version label: slightly down and left in headset view -->
-      <a-entity
-        position="-0.9 -0.6 -1"
-        text="value: Version 1; align: left; width: 2; color: #FFF; side: double;">
+  <head>
+    <meta charset="utf-8" />
+    <title>10×10 Green Floor – Version 1</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- Teleport-controls & super-hands (for advanced grabs later, optional) -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/super-hands@4.0.2/dist/super-hands.min.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; }
+    </style>
+  </head>
+  <body>
+    <a-scene>
+      <!-- Green floor -->
+      <a-plane
+        position="0 0 0"
+        rotation="-90 0 0"
+        width="10" height="10"
+        color="green"
+        class="ground"></a-plane>
+      <!-- Sky (optional) -->
+      <a-sky color="#AAD8FF"></a-sky>
+      <!-- Light -->
+      <a-light type="hemisphere" intensity="0.8"></a-light>
+
+      <!-- Camera rig with camera and floating Version 1 label -->
+      <a-entity id="rig" movement-controls="fly: false" position="0 1.6 0">
+        <a-camera wasd-controls-enabled="false">
+          <!-- Version label, bottom left of view -->
+          <a-entity
+            position="-0.75 -0.45 -1.4"
+            text="value: Version 1; align: left; width: 2; color: #fff; side: double; baseline: bottom;">
+          </a-entity>
+        </a-camera>
       </a-entity>
-    </a-camera>
-    <!-- Left and right controllers with lasers -->
-    <a-entity laser-controls="hand: left"></a-entity>
-    <a-entity laser-controls="hand: right"></a-entity>
-  </a-entity>
-</a-scene>
-</body>
+      
+      <!-- RIGHT controller: laser, teleport, thumbstick movement -->
+      <a-entity
+        laser-controls="hand: right"
+        raycaster="objects: .ground"
+        teleport-controls="cameraRig: #rig; button: B; collisionEntities: .ground"
+        super-hands></a-entity>
+      <!-- LEFT controller: laser, teleport, thumbstick movement -->
+      <a-entity
+        laser-controls="hand: left"
+        raycaster="objects: .ground"
+        teleport-controls="cameraRig: #rig; button: Y; collisionEntities: .ground"
+        super-hands></a-entity>
+    </a-scene>
+  </body>
 </html>
