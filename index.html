@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor and Blue Sphere VR</title>
+    <title>Green Floor, Blue Sphere, and Controller Pointers</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
@@ -19,23 +19,47 @@
     <a-scene>
       <!--
         Floor: A 10x10 meter plane, rotated to be flat, and colored green.
-        Positioned at 0 0 0, the camera (default) will be at 0 1.6 0, looking down at it.
+        Added 'class="interactable"' so the raycaster can potentially detect it.
       -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
+      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green" class="interactable"></a-plane>
 
       <!--
         Surrounding Sphere: A very large sphere (radius 100) centered at 0 0 0,
         colored light blue. This creates an enclosed environment.
-        The backfaceCulling="false" is important for spheres that surround the user,
-        otherwise, you might see through it from the inside.
+        The material="side: back" is important for spheres that surround the user.
       -->
       <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
 
       <!--
-        Default Camera: A-Frame automatically adds a camera if you don't specify one.
-        It will be at a default height (around 1.6m) and handle head tracking.
-        No explicit camera entity is needed for this simple setup.
+        Camera and Player Setup:
+        Explicitly defining the camera for clarity and to allow nesting the gaze cursor.
+        The a-cursor is for gaze-based interaction (looking at objects) as a fallback/alternative.
       -->
+      <a-camera position="0 1.6 0">
+        <!-- Gaze cursor for interaction by looking at objects -->
+        <a-cursor fuse="true" fuse-timeout="1500" color="#FFFFFF" opacity="0.5"></a-cursor>
+      </a-camera>
+
+      <!--
+        Controller Setup for both Left and Right Quest 2 Controllers:
+        - meta-touch-controls: Automatically tracks the controller's position/rotation and renders its 3D model.
+        - raycaster: Projects an invisible ray from the controller.
+            - objects: .interactable: Tells the raycaster to only detect objects that have the 'interactable' class.
+            - far: 20: The maximum distance the ray will travel to detect objects (20 meters).
+        - line: Visualizes the raycaster as a visible laser line.
+            - color: Sets the color of the laser line (cyan for left, blue for right).
+            - opacity: Sets the transparency of the laser line.
+      -->
+      <a-entity id="leftHand" meta-touch-controls="hand: left"
+                raycaster="objects: .interactable; far: 20;"
+                line="color: cyan; opacity: 0.7">
+      </a-entity>
+
+      <a-entity id="rightHand" meta-touch-controls="hand: right"
+                raycaster="objects: .interactable; far: 20;"
+                line="color: blue; opacity: 0.7">
+      </a-entity>
+
     </a-scene>
   </body>
 </html>
