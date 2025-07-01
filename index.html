@@ -1,1 +1,39 @@
 
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>10×10 Green Floor – Version 1</title>
+    <!-- A‑Frame core -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <a-scene>
+      <!-- 10 × 10 green ground plane -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
+
+      <!-- Basic ambient lighting so the plane isn’t flat-dark -->
+      <a-light type="hemisphere" intensity="0.8"></a-light>
+
+      <!-- Player rig: camera + left & right controllers with laser pointers -->
+      <a-entity id="rig" position="0 1.6 0">
+        <!-- Camera at natural eye height -->
+        <a-camera>
+          <!-- HUD‑style label in the bottom‑left of the user’s view -->
+          <a-text value="Version 1" align="left" width="2" color="#FFFFFF" position="-0.6 -0.4 -1"></a-text>
+        </a-camera>
+
+        <!-- Left‑hand controller with laser -->
+        <a-entity laser-controls="hand: left"></a-entity>
+        <!-- Right‑hand controller with laser -->
+        <a-entity laser-controls="hand: right"></a-entity>
+      </a-entity>
+    </a-scene>
+  </body>
+</html>
