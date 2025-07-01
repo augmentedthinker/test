@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor, Blue Sphere, and Controller Pointers</title>
+    <title>Green Floor, Blue Sphere, Pointers, and Version</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
@@ -32,12 +32,33 @@
 
       <!--
         Camera and Player Setup:
-        Explicitly defining the camera for clarity and to allow nesting the gaze cursor.
-        The a-cursor is for gaze-based interaction (looking at objects) as a fallback/alternative.
+        Explicitly defining the camera for clarity and to allow nesting the gaze cursor
+        and, importantly, the version indicator.
       -->
       <a-camera position="0 1.6 0">
         <!-- Gaze cursor for interaction by looking at objects -->
         <a-cursor fuse="true" fuse-timeout="1500" color="#FFFFFF" opacity="0.5"></a-cursor>
+
+        <!--
+          Version Indicator:
+          This text is a child of the camera, so it always stays in the same position
+          relative to the user's view, like a HUD element.
+          - value: The text to display.
+          - position: Relative to the camera. Negative X moves it left, negative Y moves it down,
+                      negative Z moves it forward (closer to the user's eyes).
+                      Here, -0.7 0.5 -1 makes it appear in the bottom-left area of the view.
+          - width: Controls the overall size/scale of the text.
+          - align: Aligns the text within its bounding box.
+          - color: Sets the text color.
+          - wrap-count: Limits characters per line, forcing wraps.
+        -->
+        <a-text value="Version 1"
+                position="-0.7 -0.5 -1"
+                width="1.5"
+                align="left"
+                color="#FFFFFF"
+                wrap-count="15">
+        </a-text>
       </a-camera>
 
       <!--
