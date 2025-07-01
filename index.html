@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor, Blue Sphere, Pointers, and Version</title>
+    <title>Green Floor, Blue Sphere, Pointers, Version, and Movement</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- A-Frame Extras for movement-controls and animation-mixer -->
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
     <style>
       /* Basic styling for the body to ensure it takes full viewport */
       body { margin: 0; overflow: hidden; }
@@ -16,7 +18,15 @@
   </head>
   <body>
     <!-- The A-Frame scene is the root of your VR experience -->
-    <a-scene>
+    <!--
+      Added 'movement-controls' to the a-scene. This component from aframe-extras
+      enables navigation using various input methods, including VR controllers.
+      - speed: Controls how fast the user moves (meters per second).
+      - fly: Set to false to keep movement on the ground plane (no flying up/down).
+      - controls: Explicitly tells movement-controls to use 'meta-touch-controls'
+                  as the input source for movement.
+    -->
+    <a-scene movement-controls="speed: 0.1; fly: false; controls: meta-touch-controls">
       <!--
         Floor: A 10x10 meter plane, rotated to be flat, and colored green.
         Added 'class="interactable"' so the raycaster can potentially detect it.
@@ -33,7 +43,8 @@
       <!--
         Camera and Player Setup:
         Explicitly defining the camera for clarity and to allow nesting the gaze cursor
-        and, importantly, the version indicator.
+        and the version indicator.
+        The movement-controls component (on a-scene) will automatically move this camera.
       -->
       <a-camera position="0 1.6 0">
         <!-- Gaze cursor for interaction by looking at objects -->
@@ -42,17 +53,9 @@
         <!--
           Version Indicator:
           This text is a child of the camera, so it always stays in the same position
-          relative to the user's view, like a HUD element.
-          - value: The text to display.
-          - position: Relative to the camera. Negative X moves it left, negative Y moves it down,
-                      negative Z moves it forward (closer to the user's eyes).
-                      Here, -0.7 0.5 -1 makes it appear in the bottom-left area of the view.
-          - width: Controls the overall size/scale of the text.
-          - align: Aligns the text within its bounding box.
-          - color: Sets the text color.
-          - wrap-count: Limits characters per line, forcing wraps.
+          relative to the user's view, like a HUD element. Updated to "Version 2".
         -->
-        <a-text value="Version 1"
+        <a-text value="Version 2"
                 position="-0.7 -0.5 -1"
                 width="1.5"
                 align="left"
