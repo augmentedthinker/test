@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor, Blue Sphere, Pointers, Version, and Movement</title>
+    <title>Green Floor, Blue Sphere, Pointers, Version, Movement, and Controller Feedback</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <!-- A-Frame Extras for movement-controls and animation-mixer -->
@@ -18,33 +18,26 @@
   </head>
   <body>
     <!-- The A-Frame scene is the root of your VR experience -->
-    <!--
-      Added 'movement-controls' to the a-scene. This component from aframe-extras
-      enables navigation using various input methods, including VR controllers.
-      - speed: Controls how fast the user moves (meters per second).
-      - fly: Set to false to keep movement on the ground plane (no flying up/down).
-      - controls: Explicitly tells movement-controls to use 'meta-touch-controls'
-                  as the input source for movement.
-    -->
     <a-scene movement-controls="speed: 0.1; fly: false; controls: meta-touch-controls">
       <!--
         Floor: A 10x10 meter plane, rotated to be flat, and colored green.
-        Added 'class="interactable"' so the raycaster can potentially detect it.
+        It has the 'interactable' class so the raycaster can detect it.
+        We've removed previous event-set attributes as the controller-feedback
+        component will now handle the interaction logic.
       -->
       <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green" class="interactable"></a-plane>
 
       <!--
         Surrounding Sphere: A very large sphere (radius 100) centered at 0 0 0,
-        colored light blue. This creates an enclosed environment.
-        The material="side: back" is important for spheres that surround the user.
+        colored light blue.
+        Added 'interactable' class so controllers can also point at it.
       -->
-      <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
+      <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back" class="interactable"></a-sphere>
 
       <!--
         Camera and Player Setup:
         Explicitly defining the camera for clarity and to allow nesting the gaze cursor
         and the version indicator.
-        The movement-controls component (on a-scene) will automatically move this camera.
       -->
       <a-camera position="0 1.6 0">
         <!-- Gaze cursor for interaction by looking at objects -->
@@ -53,9 +46,9 @@
         <!--
           Version Indicator:
           This text is a child of the camera, so it always stays in the same position
-          relative to the user's view, like a HUD element. Updated to "Version 2".
+          relative to the user's view, like a HUD element. Updated to "Version 3".
         -->
-        <a-text value="Version 2"
+        <a-text value="Version 3"
                 position="-0.7 -0.5 -1"
                 width="1.5"
                 align="left"
@@ -73,17 +66,81 @@
         - line: Visualizes the raycaster as a visible laser line.
             - color: Sets the color of the laser line (cyan for left, blue for right).
             - opacity: Sets the transparency of the laser line.
+        - controller-feedback: Our new custom component to add haptic and visual feedback.
       -->
       <a-entity id="leftHand" meta-touch-controls="hand: left"
                 raycaster="objects: .interactable; far: 20;"
-                line="color: cyan; opacity: 0.7">
+                line="color: cyan; opacity: 0.7"
+                controller-feedback>
       </a-entity>
 
       <a-entity id="rightHand" meta-touch-controls="hand: right"
                 raycaster="objects: .interactable; far: 20;"
-                line="color: blue; opacity: 0.7">
+                line="color: blue; opacity: 0.7"
+                controller-feedback>
       </a-entity>
 
+      <!--
+        Custom A-Frame Component for Controller Feedback:
+        This component adds haptic (vibration) feedback on hover and
+        visual feedback (color change) on click for interactable objects.
+      -->
+      <script>
+        AFRAME.registerComponent('controller-feedback', {
+          init: function () {
+            const el = this.el; // The controller entity (leftHand or rightHand)
+            const hand = el.getAttribute('meta-touch-controls').hand; // 'left' or 'right'
+
+            let intersectedEl = null; // To keep track of the currently intersected element
+
+            // --- Haptic Feedback on Hover (when raycaster intersects an object) ---
+            el.addEventListener('raycaster-intersected', (evt) => {
+              // Store the intersected element
+              intersectedEl = evt.detail.els[0];
+              if (intersectedEl) {
+                console.log(`${hand} controller intersected:`, intersectedEl.id || intersectedEl.tagName);
+                // Trigger a short, subtle haptic pulse
+                // pulse(intensity, duration in ms)
+                if (el.components['meta-touch-controls'].controller) { // Ensure controller is available
+                    el.components['meta-touch-controls'].controller.pulse(0.3, 50); // Low intensity, short duration
+                }
+              }
+            });
+
+            // When the raycaster stops intersecting an object
+            el.addEventListener('raycaster-intersected-cleared', () => {
+              if (intersectedEl) {
+                console.log(`${hand} controller cleared intersection with:`, intersectedEl.id || intersectedEl.tagName);
+                intersectedEl = null; // Clear the intersected element
+              }
+            });
+
+            // --- Visual Feedback on Click (when trigger is pressed while pointing at an object) ---
+            el.addEventListener('click', (evt) => {
+              // The 'click' event on the controller entity fires when the trigger is pressed
+              // AND the raycaster is intersecting an 'interactable' object.
+              const targetEl = evt.detail.intersectedEl; // The element that was clicked
+              if (targetEl) {
+                console.log(`${hand} controller clicked:`, targetEl.id || targetEl.tagName);
+
+                const originalColor = targetEl.getAttribute('material').color;
+                // Temporarily change color to highlight the click
+                targetEl.setAttribute('material', 'color', '#FF0000'); // Red for clicked
+
+                // Revert color after a short delay
+                setTimeout(() => {
+                  targetEl.setAttribute('material', 'color', originalColor);
+                }, 200); // Revert after 200 milliseconds
+              }
+            });
+
+            // You can add more listeners here for other buttons if needed for debugging:
+            // el.addEventListener('triggerdown', () => { console.log(`${hand} triggerdown`); });
+            // el.addEventListener('gripdown', () => { console.log(`${hand} gripdown`); });
+            // el.addEventListener('thumbstickmoved', (evt) => { /* console.log(`${hand} thumbstickmoved: x=${evt.detail.x.toFixed(2)}, y=${evt.detail.y.toFixed(2)}`); */ });
+          }
+        });
+      </script>
     </a-scene>
   </body>
 </html>
