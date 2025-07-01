@@ -1,38 +1,48 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <title>10×10 Green Floor – Version 1</title>
-    <!-- A‑Frame core -->
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-      }
-    </style>
-  </head>
-  <body>
-    <a-scene>
-      <!-- 10 × 10 green ground plane -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
+<head>
+  <meta charset="utf-8" />
+  <title>10×10 Green Floor – Version 1</title>
+  <!-- A‑Frame core -->
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+    }
+    /* Always‑visible overlay so the label stays in the bottom‑left of the browser & headset view */
+    #versionLabel {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      font-family: monospace;
+      font-size: 14px;
+      color: white;
+      text-shadow: 0 0 5px black;
+      z-index: 999;
+      pointer-events: none; /* don’t block clicks */
+    }
+  </style>
+</head>
+<body>
+  <!-- Overlay version tag -->
+  <div id="versionLabel">Version 1</div>
 
-      <!-- Basic ambient lighting so the plane isn’t flat-dark -->
-      <a-light type="hemisphere" intensity="0.8"></a-light>
+  <a-scene>
+    <!-- 10×10 green ground plane -->
+    <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
 
-      <!-- Player rig: camera + left & right controllers with laser pointers -->
-      <a-entity id="rig" position="0 1.6 0">
-        <!-- Camera at natural eye height -->
-        <a-camera>
-          <!-- HUD‑style label in the bottom‑left of the user’s view -->
-          <a-text value="Version 1" align="left" width="2" color="#FFFFFF" position="-0.6 -0.4 -1"></a-text>
-        </a-camera>
+    <!-- Ambient light so the floor isn’t pitch‑dark -->
+    <a-light type="hemisphere" intensity="0.8"></a-light>
 
-        <!-- Left‑hand controller with laser -->
-        <a-entity laser-controls="hand: left"></a-entity>
-        <!-- Right‑hand controller with laser -->
-        <a-entity laser-controls="hand: right"></a-entity>
-      </a-entity>
-    </a-scene>
-  </body>
+    <!-- Player rig (camera + laser controllers) -->
+    <a-entity id="rig" position="0 1.6 0">
+      <a-camera></a-camera>
+
+      <!-- Left & right controllers with built‑in laser pointers -->
+      <a-entity laser-controls="hand: left"></a-entity>
+      <a-entity laser-controls="hand: right"></a-entity>
+    </a-entity>
+  </a-scene>
+</body>
 </html>
