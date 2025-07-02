@@ -2,9 +2,7 @@
 <html>
   <head>
     <title>Green Floor with Visible Controllers</title>
-    <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <!-- A-Frame Extras for movement controls -->
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.controls.min.js"></script>
     <style>
       body { margin: 0; overflow: hidden; }
@@ -16,27 +14,22 @@
   </head>
   <body>
     <a-scene>
-      <!-- Floor -->
       <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
-      <!-- Sky -->
       <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
       
-      <!-- Camera Rig for joystick movement -->
-      <a-entity id="cameraRig" movement-controls="fly: false">
-        <!-- Camera -->
-        <a-entity camera look-controls wasd-controls="enabled: false" position="0 1.6 0">
+      <a-entity id="cameraRig" 
+                movement-controls="fly: false; speed: 0.1"> 
+        <a-entity camera look-controls position="0 1.6 0">
           <a-text
-            value="Version 1"
+            value="Version 2 - Controllers Move"
             position="0 -0.7 -1.5"
             width="2"
             align="center"
             color="white"
           ></a-text>
         </a-entity>
-        <!-- Left Controller -->
-        <a-entity oculus-touch-controls="hand: left"></a-entity>
-        <!-- Right Controller -->
-        <a-entity oculus-touch-controls="hand: right"></a-entity>
+        <a-entity hand-controls="hand: left"></a-entity>
+        <a-entity hand-controls="hand: right"></a-entity>
       </a-entity>
       
     </a-scene>
