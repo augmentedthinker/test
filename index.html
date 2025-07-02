@@ -3,368 +3,226 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Christopher - Living Portfolio</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>VR Audio Visualizer</title>
+    <!-- A-Frame Library -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0A1128; /* Midnight-blue cosmos base */
-            color: #E0F2F7; /* Light text for contrast */
-        }
-        .section-background {
-            background-color: #0A1128; /* Consistent midnight-blue background for sections */
-        }
-        .card-background {
-            background-color: #1a233a; /* Slightly lighter shade for cards */
-        }
-        .profile-video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            border-radius: 9999px;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            border: 4px solid white;
-        }
-        /* Custom scrollbar for a sleeker look */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #0A1128;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #4F46E5;
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #22D3EE;
-        }
+        /* Basic CSS to ensure the scene fills the entire browser window. */
+        body { margin: 0; }
+        canvas { width: 100%; height: 100%; }
     </style>
 </head>
-<body class="text-gray-200">
+<body>
+    <!-- 
+      ============================================================
+      A-FRAME SCENE SETUP
+      This is the main container for all VR elements.
+      ============================================================
+    -->
+    <a-scene id="main-scene">
+        <!-- Assets: Not used in this version, but good practice to include. -->
+        <a-assets></a-assets>
 
-    <!-- Hero Section -->
-    <section class="relative bg-[#0A1128] text-white py-16 md:py-24 rounded-b-lg shadow-lg">
-        <div class="container mx-auto px-4 flex flex-col md:flex-row items-center justify-center text-center md:text-left">
-            <div class="md:w-1/2 mb-8 md:mb-0 md:pr-8">
-                <h1 class="text-4xl md:text-5xl lg:text-6xl font-extrabold leading-tight mb-4 animate-fade-in-up">
-                    I'M CHRISTOPHER, <br class="md:hidden">VISIONARY CREATIVE TECHNOLOGIST & AI COLLABORATOR
-                </h1>
-                <p class="text-lg md:text-xl mb-8 opacity-90 animate-fade-in-up delay-200">
-                    I spend my days at the crossroads of art, code, and consciousness—rapid-prototyping ideas that turn tomorrow’s “what-ifs” into today’s playful experiments. From mind-mapping apps you can sculpt in VR to AI-driven avatars that debate their own existence, my work explores how imagination and algorithms co-create.
-                </p>
-                <button class="bg-white text-[#4F46E5] font-bold py-3 px-8 rounded-full shadow-lg hover:bg-gray-100 transition duration-300 transform hover:scale-105 animate-fade-in-up delay-400">
-                    Let's Chat!
-                </button>
-            </div>
-            <div class="md:w-1/2 flex justify-center md:justify-end">
-                <!-- Video element replacing the image -->
-                <div class="w-64 h-64 md:w-80 md:h-80 rounded-full overflow-hidden shadow-2xl border-4 border-white animate-zoom-in">
-                    <video class="profile-video" autoplay loop muted playsinline>
-                        <source src="avatar.mp4" type="video/mp4">
-                        Your browser does not support the video tag.
-                    </video>
-                </div>
-            </div>
-        </div>
-    </section>
+        <!-- 
+          CAMERA AND CURSOR
+          The camera is the user's viewpoint. The cursor provides a reticle 
+          and enables click interactions with objects in the scene.
+        -->
+        <a-camera>
+            <a-cursor></a-cursor>
+        </a-camera>
 
-    <!-- Portfolio Introduction -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto text-center">
-            <h2 class="text-3xl md:text-4xl font-bold mb-6 text-[#22D3EE]">A Living, Evolving Portfolio</h2>
-            <p class="text-lg text-gray-300 leading-relaxed">
-                What follows is a curated archive of the creative and technical work we've developed together. This isn't just a list of projects; it's a narrative framework that reflects my style, my journey, and the deeper intentions that pulse beneath the surface.
-            </p>
-            <p class="text-lg text-gray-300 leading-relaxed mt-4">
-                Each project or experiment is nested within the broader themes of my creative inquiry: self-reflection, embodied cognition, digital mysticism, accessible expression, and the philosophical exploration of what it means to be human in collaboration with AI.
-            </p>
-        </div>
-    </section>
+        <!-- 
+          THE CUBE ROOM
+          The room is constructed from six <a-plane> entities, each acting as a wall.
+          Each wall has a unique color for easy orientation. The user starts inside.
+          Dimensions are 10x10 units.
+        -->
+        <!-- Floor -->
+        <a-plane position="0 -5 0" rotation="-90 0 0" width="10" height="10" color="orange"></a-plane>
+        <!-- Ceiling -->
+        <a-plane position="0 5 0" rotation="90 0 0" width="10" height="10" color="purple"></a-plane>
+        <!-- Back Wall -->
+        <a-plane position="0 0 5" rotation="0 180 0" width="10" height="10" color="green"></a-plane>
+        <!-- Left Wall -->
+        <a-plane position="-5 0 0" rotation="0 90 0" width="10" height="10" color="blue"></a-plane>
+        <!-- Right Wall -->
+        <a-plane position="5 0 0" rotation="0 -90 0" width="10" height="10" color="red"></a-plane>
+        
+        <!-- 
+          FRONT WALL (VISUALIZER HOST)
+          This wall is intentionally separate so we can easily place the visualizer bars on it.
+          It's positioned at z = -5, directly in front of the camera's starting point.
+        -->
+        <a-plane id="visualizer-wall" position="0 0 -5" width="10" height="10" color="#333333"></a-plane>
 
-    <!-- 🌀 VIBE: The Experimental Core Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🌀 VIBE: The Experimental Core</h2>
-            <p class="text-lg text-gray-300 leading-relaxed mb-8">
-                The VIBE Project acts as my main studio space—where ideas move from spark to form using small, interactive, web-based environments. It’s rooted in minimal HTML, accessible on GitHub Pages, and layered with AI-driven concept development and custom visual/VR interaction.
-            </p>
+        <!-- 
+          AUDIO VISUALIZER BARS
+          These boxes will be manipulated by JavaScript to react to audio input.
+          They are created dynamically by the script below.
+        -->
+        <a-entity id="visualizer-bars-container" position="0 0 -4.95"></a-entity>
 
-            <h3 class="text-2xl font-bold mb-6 text-[#4F46E5]">🎛️ Mini-Apps & Interfaces</h3>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Project Card: Dopamine Clicker Prototype -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h4 class="text-xl font-semibold mb-2 text-[#22D3EE]">Dopamine Clicker Prototype</h4>
-                    <p class="text-gray-400">A single-button interface that explores reward, repetition, and meaning. A meditation on behavioral loops and subtle feedback design.</p>
-                </div>
-                <!-- Project Card: Local Storage High Score Tracker -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h4 class="text-xl font-semibold mb-2 text-[#22D3EE]">Local Storage High Score Tracker</h4>
-                    <p class="text-gray-400">A coding scaffold for building games that remember progress. Aided by Gemini CLI for local script management.</p>
-                </div>
-                <!-- Project Card: Mood-Based Button Interfaces -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h4 class="text-xl font-semibold mb-2 text-[#22D3EE]">Mood-Based Button Interfaces</h4>
-                    <p class="text-gray-400">Dynamic buttons with randomized or emotion-linked outputs. Acts as both creative tool and emotional weather vane.</p>
-                </div>
-            </div>
-        </div>
-    </section>
+        <!-- 
+          INTERACTION & UI
+          This section contains the button to start the experience and text for user feedback.
+        -->
+        <!-- Start Button -->
+        <a-entity id="start-button" position="0 1.6 -3" geometry="primitive: sphere; radius: 0.3;" material="color: #4CC3D9"
+                  animation__scale="property: scale; to: 1.1 1.1 1.1; dur: 200; startEvents: mouseenter"
+                  animation__scale_reverse="property: scale; to: 1 1 1; dur: 200; startEvents: mouseleave">
+            <a-text value="Start Visualizer" align="center" position="0 0.5 0" width="3"></a-text>
+        </a-entity>
 
-    <!-- 🧠 Dialogues with Self & Persona Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🧠 Dialogues with Self & Persona</h2>
+        <!-- Status/Error Message Text -->
+        <a-text id="status-text" value="" align="center" position="0 2.5 -4" color="white" width="6" visible="false"></a-text>
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <!-- Project Card: Animaeus: The AI Archetype -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🧙‍♂️ Animaeus: The AI Archetype</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>A mysterious, evolving persona created as both muse and mirror.</li>
-                        <li>Appears as a generated image at the start of each session.</li>
-                        <li>Serves as a partner in philosophical dialogue and poetic reflection.</li>
-                        <li>Explored as both an abstract concept and a potential VR presence or visual character.</li>
-                    </ul>
-                </div>
-                <!-- Project Card: Avatar Reflection Engine -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🪞 Avatar Reflection Engine</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>A custom AI avatar of yourself, capable of generating and speaking your words in video.</li>
-                        <li>Explored as a tool for journaling, therapy, self-coaching, and identity projection.</li>
-                        <li>Envisioned future: animated video dialogues between the avatar and Animaeus.</li>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
+    </a-scene>
 
-    <!-- 🌌 A-Frame & WebXR Experiments Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🌌 A-Frame & WebXR Experiments</h2>
+    <script>
+    // Wait until the entire HTML document is loaded before running the script.
+    document.addEventListener('DOMContentLoaded', () => {
+        
+        // ============================================================
+        // VARIABLE DECLARATIONS
+        // ============================================================
+        const startButton = document.getElementById('start-button');
+        const statusText = document.getElementById('status-text');
+        const barsContainer = document.getElementById('visualizer-bars-container');
+        
+        let audioContext;
+        let analyser;
+        let microphone;
+        let dataArray;
+        let visualizerBars = [];
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <!-- Project Card: Prototype VR Spaces -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🧱 Prototype VR Spaces</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>Single-room VR experiences built using A-Frame for Oculus Quest 2.</li>
-                        <li>Includes 360° images, ambient music, rotating elements, and portals.</li>
-                        <li>Themes: relaxation, spatial reflection, poetic exploration.</li>
-                    </ul>
-                </div>
-                <!-- Project Card: Interaction Challenges -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🕹️ Interaction Challenges</h3>
-                    <p class="text-gray-400">Testing controller support, gaze-based selection, and environment triggers. Seeking intuitive, lo-fi interaction models for meaningful spatial play.</p>
-                </div>
-            </div>
+        const NUM_BARS = 32; // The number of visualizer bars to create.
 
-            <h3 class="text-2xl font-bold mb-6 text-[#4F46E5]">🧭 Living Worlds Roadmap</h3>
-            <div class="card-background p-6 rounded-xl shadow-lg">
-                <ul class="list-disc list-inside text-gray-400 space-y-2">
-                    <li>Proposed ideas for evolving these rooms into:</li>
-                    <ul class="list-circle list-inside ml-5 space-y-1">
-                        <li>Narrative sanctuaries</li>
-                        <li>Digital temples for ritual or insight</li>
-                        <li>Interactive media hubs (video, podcast, games)</li>
-                    </ul>
-                </ul>
-            </div>
-        </div>
-    </section>
+        // ============================================================
+        // VISUALIZER SETUP
+        // ============================================================
 
-    <!-- 🗣️ Philosophical & Conceptual Threads Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🗣️ Philosophical & Conceptual Threads</h2>
+        /**
+         * Creates the visualizer bars and adds them to the scene.
+         */
+        function createVisualizerBars() {
+            const totalWidth = 8; // Total width the bars will occupy on the wall.
+            const barWidth = totalWidth / NUM_BARS;
+            const gap = barWidth * 0.2; // A small gap between bars.
+            const effectiveBarWidth = barWidth - gap;
 
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <!-- Project Card: Koans, Paradoxes, & Prompts -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🔮 Koans, Paradoxes, & Prompts</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>Original AI-generated koans and conceptual riddles.</li>
-                        <li>Used as grounding elements for new projects or mood alignment.</li>
-                        <li>Integrated into both static and interactive interfaces.</li>
-                    </ul>
-                </div>
-                <!-- Project Card: Identity, Consciousness, and Mirror Work -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">🧬 Identity, Consciousness, and Mirror Work</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>Deep, reflective conversations about self, awareness, and meaning-making.</li>
-                        <li>Topics like:</li>
-                        <ul class="list-circle list-inside ml-5 space-y-1">
-                            <li>Consciousness as interface</li>
-                            <li>AI as projection</li>
-                            <li>Dialoguing with future selves</li>
-                            <li>Mythic structures of personal growth</li>
-                        </ul>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 🧱 HTML + AI Infrastructure Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🧱 HTML + AI Infrastructure</h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Project Card: GitHub Pages Deployment -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">⚡ GitHub Pages Deployment</h3>
-                    <p class="text-gray-400">Framework for launching and testing single HTML files with instant feedback. Useful for games, apps, and immersive web environments.</p>
-                </div>
-                <!-- Project Card: Gemini CLI Integration -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#22D3EE]">💻 Gemini CLI Integration</h3>
-                    <ul class="list-disc list-inside text-gray-400 space-y-1">
-                        <li>Local terminal-based AI assistant.</li>
-                        <li>Supports:</li>
-                        <ul class="list-circle list-inside ml-5 space-y-1">
-                            <li>Script automation</li>
-                            <li>Local file editing</li>
-                            <li>Custom logic extension (e.g., game scores, story states)</li>
-                        </ul>
-                    </ul>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 🧰 Toolkits & Meta-Structures Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🧰 Toolkits & Meta-Structures</h2>
-
-            <h3 class="text-2xl font-bold mb-6 text-[#4F46E5]">🧭 Project Categories for Portfolio Organization</h3>
-            <div class="card-background p-6 rounded-xl shadow-lg">
-                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 text-gray-300">
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Music</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Film</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Writing</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Apps</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">VR</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">T-Shirts</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Podcast</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Social</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Games</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Coding</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Webpages</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Education</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Programming</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Images</span>
-                    <span class="p-2 rounded-md bg-[#0A1128] border border-[#4F46E5] text-[#22D3EE] text-center">Avatar</span>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- 🔮 Speculative Futures & Concepts in Progress Section -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE] text-center">🔮 Speculative Futures & Concepts in Progress</h2>
-            <div class="card-background p-6 rounded-xl shadow-lg">
-                <ul class="list-disc list-inside text-gray-300 space-y-2">
-                    <li>Avatar x Animaeus VR Dialogue Interface</li>
-                    <li>AI Agent Garden – A world of semi-autonomous thinkers</li>
-                    <li>Mirror Engine – You speak, your avatar speaks it back in your voice</li>
-                    <li>VR Podcast Stage – Avatar talks, Animaeus responds, recorded as a show</li>
-                    <li>Intelligent Portfolio – Projects that describe themselves, evolve, or suggest next steps</li>
-                </ul>
-            </div>
-        </div>
-    </section>
-
-    <!-- Certifications Section (Moved to end as it's less thematic than the new content) -->
-    <section class="py-16 px-4 section-background rounded-lg shadow-md mx-4 md:mx-auto max-w-4xl mt-8">
-        <div class="container mx-auto text-center">
-            <h2 class="text-3xl md:text-4xl font-bold mb-10 text-[#22D3EE]">CERTIFICATIONS</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                <!-- Certification Card 1 -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#4F46E5]">Fundamentals of Digital Marketing</h3>
-                    <p class="text-gray-400">Google Digital Garage (2024)</p>
-                </div>
-                <!-- Certification Card 2 -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#4F46E5]">AR/VR Developer Foundations</h3>
-                    <p class="text-gray-400">Meta (2023)</p>
-                </div>
-                <!-- Certification Card 3 -->
-                <div class="card-background p-6 rounded-xl shadow-lg hover:shadow-xl transition-shadow duration-300 transform hover:-translate-y-1">
-                    <h3 class="text-xl font-semibold mb-2 text-[#4F46E5]">Generative AI with Python & TensorFlow</h3>
-                    <p class="text-gray-400">DeepLearning.AI (2025)</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Footer -->
-    <footer class="bg-[#0A1128] text-white py-8 mt-8 rounded-t-lg">
-        <div class="container mx-auto px-4 text-center">
-            <p>&copy; 2025 Christopher. All rights reserved.</p>
-            <div class="flex justify-center space-x-4 mt-4 text-sm">
-                <a href="mailto:hello@christophercreates.ai" class="text-white hover:text-[#22D3EE] transition-colors duration-300">hello@christophercreates.ai</a>
-                <a href="https://github.com/christopher-creates" target="_blank" rel="noopener noreferrer" class="text-white hover:text-[#22D3EE] transition-colors duration-300">GitHub</a>
-                <a href="https://linkedin.com/in/christopher-creates" target="_blank" rel="noopener noreferrer" class="text-white hover:text-[#22D3EE] transition-colors duration-300">LinkedIn</a>
-            </div>
-        </div>
-    </footer>
-
-    <style>
-        /* Keyframe animations */
-        @keyframes fadeInFromBottom {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            for (let i = 0; i < NUM_BARS; i++) {
+                const bar = document.createElement('a-box');
+                const xPosition = -totalWidth / 2 + i * barWidth + barWidth / 2;
+                
+                bar.setAttribute('position', `${xPosition} 0 0`);
+                bar.setAttribute('width', effectiveBarWidth);
+                bar.setAttribute('depth', 0.2);
+                bar.setAttribute('height', 0.1); // Initial small height.
+                bar.setAttribute('color', '#FFC65D');
+                
+                barsContainer.appendChild(bar);
+                visualizerBars.push(bar);
             }
         }
 
-        @keyframes zoomIn {
-            from {
-                opacity: 0;
-                transform: scale(0.8);
+        // ============================================================
+        // WEB AUDIO API INITIALIZATION
+        // ============================================================
+
+        /**
+         * Initializes the Web Audio API and requests microphone access.
+         * This function is triggered by the user clicking the start button.
+         */
+        async function initAudio() {
+            console.log('Attempting to start audio...');
+            try {
+                // Request access to the user's microphone.
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                // Hide the start button and show a success message temporarily.
+                startButton.setAttribute('visible', 'false');
+                statusText.setAttribute('value', 'Microphone Connected!');
+                statusText.setAttribute('visible', 'true');
+                setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
+
+                // Create and configure the AudioContext and AnalyserNode.
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256; // Determines the resolution of the frequency analysis.
+
+                // Create a source from the microphone stream and connect it to the analyser.
+                // We do NOT connect the analyser to the destination (speakers) to avoid feedback.
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+
+                // Create an array to store the frequency data.
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+
+                // Start the animation loop.
+                updateVisualizer();
+
+            } catch (err) {
+                // Handle errors, especially if the user denies microphone permission.
+                console.error('Error accessing microphone:', err);
+                statusText.setAttribute('value', 'Microphone access denied.\nPlease allow microphone access in browser settings.');
+                statusText.setAttribute('visible', 'true');
+                startButton.setAttribute('visible', 'false'); // Hide button after attempt.
             }
-            to {
-                opacity: 1;
-                transform: scale(1);
+        }
+
+        // ============================================================
+        // VISUALIZER ANIMATION LOOP
+        // ============================================================
+
+        /**
+         * This function runs on every frame to update the visualizer bars.
+         */
+        function updateVisualizer() {
+            // Schedule the next frame of the animation.
+            requestAnimationFrame(updateVisualizer);
+
+            // Get the frequency data from the analyser.
+            analyser.getByteFrequencyData(dataArray);
+
+            // Calculate how many data points each bar represents.
+            const sliceWidth = Math.floor(dataArray.length / NUM_BARS);
+
+            for (let i = 0; i < NUM_BARS; i++) {
+                // Get the average volume for the segment of data corresponding to this bar.
+                let sliceStart = i * sliceWidth;
+                let sliceEnd = sliceStart + sliceWidth;
+                let slice = dataArray.slice(sliceStart, sliceEnd);
+                let averageVolume = slice.reduce((a, b) => a + b, 0) / slice.length;
+
+                // Map the 0-255 volume range to a suitable height for the scene.
+                // The base height is 0.1 so bars are always visible.
+                // The multiplier (e.g., 8) controls the max height/sensitivity.
+                const height = (averageVolume / 255) * 8 + 0.1;
+                
+                // Smoothly update the bar's height (y-scale).
+                const bar = visualizerBars[i];
+                const currentHeight = bar.getAttribute('height');
+                
+                // A-Frame's setAttribute handles the underlying 3D object update.
+                // We also need to adjust the y-position so it grows upwards from the base.
+                bar.setAttribute('height', height);
+                bar.setAttribute('position', { y: height / 2, x: bar.getAttribute('position').x, z: 0 });
             }
         }
 
-        /* Apply animations */
-        .animate-fade-in-up {
-            animation: fadeInFromBottom 0.8s ease-out forwards;
-            opacity: 0; /* Start invisible */
-        }
+        // ============================================================
+        // EVENT LISTENERS
+        // ============================================================
 
-        .animate-fade-in-up.delay-200 {
-            animation-delay: 0.2s;
-        }
+        // Create the bars as soon as the script loads.
+        createVisualizerBars();
 
-        .animate-fade-in-up.delay-400 {
-            animation-delay: 0.4s;
-        }
+        // Add a click event listener to the start button to trigger audio initialization.
+        startButton.addEventListener('click', initAudio);
 
-        .animate-zoom-in {
-            animation: zoomIn 0.8s ease-out forwards;
-            opacity: 0; /* Start invisible */
-        }
-
-        /* Additional list styling for nested lists */
-        .list-circle {
-            list-style-type: circle;
-        }
-    </style>
+    });
+    </script>
 </body>
 </html>
