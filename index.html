@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor and Blue Sphere VR - Version 2</title>
+    <title>VR with Quest 2 Controllers - Version 2</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- A-Frame Extras library for teleportation controls -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <style>
       /* Basic styling for the body to ensure it takes full viewport */
       body { margin: 0; overflow: hidden; }
@@ -19,41 +21,44 @@
     <a-scene>
       <!--
         Floor: A 10x10 meter plane, rotated to be flat, and colored green.
-        Positioned at 0 0 0, the camera (default) will be at 0 1.6 0, looking down at it.
+        We've added the `class="collidable"` so our teleportation system
+        knows this is a surface we can move to.
       -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
+      <a-plane
+        position="0 0 0"
+        rotation="-90 0 0"
+        width="10"
+        height="10"
+        color="green"
+        class="collidable"
+      ></a-plane>
 
       <!--
-        Surrounding Sphere: A very large sphere (radius 100) centered at 0 0 0,
-        colored light blue. This creates an enclosed environment.
-        The backfaceCulling="false" is important for spheres that surround the user,
-        otherwise, you might see through it from the inside.
+        Surrounding Sphere: A very large sphere creating a sky.
       -->
-      <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
+      <a-sphere
+        position="0 0 0"
+        radius="100"
+        color="lightblue"
+        material="side: back"
+      ></a-sphere>
 
       <!--
-        Camera Rig: It's good practice to wrap the camera and controllers in a
-        parent entity (a "rig"). This allows you to move the entire player
-        (camera + hands) as a single unit for locomotion.
-        'look-controls' allows head tracking, and 'wasd-controls' allows movement
-        for desktop testing. Default position for the camera is 0 1.6 0.
+        Camera Rig: This entity acts as a container for the camera and controllers.
+        Moving the rig moves the entire player setup. This is essential for
+        teleportation and other movement systems to work correctly without
+        interfering with the camera's own tracking.
       -->
-      <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity id="cameraRig" position="0 0 0">
         <!--
-          Camera: The user's viewpoint.
+          Camera: We removed 'wasd-controls' as movement is now handled by teleportation.
+          'look-controls' remains for head-tracking. The camera is offset on the Y-axis
+          to simulate eye height.
         -->
-        <a-camera look-controls wasd-controls>
+        <a-entity camera look-controls position="0 1.6 0">
           <!--
-            Version Text: This text entity is a child of the camera, so it moves
-            and rotates with the user's view, always appearing at the bottom of their screen.
-            - value: The text content to display.
-            - position: Relative to the camera. '0 -0.7 -1.5' places it:
-                        - 0 on X: centered horizontally.
-                        - -0.7 on Y: 0.7 meters below the camera's center (i.e., at the bottom).
-                        - -1.5 on Z: 1.5 meters in front of the camera (readable distance).
-            - width: Controls the overall size of the text.
-            - align: Centers the text horizontally.
-            - color: Sets the text color for visibility.
+            Version Text: Updated to "Version 2". It remains a child of the
+            camera to stay fixed in the user's view.
           -->
           <a-text
             value="Version 2"
@@ -62,23 +67,38 @@
             align="center"
             color="white"
           ></a-text>
-        </a-camera>
+        </a-entity>
 
         <!--
-          Left Meta Quest 2 Controller:
-          The 'meta-touch-controls' component automatically loads the 3D model
-          of the controller and handles its position and rotation based on
-          the actual physical controller.
-          'hand: left' specifies that this entity represents the left controller.
+          Left Controller:
+          - oculus-touch-controls: Automatically loads the 3D model for the left Quest controller.
+          - laser-controls: Adds a laser pointer.
         -->
-        <a-entity meta-touch-controls="hand: left"></a-entity>
+        <a-entity
+          oculus-touch-controls="hand: left"
+          laser-controls="hand: left"
+        ></a-entity>
 
         <!--
-          Right Meta Quest 2 Controller:
-          Similar to the left, but for the right hand.
-          'hand: right' specifies that this entity represents the right controller.
+          Right Controller:
+          - oculus-touch-controls: Loads the model for the right Quest controller.
+          - laser-controls: Adds a laser pointer.
+          - teleport-controls: Enables teleportation.
+            - button: 'trigger' means you squeeze the trigger to aim and release to teleport.
+            - collisionEntities: Selects which objects the teleport ray can land on.
+            - cameraRig: Specifies the entity to move when teleporting.
+            - teleportOrigin: Specifies the entity from which the teleport ray originates.
         -->
-        <a-entity meta-touch-controls="hand: right"></a-entity>
+        <a-entity
+          oculus-touch-controls="hand: right"
+          laser-controls="hand: right"
+          teleport-controls="
+            button: trigger;
+            collisionEntities: .collidable;
+            cameraRig: #cameraRig;
+            teleportOrigin: [object Object];
+          "
+        ></a-entity>
       </a-entity>
     </a-scene>
   </body>
