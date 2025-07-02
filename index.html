@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor with Visible Controllers</title>
+    <title>Green Floor with Controller Teleportation - V2</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- A-Frame Extras library for teleportation controls -->
+    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
     <style>
       /* Basic styling for the body to ensure it takes full viewport */
       body { margin: 0; overflow: hidden; }
@@ -19,44 +21,81 @@
     <a-scene>
       <!--
         Floor: A 10x10 meter plane, rotated to be flat, and colored green.
+        We've added the `class="collidable"` so our teleportation system
+        knows this is a surface we can move to.
       -->
-      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
+      <a-plane
+        position="0 0 0"
+        rotation="-90 0 0"
+        width="10"
+        height="10"
+        color="green"
+        class="collidable"
+      ></a-plane>
 
       <!--
         Surrounding Sphere: A very large sphere to act as the sky.
       -->
-      <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
+      <a-sphere
+        position="0 0 0"
+        radius="100"
+        color="lightblue"
+        material="side: back"
+      ></a-sphere>
 
       <!--
-        Explicit Camera: The user's viewpoint in the scene.
+        Camera Rig: This entity acts as a container for the camera and controllers.
+        Moving the rig moves the entire player setup. This is essential for
+        teleportation to work correctly without interfering with the camera's
+        own tracking.
       -->
-      <a-entity camera look-controls wasd-controls position="0 1.6 0">
+      <a-entity id="cameraRig" position="0 0 0">
         <!--
-          Version Text: This text is a child of the camera to keep it in view.
+          Camera: We removed 'wasd-controls' as movement is now handled by teleportation.
+          'look-controls' remains for head-tracking. The camera is offset on the Y-axis
+          to simulate eye height.
         -->
-        <a-text
-          value="Version 1"
-          position="0 -0.7 -1.5"
-          width="2"
-          align="center"
-          color="white"
-        ></a-text>
+        <a-entity camera look-controls position="0 1.6 0">
+          <!--
+            Version Text: This text is a child of the camera to keep it in view.
+            Updated to "Version 2".
+          -->
+          <a-text
+            value="Version 2"
+            position="0 -0.7 -1.5"
+            width="2"
+            align="center"
+            color="white"
+          ></a-text>
+        </a-entity>
+
+        <!--
+          Left Controller:
+          - oculus-touch-controls: Loads the model for the left Quest controller.
+        -->
+        <a-entity oculus-touch-controls="hand: left"></a-entity>
+
+        <!--
+          Right Controller:
+          - oculus-touch-controls: Loads the model for the right Quest controller.
+          - laser-controls: Adds a laser pointer, which the teleport system uses for aiming.
+          - teleport-controls: Enables teleportation.
+            - button: 'trigger' means you squeeze the trigger to aim and release to teleport.
+            - collisionEntities: Selects which objects the teleport ray can land on.
+            - cameraRig: Specifies the entity to move when teleporting (#cameraRig).
+            - teleportOrigin: Specifies the entity from which the teleport ray originates (the camera).
+        -->
+        <a-entity
+          oculus-touch-controls="hand: right"
+          laser-controls="hand: right"
+          teleport-controls="
+            button: trigger;
+            collisionEntities: .collidable;
+            cameraRig: #cameraRig;
+            teleportOrigin: [object Object];
+          "
+        ></a-entity>
       </a-entity>
-
-      <!--
-        Left Controller:
-        - oculus-touch-controls: Automatically loads the 3D model for the
-          left Quest controller and handles its tracking.
-      -->
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
-
-      <!--
-        Right Controller:
-        - oculus-touch-controls: Automatically loads the 3D model for the
-          right Quest controller and handles its tracking.
-      -->
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
-
     </a-scene>
   </body>
 </html>
