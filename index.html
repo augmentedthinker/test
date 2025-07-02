@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Green Floor and Blue Sphere VR - Version 1</title>
+    <title>Green Floor and Blue Sphere VR - Version 2</title>
     <!-- A-Frame library from CDN -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <style>
@@ -32,32 +32,53 @@
       <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
 
       <!--
-        Explicit Camera: We define the camera explicitly here so we can attach
-        the version text as a child. This ensures the text stays "static"
-        relative to the user's view, always appearing at the bottom of their screen.
-        'look-controls' allows head tracking, and 'wasd-controls' allows movement.
-        Default position for the camera is 0 1.6 0 (average human eye height).
+        Camera Rig: It's good practice to wrap the camera and controllers in a
+        parent entity (a "rig"). This allows you to move the entire player
+        (camera + hands) as a single unit for locomotion.
+        'look-controls' allows head tracking, and 'wasd-controls' allows movement
+        for desktop testing. Default position for the camera is 0 1.6 0.
       -->
-      <a-entity camera look-controls wasd-controls position="0 1.6 0">
+      <a-entity id="cameraRig" position="0 1.6 0">
         <!--
-          Version Text: This text entity is a child of the camera, so it moves
-          and rotates with the user's view.
-          - value: The text content to display.
-          - position: Relative to the camera. '0 -0.7 -1.5' places it:
-                      - 0 on X: centered horizontally.
-                      - -0.7 on Y: 0.7 meters below the camera's center (i.e., at the bottom).
-                      - -1.5 on Z: 1.5 meters in front of the camera (readable distance).
-          - width: Controls the overall size of the text.
-          - align: Centers the text horizontally.
-          - color: Sets the text color for visibility.
+          Camera: The user's viewpoint.
         -->
-        <a-text
-          value="Version 1"
-          position="0 -0.7 -1.5"
-          width="2"
-          align="center"
-          color="white"
-        ></a-text>
+        <a-camera look-controls wasd-controls>
+          <!--
+            Version Text: This text entity is a child of the camera, so it moves
+            and rotates with the user's view, always appearing at the bottom of their screen.
+            - value: The text content to display.
+            - position: Relative to the camera. '0 -0.7 -1.5' places it:
+                        - 0 on X: centered horizontally.
+                        - -0.7 on Y: 0.7 meters below the camera's center (i.e., at the bottom).
+                        - -1.5 on Z: 1.5 meters in front of the camera (readable distance).
+            - width: Controls the overall size of the text.
+            - align: Centers the text horizontally.
+            - color: Sets the text color for visibility.
+          -->
+          <a-text
+            value="Version 2"
+            position="0 -0.7 -1.5"
+            width="2"
+            align="center"
+            color="white"
+          ></a-text>
+        </a-camera>
+
+        <!--
+          Left Meta Quest 2 Controller:
+          The 'meta-touch-controls' component automatically loads the 3D model
+          of the controller and handles its position and rotation based on
+          the actual physical controller.
+          'hand: left' specifies that this entity represents the left controller.
+        -->
+        <a-entity meta-touch-controls="hand: left"></a-entity>
+
+        <!--
+          Right Meta Quest 2 Controller:
+          Similar to the left, but for the right hand.
+          'hand: right' specifies that this entity represents the right controller.
+        -->
+        <a-entity meta-touch-controls="hand: right"></a-entity>
       </a-entity>
     </a-scene>
   </body>
