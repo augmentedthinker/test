@@ -1,43 +1,64 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>10×10 Green Floor – Version 2</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/super-hands@4.0.2/dist/super-hands.min.js"></script>
-  <style>
-    body { margin: 0; overflow: hidden; }
-  </style>
-</head>
-<body>
-  <a-scene>
-    <!-- Green floor -->
-    <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green" class="ground"></a-plane>
-    <a-sky color="#AAD8FF"></a-sky>
-    <a-light type="hemisphere" intensity="0.8"></a-light>
+<html>
+  <head>
+    <title>Green Floor and Blue Sphere VR - Version 1</title>
+    <!-- A-Frame library from CDN -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <style>
+      /* Basic styling for the body to ensure it takes full viewport */
+      body { margin: 0; overflow: hidden; }
+      /* Ensure the A-Frame canvas fills the screen */
+      .a-canvas {
+        width: 100vw !important;
+        height: 100vh !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- The A-Frame scene is the root of your VR experience -->
+    <a-scene>
+      <!--
+        Floor: A 10x10 meter plane, rotated to be flat, and colored green.
+        Positioned at 0 0 0, the camera (default) will be at 0 1.6 0, looking down at it.
+      -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="green"></a-plane>
 
-    <!-- Camera rig: controls your "player" body and movement -->
-    <a-entity id="rig" position="0 1.6 0" movement-controls="fly: false">
-      <a-camera wasd-controls-enabled="false">
-        <!-- Bottom-left label -->
-        <a-entity position="-0.75 -0.45 -1.4"
-                  text="value: Version 2; align: left; width: 2; color: #fff; side: double; baseline: bottom;">
-        </a-entity>
-      </a-camera>
-    </a-entity>
-    
-    <!-- Controllers are direct children of the scene, so they track your real hands -->
-    <a-entity laser-controls="hand: right"
-              teleport-controls="cameraRig: #rig; button: B; collisionEntities: .ground"
-              raycaster="objects: .ground"
-              super-hands>
-    </a-entity>
-    <a-entity laser-controls="hand: left"
-              teleport-controls="cameraRig: #rig; button: Y; collisionEntities: .ground"
-              raycaster="objects: .ground"
-              super-hands>
-    </a-entity>
-  </a-scene>
-</body>
+      <!--
+        Surrounding Sphere: A very large sphere (radius 100) centered at 0 0 0,
+        colored light blue. This creates an enclosed environment.
+        The backfaceCulling="false" is important for spheres that surround the user,
+        otherwise, you might see through it from the inside.
+      -->
+      <a-sphere position="0 0 0" radius="100" color="lightblue" material="side: back"></a-sphere>
+
+      <!--
+        Explicit Camera: We define the camera explicitly here so we can attach
+        the version text as a child. This ensures the text stays "static"
+        relative to the user's view, always appearing at the bottom of their screen.
+        'look-controls' allows head tracking, and 'wasd-controls' allows movement.
+        Default position for the camera is 0 1.6 0 (average human eye height).
+      -->
+      <a-entity camera look-controls wasd-controls position="0 1.6 0">
+        <!--
+          Version Text: This text entity is a child of the camera, so it moves
+          and rotates with the user's view.
+          - value: The text content to display.
+          - position: Relative to the camera. '0 -0.7 -1.5' places it:
+                      - 0 on X: centered horizontally.
+                      - -0.7 on Y: 0.7 meters below the camera's center (i.e., at the bottom).
+                      - -1.5 on Z: 1.5 meters in front of the camera (readable distance).
+          - width: Controls the overall size of the text.
+          - align: Centers the text horizontally.
+          - color: Sets the text color for visibility.
+        -->
+        <a-text
+          value="Version 1"
+          position="0 -0.7 -1.5"
+          width="2"
+          align="center"
+          color="white"
+        ></a-text>
+      </a-entity>
+    </a-scene>
+  </body>
 </html>
