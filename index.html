@@ -1,49 +1,43 @@
-<!-- 
-  Minimal VR Scene for Meta Quest 2/3 with Controller Support (A-Frame 1.5.0+)
-  See: https://aframe.io/docs/1.5.0/  and https://aframe.io/docs/1.7.0/components/meta-touch-controls.html
-  Performance guidelines: https://developers.meta.com/horizon/documentation/web/webxr-perf-workflow/
-  [Maintains 72 FPS+ on Quest 2, 90 FPS+ on Quest 3.]
+<!--
+  VR Scene for Meta Quest 2/3: Visible Controllers & Laser Pointers
+  Docs: https://aframe.io/docs/1.5.0/ (A-Frame), https://aframe.io/docs/1.7.0/components/meta-touch-controls.html, https://aframe.io/docs/1.7.0/components/laser-controls.html
 -->
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest Baseline VR Scene</title>
-  <!-- A-Frame v1.5.0 (latest stable) -->
+  <title>Quest VR Scene: Controllers + Lasers</title>
+  <!-- A-Frame v1.5.0 -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <!-- (Optional: A-Frame Extras for movement-controls) -->
-  <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script> <!-- https://github.com/n5ro/aframe-extras -->
+  <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script> <!-- movement-controls -->
 </head>
 <body>
 <a-scene background="color: #ECECEC">
-  <!-- Preload assets here (textures/models if needed) -->
   <a-assets></a-assets>
 
-  <!-- Player Rig: Camera + Hands, smooth locomotion via thumbstick, teleport optional -->
+  <!-- Player rig with visible controllers and lasers -->
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
     <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
-    <!-- Quest Controllers -->
-    <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-    <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+    <!-- Left Hand: meta-touch-controls with model and laser pointer -->
+    <a-entity id="leftHand"
+              meta-touch-controls="hand: left; model: true"
+              laser-controls="hand: left"></a-entity>
+    <!-- Right Hand: meta-touch-controls with model and laser pointer -->
+    <a-entity id="rightHand"
+              meta-touch-controls="hand: right; model: true"
+              laser-controls="hand: right"></a-entity>
   </a-entity>
 
-  <!-- Teleportation (optional, left hand trigger for teleport) -->
-  <a-entity teleport-controls="button: trigger; collisionEntities: #ground; cameraRig: #cameraRig; startEvents: teleportstart; endEvents: teleportend;" raycaster="objects: #ground" line="color: #FFF; opacity: 0.5" hand-controls="left"></a-entity> <!-- https://github.com/fernandojsg/aframe-teleport-controls -->
-
   <!-- Environment -->
-  <a-sky color="#ECECEC"></a-sky>
+  <a-sky color="#B3E0FF"></a-sky> <!-- Light blue sky -->
   <a-plane id="ground" color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
-
-  <!-- Lighting -->
   <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
   <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
-
 </a-scene>
 </body>
 </html>
 <!--
-Controller mapping/events: See https://aframe.io/docs/1.7.0/components/meta-touch-controls.html#events
-Performance tips: https://developers.meta.com/horizon/documentation/web/webxr-perf-workflow/
-Movement/teleport docs: https://github.com/n5ro/aframe-extras, https://github.com/fernandojsg/aframe-teleport-controls
-All assets should be glTF 2.0 (.glb), textures KTX2/ASTC. Host on same origin or GitHub Pages for CORS.
+Controller and laser pointer docs:
+- https://aframe.io/docs/1.7.0/components/meta-touch-controls.html
+- https://aframe.io/docs/1.7.0/components/laser-controls.html
 -->
