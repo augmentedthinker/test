@@ -2,17 +2,20 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Sound, Haptics, and Explosions!</title>
+  <title>Quest VR: Massive Particles & Working Sounds</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
 <a-scene background="color: #ECECEC">
-  <!-- Sound Assets (laser + explosion) - public domain short clips -->
+  <!-- Sound Assets (short, reliable mp3s; you can replace these if you want) -->
   <a-assets>
     <audio id="laser" src="https://cdn.jsdelivr.net/gh/joshwcomeau/laser-sounds@main/sounds/laser1.mp3"></audio>
     <audio id="explosion" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa45ad.mp3"></audio>
   </a-assets>
+  <a-entity id="laserSound" sound="src: #laser; volume: 3"></a-entity>
+  <a-entity id="explosionSound" sound="src: #explosion; volume: 7"></a-entity>
+
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0"></a-entity>
     <a-entity id="leftHand"
@@ -47,11 +50,6 @@
             shoot-on-click
             explode-on-hit></a-sphere>
 
-  <!-- Laser fire sound -->
-  <a-entity id="laserSound" sound="src: #laser; volume: 2"></a-entity>
-  <!-- Explosion sound -->
-  <a-entity id="explosionSound" sound="src: #explosion; volume: 4"></a-entity>
-
   <script>
     // Toggle central sphere color on click
     AFRAME.registerComponent('toggle-color-on-click', {
@@ -79,16 +77,19 @@
         this.exploding = true;
         let el = this.el;
         // Play explosion sound
-        document.querySelector('#explosionSound').components.sound.playSound();
+        let exp = document.querySelector('#explosionSound');
+        if (exp && exp.components && exp.components.sound) {
+          exp.components.sound.stopSound();
+          exp.components.sound.playSound();
+        }
 
-        // Haptic feedback: vibrate both controllers if possible
-        vibrateControllers(0.4, 180); // duration in seconds, intensity in ms
+        vibrateControllers(0.4, 180);
 
         // Animate: balloon up and fade out
         el.setAttribute('color', '#FFF');
         el.setAttribute('animation__grow', {
           property: 'scale',
-          to: '2.7 2.7 2.7',
+          to: '3.6 3.6 3.6',
           dur: 200,
           easing: 'easeOutCubic'
         });
@@ -100,16 +101,15 @@
           delay: 180
         });
 
-        // Spawn particles
-        spawnParticles(el.object3D.position, 15);
+        // Spawn 60 particles (4x more)
+        spawnParticles(el.object3D.position, 60);
 
-        // Reset after short time
         setTimeout(() => {
           el.setAttribute('scale', '1 1 1');
           el.setAttribute('color', this.originalColor);
           el.setAttribute('material', 'opacity', 1);
           this.exploding = false;
-        }, 850);
+        }, 950);
       }
     });
 
@@ -121,7 +121,11 @@
       init: function () {
         this.el.addEventListener('click', () => {
           // Play laser sound
-          document.querySelector('#laserSound').components.sound.playSound();
+          let laser = document.querySelector('#laserSound');
+          if (laser && laser.components && laser.components.sound) {
+            laser.components.sound.stopSound();
+            laser.components.sound.playSound();
+          }
 
           // Get midpoint between controllers in WORLD space
           var leftObj = document.querySelector('#leftHand').object3D;
@@ -223,8 +227,7 @@
     });
 
     // HAPTICS: vibrate both controllers on hit (if supported)
-    function vibrateControllers(duration = 0.2, strong = 180) {
-      // duration in seconds, strong is vibration intensity (ms)
+    function vibrateControllers(duration = 0.4, strong = 180) {
       const hands = ['leftHand', 'rightHand'];
       hands.forEach(handId => {
         const hand = document.getElementById(handId);
@@ -234,28 +237,27 @@
                         hand.components['meta-touch-controls'].controller.gamepad;
         if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
           try {
-            // Use pulse method if available
             gamepad.hapticActuators[0].pulse(1.0, duration * 1000);
-          } catch (e) { /* Not supported */ }
+          } catch (e) {}
         }
       });
     }
 
-    // PARTICLE BURST: spawn multiple small spheres that move outward quickly and fade
+    // PARTICLE BURST: spawn many more
     function spawnParticles(origin, count) {
       const scene = document.querySelector('a-scene');
       for (let i = 0; i < count; i++) {
         const p = document.createElement('a-sphere');
-        p.setAttribute('radius', 0.08 + Math.random() * 0.04);
+        p.setAttribute('radius', 0.12 + Math.random() * 0.08);
         p.setAttribute('color', '#FFD600');
-        // Random direction on a sphere
+        // Random direction (bigger/faster)
         const theta = Math.random() * 2 * Math.PI;
         const phi = Math.acos(2 * Math.random() - 1);
         const dir = new THREE.Vector3(
           Math.sin(phi) * Math.cos(theta),
           Math.sin(phi) * Math.sin(theta),
           Math.cos(phi)
-        ).multiplyScalar(0.6 + Math.random() * 0.8);
+        ).multiplyScalar(2 + Math.random() * 2.3);
 
         p.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
         p.setAttribute('particle-move-fade', {vx: dir.x, vy: dir.y, vz: dir.z});
@@ -275,16 +277,15 @@
       },
       tick: function (time, dt) {
         this.life += dt;
-        // Move
         this.el.object3D.position.x += this.data.vx * dt / 1000;
         this.el.object3D.position.y += this.data.vy * dt / 1000;
         this.el.object3D.position.z += this.data.vz * dt / 1000;
-        // Fade out after 0.2s
-        if (this.life > 200) {
-          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 200) / 300, 0));
+        // Fade out after 0.3s
+        if (this.life > 300) {
+          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 300) / 500, 0));
         }
-        // Remove after 0.5s
-        if (this.life > 500) {
+        // Remove after 1.1s
+        if (this.life > 1100) {
           this.el.parentNode && this.el.parentNode.removeChild(this.el);
         }
       }
