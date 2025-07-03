@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Audio Visualizer + Video Wall</title>
+    <title>VR Visualizer with Controllers</title>
     <!-- A-Frame Library -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
@@ -13,46 +13,54 @@
 </head>
 <body>
     <a-scene id="main-scene" background="color: #000">
-        <!-- 
-          ============================================================
-          ASSETS MANAGEMENT
-          Pre-loading assets like videos is crucial for performance.
-          The video is given an ID and referenced by other entities.
-          ============================================================
-        -->
+        <!-- Assets Management -->
         <a-assets>
-            <!-- The video file, expected to be in the same directory. -->
             <video id="my-video" src="video.mp4" loop="true" preload="auto" crossOrigin="anonymous"></video>
         </a-assets>
 
-        <!-- Camera and Cursor -->
-        <a-camera>
-            <a-cursor></a-cursor>
-        </a-camera>
-
         <!-- 
-          THE CUBE ROOM - "SHADES OF BLUE" VIBE
+          ============================================================
+          NEW FEATURE: CAMERA & CONTROLLER RIG
+          Instead of a simple camera, we now use a "rig" to hold the camera and the controllers.
+          This ensures the controllers move correctly relative to the user's viewpoint.
+          The old <a-camera> with <a-cursor> has been replaced by this setup.
+          ============================================================
         -->
+        <a-entity id="player-rig">
+            <!-- The camera is now nested inside the rig. -->
+            <a-camera></a-camera>
+
+            <!-- 
+              Left Controller:
+              - meta-touch-controls: Automatically loads the Quest 2 controller model for the specified hand.
+              - laser-controls: Adds a laser pointer and maps the trigger button to a 'click' event.
+            -->
+            <a-entity id="left-hand" meta-touch-controls="hand: left" laser-controls="hand: left"></a-entity>
+            
+            <!-- 
+              Right Controller:
+              - Same setup as the left controller, but for the right hand.
+            -->
+            <a-entity id="right-hand" meta-touch-controls="hand: right" laser-controls="hand: right"></a-entity>
+        </a-entity>
+
+
+        <!-- The Cube Room (No changes) -->
         <a-plane position="0 -5 0" rotation="-90 0 0" width="10" height="10" color="#001f3f"></a-plane>
         <a-plane position="0 5 0" rotation="90 0 0" width="10" height="10" color="#7FDBFF"></a-plane>
         <a-plane position="0 0 5" rotation="0 180 0" width="10" height="10" color="#0074D9"></a-plane>
         <a-plane position="5 0 0" rotation="0 -90 0" width="10" height="10" color="#00BFFF"></a-plane>
         
-        <!-- 
-          NEW FEATURE: VIDEO WALL
-          This plane uses the preloaded video from <a-assets> as its texture.
-          It has an ID so we can target it with JavaScript for play/pause controls.
-        -->
+        <!-- Video Wall (No changes) -->
         <a-plane id="video-wall" position="-5 0 0" rotation="0 90 0" width="10" height="10" src="#my-video" color="#39CCCC">
-            <!-- A simple "Play" icon to indicate interactivity -->
             <a-text id="play-icon" value="►" align="center" width="15" color="white"></a-text>
         </a-plane>
 
-        <!-- Front Wall (Visualizer Host) -->
+        <!-- Visualizer Wall (No changes) -->
         <a-plane id="visualizer-wall" position="0 0 -5" width="10" height="10" color="#001020"></a-plane>
         <a-entity id="visualizer-bars-container" position="0 0 -4.95"></a-entity>
 
-        <!-- UI Elements -->
+        <!-- UI Elements (No changes) -->
         <a-entity id="start-button" position="0 1.6 -3" 
                   geometry="primitive: sphere; radius: 0.3;" 
                   material="color: #FFDC00; shader: flat;">
@@ -64,33 +72,21 @@
     <script>
     document.addEventListener('DOMContentLoaded', () => {
         
-        // ============================================================
-        // VARIABLE DECLARATIONS
-        // ============================================================
+        // Variable Declarations (No changes)
         const scene = document.getElementById('main-scene');
         const startButton = document.getElementById('start-button');
         const statusText = document.getElementById('status-text');
-        
-        // Visualizer variables
         const barsContainer = document.getElementById('visualizer-bars-container');
-        let visualizerBars = [];
-        const NUM_BARS = 32;
-
-        // Video variables
         const videoWall = document.getElementById('video-wall');
         const videoEl = document.getElementById('my-video');
         const playIcon = document.getElementById('play-icon');
         
-        // Web Audio API variables
-        let audioContext;
-        let analyser;
-        let microphone;
-        let dataArray;
+        let visualizerBars = [];
+        const NUM_BARS = 32;
+        let audioContext, analyser, microphone, dataArray;
         let isAudioInitialized = false;
 
-        // ============================================================
-        // VISUALIZER SETUP (No changes from previous version)
-        // ============================================================
+        // Visualizer Bar Creation (No changes)
         function createVisualizerBars() {
             const totalWidth = 9.8; 
             const barWidth = totalWidth / NUM_BARS;
@@ -108,34 +104,24 @@
             }
         }
 
-        // ============================================================
-        // WEB AUDIO API INITIALIZATION & BUG FIXING
-        // ============================================================
+        // Audio Initialization & Bug Fix Logic (No changes)
         async function initAudio() {
-            // If already initialized, do nothing.
             if (isAudioInitialized) return;
-
             console.log('Attempting to start audio...');
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                
                 audioContext = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioContext.createAnalyser();
                 analyser.fftSize = 256;
                 microphone = audioContext.createMediaStreamSource(stream);
                 microphone.connect(analyser);
-
-                const bufferLength = analyser.frequencyBinCount;
-                dataArray = new Uint8Array(bufferLength);
-                
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
                 startButton.setAttribute('visible', 'false');
                 statusText.setAttribute('value', 'Microphone Connected!');
                 statusText.setAttribute('visible', 'true');
                 setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
-
                 isAudioInitialized = true;
                 updateVisualizer();
-
             } catch (err) {
                 console.error('Error accessing microphone:', err);
                 statusText.setAttribute('value', 'Microphone access denied.');
@@ -144,51 +130,35 @@
             }
         }
 
-        /**
-         * BUG FIX ATTEMPT: This function is called when the user clicks the start button
-         * OR when they enter VR mode. It checks if the audio context is "suspended"
-         * and tries to resume it. This is a common requirement for WebXR.
-         */
         function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
                 console.log('AudioContext is suspended. Attempting to resume...');
-                audioContext.resume().then(() => {
-                    console.log('AudioContext resumed successfully.');
-                }).catch(e => console.error('Failed to resume AudioContext:', e));
+                audioContext.resume().catch(e => console.error('Failed to resume AudioContext:', e));
             }
         }
 
-        // ============================================================
-        // VIDEO WALL PLAYBACK CONTROL
-        // ============================================================
+        // Video Playback Control (No changes)
         function toggleVideoPlayback() {
             if (!videoEl) return;
-
             if (videoEl.paused) {
                 videoEl.play();
-                playIcon.setAttribute('visible', 'false'); // Hide play icon when playing
+                playIcon.setAttribute('visible', 'false');
             } else {
                 videoEl.pause();
-                playIcon.setAttribute('visible', 'true'); // Show play icon when paused
+                playIcon.setAttribute('visible', 'true');
             }
         }
 
-        // ============================================================
-        // VISUALIZER ANIMATION LOOP
-        // ============================================================
+        // Visualizer Animation Loop (No changes)
         function updateVisualizer() {
             if (!isAudioInitialized) return;
-
             requestAnimationFrame(updateVisualizer);
             analyser.getByteFrequencyData(dataArray);
-
             for (let i = 0; i < NUM_BARS; i++) {
                 const sliceWidth = Math.floor(dataArray.length / NUM_BARS);
-                let sliceStart = i * sliceWidth;
-                let slice = dataArray.slice(sliceStart, sliceStart + sliceWidth);
+                let slice = dataArray.slice(i * sliceWidth, i * sliceWidth + sliceWidth);
                 let averageVolume = slice.reduce((a, b) => a + b, 0) / slice.length;
                 const height = (averageVolume / 255) * 9.5 + 0.1;
-                
                 const bar = visualizerBars[i];
                 if (bar) {
                     bar.setAttribute('height', height);
@@ -197,23 +167,18 @@
             }
         }
 
-        // ============================================================
-        // EVENT LISTENERS & INITIALIZATION
-        // ============================================================
+        // Event Listeners & Initialization
         createVisualizerBars();
         
-        // Listener for the audio start button
+        // NOTE: No changes are needed for the event listeners!
+        // The 'laser-controls' component automatically makes the controller's trigger
+        // emit a 'click' event on whatever it's pointing at.
+        // So, these existing listeners will now work with the controllers.
         startButton.addEventListener('click', initAudio);
-
-        // Listener for the video wall click
         videoWall.addEventListener('click', toggleVideoPlayback);
-
-        // BUG FIX LISTENER: Listen for the 'enter-vr' event on the scene.
-        // When the user enters immersive mode, we explicitly try to resume the audio context.
-        scene.addEventListener('enter-vr', () => {
-            console.log("Entered VR mode. Checking audio context state.");
-            resumeAudioContext();
-        });
+        
+        // Persistent bug fix attempt listener (No changes)
+        scene.addEventListener('enter-vr', resumeAudioContext);
     });
     </script>
 </body>
