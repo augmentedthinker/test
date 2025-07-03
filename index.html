@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Player Hit Detection - Fixed</title>
+  <title>Quest VR: Accurate Player Hitbox</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -21,7 +21,7 @@
               laser-controls="hand: right"
               raycaster="objects: .clickable; far: 100"
               line="color: red; opacity: 0.9"></a-entity>
-    <!-- Player hitbox sphere (now larger, semi-transparent blue) -->
+    <!-- Player hitbox sphere (centered between hands, radius 0.4) -->
     <a-sphere id="playerSphere"
               color="#2196F3"
               opacity="0.3"
@@ -81,7 +81,7 @@
       },
       init: function () {
         this.el.addEventListener('click', () => {
-          // Get midpoint between controllers
+          // Get midpoint between controllers in WORLD space
           var leftObj = document.querySelector('#leftHand').object3D;
           var rightObj = document.querySelector('#rightHand').object3D;
           var leftPos = new THREE.Vector3();
@@ -90,7 +90,7 @@
           rightObj.getWorldPosition(rightPos);
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
 
-          // Get the shooting sphere's position
+          // Get the shooting sphere's position in WORLD space
           var origin = new THREE.Vector3();
           this.el.object3D.getWorldPosition(origin);
 
@@ -131,10 +131,11 @@
         var move = this.directionVec.clone().multiplyScalar(this.speed * deltaTime / 1000);
         this.el.object3D.position.add(move);
 
-        // Collision with player sphere
+        // Collision with player sphere (use world positions)
         var player = document.querySelector('#playerSphere');
         if (player) {
-          var projectilePos = this.el.object3D.position;
+          var projectilePos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(projectilePos);
           var playerPos = new THREE.Vector3();
           player.object3D.getWorldPosition(playerPos);
           var dist = projectilePos.distanceTo(playerPos);
@@ -154,7 +155,7 @@
       }
     });
 
-    // Fix: Accurate player sphere midpoint update each frame
+    // Correct: Always update the player sphere's position to the true midpoint between hands (in world coordinates)
     AFRAME.registerComponent('player-follow-hands', {
       tick: function () {
         var leftHand = document.querySelector('#leftHand');
@@ -168,8 +169,8 @@
           leftObj.getWorldPosition(leftPos);
           rightObj.getWorldPosition(rightPos);
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
-          // Set Y so it's not below the floor if hands are too low
-          if (mid.y < 0.3) mid.y = 0.3;
+          // Set the playerSphere's **WORLD position** exactly to that midpoint:
+          playerSphere.object3D.parent.worldToLocal(mid); // Convert world to local for parenting
           playerSphere.object3D.position.copy(mid);
         }
       }
