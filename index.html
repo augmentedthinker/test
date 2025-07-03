@@ -3,79 +3,62 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Audio Visualizer - Blue Neon</title>
+    <title>VR Audio Visualizer + Video Wall</title>
     <!-- A-Frame Library -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
-        /* Basic CSS to ensure the scene fills the entire browser window. */
         body { margin: 0; }
         canvas { width: 100%; height: 100%; }
     </style>
 </head>
 <body>
-    <!-- 
-      ============================================================
-      A-FRAME SCENE SETUP
-      ============================================================
-    -->
     <a-scene id="main-scene" background="color: #000">
-        <!-- Assets: Not used in this version, but good practice to include. -->
-        <a-assets></a-assets>
-
         <!-- 
-          CAMERA AND CURSOR
-          The camera is the user's viewpoint. The cursor provides a reticle 
-          and enables click interactions with objects in the scene.
+          ============================================================
+          ASSETS MANAGEMENT
+          Pre-loading assets like videos is crucial for performance.
+          The video is given an ID and referenced by other entities.
+          ============================================================
         -->
+        <a-assets>
+            <!-- The video file, expected to be in the same directory. -->
+            <video id="my-video" src="video.mp4" loop="true" preload="auto" crossOrigin="anonymous"></video>
+        </a-assets>
+
+        <!-- Camera and Cursor -->
         <a-camera>
             <a-cursor></a-cursor>
         </a-camera>
 
         <!-- 
           THE CUBE ROOM - "SHADES OF BLUE" VIBE
-          The room is constructed from six <a-plane> entities, each acting as a wall.
-          Each wall has a distinct, harmonious shade of blue for depth and orientation.
-          Dimensions are 10x10 units.
         -->
-        <!-- Floor (Dark Navy) -->
         <a-plane position="0 -5 0" rotation="-90 0 0" width="10" height="10" color="#001f3f"></a-plane>
-        <!-- Ceiling (Light Aqua) -->
         <a-plane position="0 5 0" rotation="90 0 0" width="10" height="10" color="#7FDBFF"></a-plane>
-        <!-- Back Wall (Primary Blue) -->
         <a-plane position="0 0 5" rotation="0 180 0" width="10" height="10" color="#0074D9"></a-plane>
-        <!-- Left Wall (Teal) -->
-        <a-plane position="-5 0 0" rotation="0 90 0" width="10" height="10" color="#39CCCC"></a-plane>
-        <!-- Right Wall (Deep Sky Blue) -->
         <a-plane position="5 0 0" rotation="0 -90 0" width="10" height="10" color="#00BFFF"></a-plane>
         
         <!-- 
-          FRONT WALL (VISUALIZER HOST)
-          This wall has a very dark blue background to provide good contrast for the neon orange bars.
+          NEW FEATURE: VIDEO WALL
+          This plane uses the preloaded video from <a-assets> as its texture.
+          It has an ID so we can target it with JavaScript for play/pause controls.
         -->
-        <a-plane id="visualizer-wall" position="0 0 -5" width="10" height="10" color="#001020"></a-plane>
+        <a-plane id="video-wall" position="-5 0 0" rotation="0 90 0" width="10" height="10" src="#my-video" color="#39CCCC">
+            <!-- A simple "Play" icon to indicate interactivity -->
+            <a-text id="play-icon" value="►" align="center" width="15" color="white"></a-text>
+        </a-plane>
 
-        <!-- 
-          AUDIO VISUALIZER BARS CONTAINER
-          This entity will hold the dynamically generated bars. It's positioned slightly in front 
-          of the wall to prevent z-fighting (visual flickering).
-        -->
+        <!-- Front Wall (Visualizer Host) -->
+        <a-plane id="visualizer-wall" position="0 0 -5" width="10" height="10" color="#001020"></a-plane>
         <a-entity id="visualizer-bars-container" position="0 0 -4.95"></a-entity>
 
-        <!-- 
-          INTERACTION & UI
-        -->
-        <!-- Start Button (Bright Yellow for contrast) -->
+        <!-- UI Elements -->
         <a-entity id="start-button" position="0 1.6 -3" 
                   geometry="primitive: sphere; radius: 0.3;" 
-                  material="color: #FFDC00; shader: flat;"
-                  animation__scale="property: scale; to: 1.1 1.1 1.1; dur: 200; startEvents: mouseenter"
-                  animation__scale_reverse="property: scale; to: 1 1 1; dur: 200; startEvents: mouseleave">
+                  material="color: #FFDC00; shader: flat;">
             <a-text value="Start Visualizer" align="center" position="0 0.5 0" width="3" color="black"></a-text>
         </a-entity>
-
-        <!-- Status/Error Message Text -->
         <a-text id="status-text" value="" align="center" position="0 2.5 -4" color="white" width="6" visible="false"></a-text>
-
     </a-scene>
 
     <script>
@@ -84,139 +67,130 @@
         // ============================================================
         // VARIABLE DECLARATIONS
         // ============================================================
+        const scene = document.getElementById('main-scene');
         const startButton = document.getElementById('start-button');
         const statusText = document.getElementById('status-text');
+        
+        // Visualizer variables
         const barsContainer = document.getElementById('visualizer-bars-container');
+        let visualizerBars = [];
+        const NUM_BARS = 32;
+
+        // Video variables
+        const videoWall = document.getElementById('video-wall');
+        const videoEl = document.getElementById('my-video');
+        const playIcon = document.getElementById('play-icon');
         
         // Web Audio API variables
         let audioContext;
         let analyser;
         let microphone;
         let dataArray;
-
-        // Visualizer variables
-        let visualizerBars = [];
-        const NUM_BARS = 32; // The number of visualizer bars to create.
+        let isAudioInitialized = false;
 
         // ============================================================
-        // VISUALIZER SETUP
+        // VISUALIZER SETUP (No changes from previous version)
         // ============================================================
-
-        /**
-         * Creates the visualizer bars with a neon/glowing style and adds them to the scene.
-         */
         function createVisualizerBars() {
-            // The total width should match the wall's width.
             const totalWidth = 9.8; 
             const barWidth = totalWidth / NUM_BARS;
-            const gap = barWidth * 0.15; // A small gap between bars.
-            const effectiveBarWidth = barWidth - gap;
-
+            const effectiveBarWidth = barWidth - (barWidth * 0.15);
             for (let i = 0; i < NUM_BARS; i++) {
                 const bar = document.createElement('a-box');
                 const xPosition = -totalWidth / 2 + i * barWidth + barWidth / 2;
-                
                 bar.setAttribute('position', `${xPosition} 0 0`);
                 bar.setAttribute('width', effectiveBarWidth);
                 bar.setAttribute('depth', 0.2);
-                bar.setAttribute('height', 0.1); // Initial small height.
-                
-                // STYLISTIC CHANGE: Use a flat shader with an emissive color to create a neon glow effect.
-                // This makes the bars look like they are emitting light.
-                bar.setAttribute('material', {
-                    shader: 'flat',
-                    color: '#FFA500', // Vibrant orange
-                    emissive: '#FFA500',
-                    emissiveIntensity: 1.5
-                });
-                
+                bar.setAttribute('height', 0.1);
+                bar.setAttribute('material', { shader: 'flat', color: '#FFA500' });
                 barsContainer.appendChild(bar);
                 visualizerBars.push(bar);
             }
         }
 
         // ============================================================
-        // WEB AUDIO API INITIALIZATION
+        // WEB AUDIO API INITIALIZATION & BUG FIXING
         // ============================================================
+        async function initAudio() {
+            // If already initialized, do nothing.
+            if (isAudioInitialized) return;
+
+            console.log('Attempting to start audio...');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 256;
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                dataArray = new Uint8Array(bufferLength);
+                
+                startButton.setAttribute('visible', 'false');
+                statusText.setAttribute('value', 'Microphone Connected!');
+                statusText.setAttribute('visible', 'true');
+                setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
+
+                isAudioInitialized = true;
+                updateVisualizer();
+
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                statusText.setAttribute('value', 'Microphone access denied.');
+                statusText.setAttribute('visible', 'true');
+                startButton.setAttribute('visible', 'false');
+            }
+        }
 
         /**
-         * Initializes the Web Audio API and requests microphone access.
-         * This function is triggered by the user clicking the start button.
+         * BUG FIX ATTEMPT: This function is called when the user clicks the start button
+         * OR when they enter VR mode. It checks if the audio context is "suspended"
+         * and tries to resume it. This is a common requirement for WebXR.
          */
-        async function initAudio() {
-            console.log('Attempting to start or resume audio...');
-
-            // BUG FIX ATTEMPT: Check if the AudioContext is suspended, which can happen after 
-            // entering immersive (VR) mode. If so, resume it. This requires a user gesture (the click).
+        function resumeAudioContext() {
             if (audioContext && audioContext.state === 'suspended') {
-                console.log('Resuming suspended AudioContext.');
-                await audioContext.resume();
+                console.log('AudioContext is suspended. Attempting to resume...');
+                audioContext.resume().then(() => {
+                    console.log('AudioContext resumed successfully.');
+                }).catch(e => console.error('Failed to resume AudioContext:', e));
             }
+        }
 
-            // If the audio context doesn't exist yet, create and configure it.
-            if (!audioContext) {
-                console.log('Creating new AudioContext.');
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-                    
-                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    analyser = audioContext.createAnalyser();
-                    analyser.fftSize = 256;
+        // ============================================================
+        // VIDEO WALL PLAYBACK CONTROL
+        // ============================================================
+        function toggleVideoPlayback() {
+            if (!videoEl) return;
 
-                    microphone = audioContext.createMediaStreamSource(stream);
-                    microphone.connect(analyser);
-
-                    const bufferLength = analyser.frequencyBinCount;
-                    dataArray = new Uint8Array(bufferLength);
-                    
-                    // Hide the start button and show a success message only on the first successful connection.
-                    startButton.setAttribute('visible', 'false');
-                    statusText.setAttribute('value', 'Microphone Connected!');
-                    statusText.setAttribute('visible', 'true');
-                    setTimeout(() => statusText.setAttribute('visible', 'false'), 2000);
-
-                    // Start the animation loop.
-                    updateVisualizer();
-
-                } catch (err) {
-                    console.error('Error accessing microphone:', err);
-                    statusText.setAttribute('value', 'Microphone access denied.\nPlease allow access in browser settings.');
-                    statusText.setAttribute('visible', 'true');
-                    startButton.setAttribute('visible', 'false');
-                }
+            if (videoEl.paused) {
+                videoEl.play();
+                playIcon.setAttribute('visible', 'false'); // Hide play icon when playing
+            } else {
+                videoEl.pause();
+                playIcon.setAttribute('visible', 'true'); // Show play icon when paused
             }
         }
 
         // ============================================================
         // VISUALIZER ANIMATION LOOP
         // ============================================================
-
-        /**
-         * This function runs on every frame to update the visualizer bars.
-         */
         function updateVisualizer() {
-            // This check ensures we don't try to animate if the audio setup failed.
-            if (!analyser) {
-                return;
-            }
+            if (!isAudioInitialized) return;
 
             requestAnimationFrame(updateVisualizer);
             analyser.getByteFrequencyData(dataArray);
 
-            const sliceWidth = Math.floor(dataArray.length / NUM_BARS);
-
             for (let i = 0; i < NUM_BARS; i++) {
+                const sliceWidth = Math.floor(dataArray.length / NUM_BARS);
                 let sliceStart = i * sliceWidth;
                 let slice = dataArray.slice(sliceStart, sliceStart + sliceWidth);
                 let averageVolume = slice.reduce((a, b) => a + b, 0) / slice.length;
-
-                // Map the 0-255 volume range to a suitable height for the scene.
-                // The max height is adjusted to fit the 10-unit high wall.
                 const height = (averageVolume / 255) * 9.5 + 0.1;
                 
                 const bar = visualizerBars[i];
                 if (bar) {
-                    // Update height and position simultaneously.
                     bar.setAttribute('height', height);
                     bar.setAttribute('position', { y: height / 2 - 5, x: bar.getAttribute('position').x, z: 0 });
                 }
@@ -226,10 +200,20 @@
         // ============================================================
         // EVENT LISTENERS & INITIALIZATION
         // ============================================================
-
         createVisualizerBars();
+        
+        // Listener for the audio start button
         startButton.addEventListener('click', initAudio);
 
+        // Listener for the video wall click
+        videoWall.addEventListener('click', toggleVideoPlayback);
+
+        // BUG FIX LISTENER: Listen for the 'enter-vr' event on the scene.
+        // When the user enters immersive mode, we explicitly try to resume the audio context.
+        scene.addEventListener('enter-vr', () => {
+            console.log("Entered VR mode. Checking audio context state.");
+            resumeAudioContext();
+        });
     });
     </script>
 </body>
