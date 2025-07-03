@@ -2,13 +2,17 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Accurate Player Hitbox</title>
+  <title>Quest VR: Sound, Haptics, and Explosions!</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
 <a-scene background="color: #ECECEC">
-  <a-assets></a-assets>
+  <!-- Sound Assets (laser + explosion) - public domain short clips -->
+  <a-assets>
+    <audio id="laser" src="https://cdn.jsdelivr.net/gh/joshwcomeau/laser-sounds@main/sounds/laser1.mp3"></audio>
+    <audio id="explosion" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa45ad.mp3"></audio>
+  </a-assets>
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0"></a-entity>
     <a-entity id="leftHand"
@@ -21,7 +25,6 @@
               laser-controls="hand: right"
               raycaster="objects: .clickable; far: 100"
               line="color: red; opacity: 0.9"></a-entity>
-    <!-- Player hitbox sphere (centered between hands, radius 0.4) -->
     <a-sphere id="playerSphere"
               color="#2196F3"
               opacity="0.3"
@@ -32,7 +35,8 @@
   <a-plane id="ground" color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
   <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
   <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
-  <!-- Main clickable sphere -->
+
+  <!-- Main clickable/exploding sphere -->
   <a-sphere id="colorSphere"
             class="clickable"
             position="0 2 0"
@@ -41,9 +45,15 @@
             shadow="cast: true"
             toggle-color-on-click
             shoot-on-click
-            flash-on-hit></a-sphere>
+            explode-on-hit></a-sphere>
+
+  <!-- Laser fire sound -->
+  <a-entity id="laserSound" sound="src: #laser; volume: 2"></a-entity>
+  <!-- Explosion sound -->
+  <a-entity id="explosionSound" sound="src: #explosion; volume: 4"></a-entity>
+
   <script>
-    // Toggle central sphere color
+    // Toggle central sphere color on click
     AFRAME.registerComponent('toggle-color-on-click', {
       schema: {
         colors: {type: 'array', default: ['#FFC300', '#32CD32', '#1976D2', '#E53935']}
@@ -57,30 +67,62 @@
       }
     });
 
-    // Flash the central sphere when called
-    AFRAME.registerComponent('flash-on-hit', {
+    // Explosive "burst" animation, sound, particles, and haptics on hit
+    AFRAME.registerComponent('explode-on-hit', {
       init: function () {
+        this.exploding = false;
         this.originalScale = this.el.object3D.scale.clone();
         this.originalColor = this.el.getAttribute('color');
       },
-      flash: function () {
+      explode: function () {
+        if (this.exploding) return;
+        this.exploding = true;
         let el = this.el;
+        // Play explosion sound
+        document.querySelector('#explosionSound').components.sound.playSound();
+
+        // Haptic feedback: vibrate both controllers if possible
+        vibrateControllers(0.4, 180); // duration in seconds, intensity in ms
+
+        // Animate: balloon up and fade out
         el.setAttribute('color', '#FFF');
-        el.object3D.scale.set(1.3, 1.3, 1.3);
+        el.setAttribute('animation__grow', {
+          property: 'scale',
+          to: '2.7 2.7 2.7',
+          dur: 200,
+          easing: 'easeOutCubic'
+        });
+        el.setAttribute('animation__fade', {
+          property: 'material.opacity',
+          to: 0,
+          dur: 250,
+          easing: 'easeInCubic',
+          delay: 180
+        });
+
+        // Spawn particles
+        spawnParticles(el.object3D.position, 15);
+
+        // Reset after short time
         setTimeout(() => {
+          el.setAttribute('scale', '1 1 1');
           el.setAttribute('color', this.originalColor);
-          el.object3D.scale.copy(this.originalScale);
-        }, 400);
+          el.setAttribute('material', 'opacity', 1);
+          this.exploding = false;
+        }, 850);
       }
     });
 
-    // Shoot projectile at player when main sphere clicked
+    // Shoot projectile at player when main sphere clicked, with laser sound
     AFRAME.registerComponent('shoot-on-click', {
       schema: {
         speed: {type: 'number', default: 1.5}
       },
       init: function () {
         this.el.addEventListener('click', () => {
+          // Play laser sound
+          document.querySelector('#laserSound').components.sound.playSound();
+
           // Get midpoint between controllers in WORLD space
           var leftObj = document.querySelector('#leftHand').object3D;
           var rightObj = document.querySelector('#rightHand').object3D;
@@ -142,9 +184,10 @@
           var combinedRadius = 0.12 + 0.4;
           if (dist < combinedRadius) {
             this.hit = true;
+            // EXPLODE!
             var colorSphere = document.querySelector('#colorSphere');
-            if (colorSphere && colorSphere.components['flash-on-hit']) {
-              colorSphere.components['flash-on-hit'].flash();
+            if (colorSphere && colorSphere.components['explode-on-hit']) {
+              colorSphere.components['explode-on-hit'].explode();
             }
             this.el.parentNode.removeChild(this.el);
             return;
@@ -155,7 +198,7 @@
       }
     });
 
-    // Correct: Always update the player sphere's position to the true midpoint between hands (in world coordinates)
+    // Always update the player sphere's position to the true midpoint between hands (world coordinates)
     AFRAME.registerComponent('player-follow-hands', {
       tick: function () {
         var leftHand = document.querySelector('#leftHand');
@@ -169,8 +212,7 @@
           leftObj.getWorldPosition(leftPos);
           rightObj.getWorldPosition(rightPos);
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
-          // Set the playerSphere's **WORLD position** exactly to that midpoint:
-          playerSphere.object3D.parent.worldToLocal(mid); // Convert world to local for parenting
+          playerSphere.object3D.parent.worldToLocal(mid);
           playerSphere.object3D.position.copy(mid);
         }
       }
@@ -178,6 +220,74 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       document.querySelector('#cameraRig').setAttribute('player-follow-hands', '');
+    });
+
+    // HAPTICS: vibrate both controllers on hit (if supported)
+    function vibrateControllers(duration = 0.2, strong = 180) {
+      // duration in seconds, strong is vibration intensity (ms)
+      const hands = ['leftHand', 'rightHand'];
+      hands.forEach(handId => {
+        const hand = document.getElementById(handId);
+        if (!hand) return;
+        const gamepad = hand.components['meta-touch-controls'] &&
+                        hand.components['meta-touch-controls'].controller &&
+                        hand.components['meta-touch-controls'].controller.gamepad;
+        if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
+          try {
+            // Use pulse method if available
+            gamepad.hapticActuators[0].pulse(1.0, duration * 1000);
+          } catch (e) { /* Not supported */ }
+        }
+      });
+    }
+
+    // PARTICLE BURST: spawn multiple small spheres that move outward quickly and fade
+    function spawnParticles(origin, count) {
+      const scene = document.querySelector('a-scene');
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('a-sphere');
+        p.setAttribute('radius', 0.08 + Math.random() * 0.04);
+        p.setAttribute('color', '#FFD600');
+        // Random direction on a sphere
+        const theta = Math.random() * 2 * Math.PI;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const dir = new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.sin(phi) * Math.sin(theta),
+          Math.cos(phi)
+        ).multiplyScalar(0.6 + Math.random() * 0.8);
+
+        p.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+        p.setAttribute('particle-move-fade', {vx: dir.x, vy: dir.y, vz: dir.z});
+        scene.appendChild(p);
+      }
+    }
+
+    // Particle move and fade out component
+    AFRAME.registerComponent('particle-move-fade', {
+      schema: {
+        vx: {type: 'number', default: 0},
+        vy: {type: 'number', default: 0},
+        vz: {type: 'number', default: 0}
+      },
+      init: function () {
+        this.life = 0;
+      },
+      tick: function (time, dt) {
+        this.life += dt;
+        // Move
+        this.el.object3D.position.x += this.data.vx * dt / 1000;
+        this.el.object3D.position.y += this.data.vy * dt / 1000;
+        this.el.object3D.position.z += this.data.vz * dt / 1000;
+        // Fade out after 0.2s
+        if (this.life > 200) {
+          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 200) / 300, 0));
+        }
+        // Remove after 0.5s
+        if (this.life > 500) {
+          this.el.parentNode && this.el.parentNode.removeChild(this.el);
+        }
+      }
     });
   </script>
 </a-scene>
