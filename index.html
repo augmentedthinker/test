@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Pronounced Game Over & Player Explosion</title>
+  <title>Quest VR: Large 3D Game Over & Advancing Sphere</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -37,7 +37,31 @@
   <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
   <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
 
-  <!-- Central clickable sphere (does NOT explode on hit) -->
+  <!-- Large 3D Game Over display, always in front of player, four times bigger, and thicker -->
+  <a-entity id="gameOverGroup" visible="false">
+    <a-torus color="#ff2222" radius="4.8" radius-tubular="0.36" segments-radial="20" segments-tubular="100" position="0 0 0.2"></a-torus>
+    <!-- Fake depth by overlaying several slightly offset texts -->
+    <a-text id="gameOverTextBack"
+            value="GAME OVER"
+            color="#660000"
+            width="10"
+            align="center"
+            position="0 0.42 0.27"
+            side="double"
+            rotation="0 0 0"
+            opacity="0.7"></a-text>
+    <a-text id="gameOverTextFront"
+            value="GAME OVER"
+            color="#fff"
+            width="10"
+            align="center"
+            position="0 0.4 0.32"
+            side="double"
+            rotation="0 0 0"
+            opacity="1"></a-text>
+  </a-entity>
+
+  <!-- Central sphere: now will move toward the player after 10s -->
   <a-sphere id="colorSphere"
             class="clickable"
             position="0 2 0"
@@ -45,23 +69,8 @@
             color="#FFC300"
             shadow="cast: true"
             toggle-color-on-click
-            shoot-on-click></a-sphere>
-
-  <!-- 3D Game Over: Large torus and animated text (will follow player) -->
-  <a-entity id="gameOverGroup" visible="false">
-    <a-torus color="#ff2222" radius="1.2" radius-tubular="0.09" segments-radial="16" segments-tubular="50" position="0 0 0"></a-torus>
-    <a-text id="gameOverText"
-            value="GAME OVER"
-            color="#fff"
-            width="3"
-            align="center"
-            anchor="center"
-            position="0 0.1 0.2"
-            side="double"
-            shader="msdf"
-            font="https://cdn.aframe.io/fonts/kenpixel-msdf.json">
-    </a-text>
-  </a-entity>
+            shoot-on-click
+            central-sphere-move></a-sphere>
 
   <script>
     // Audio DOM elements
@@ -115,22 +124,25 @@
           rightHand.object3D.getWorldPosition(rightPos);
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
           group.object3D.position.copy(mid);
-          group.object3D.position.y += 0.7; // always above
+          group.object3D.position.y += 1.3; // now even higher above for big display
         }
         requestAnimationFrame(followPlayer);
       }
       followPlayer();
 
       // Animate text: spin and pulse
-      const text = document.getElementById('gameOverText');
+      const front = document.getElementById('gameOverTextFront');
+      const back = document.getElementById('gameOverTextBack');
       let pulse = 1, direction = 1;
       function animateText() {
         if (!gameOver) return;
-        pulse += direction * 0.03;
-        if (pulse > 1.22) direction = -1;
+        pulse += direction * 0.05;
+        if (pulse > 1.11) direction = -1;
         if (pulse < 1) direction = 1;
-        text.object3D.scale.set(pulse, pulse, pulse);
-        text.object3D.rotation.y += 0.04;
+        front.object3D.scale.set(pulse, pulse, pulse);
+        back.object3D.scale.set(pulse, pulse, pulse);
+        front.object3D.rotation.y += 0.019;
+        back.object3D.rotation.y += 0.019;
         requestAnimationFrame(animateText);
       }
       animateText();
@@ -250,6 +262,45 @@
       }
     });
 
+    // Central sphere moves toward player after 10s, then accelerates
+    AFRAME.registerComponent('central-sphere-move', {
+      schema: {},
+      init: function () {
+        this.startTime = Date.now();
+        this.hasStarted = false;
+        this.lastTarget = new THREE.Vector3();
+      },
+      tick: function () {
+        if (gameOver) return;
+        const now = Date.now();
+        const elapsed = (now - this.startTime) / 1000;
+        if (elapsed < 10) return; // Wait first 10 seconds
+        // Find midpoint between controllers
+        var leftHand = document.querySelector('#leftHand');
+        var rightHand = document.querySelector('#rightHand');
+        if (!leftHand || !rightHand) return;
+        var leftPos = new THREE.Vector3();
+        var rightPos = new THREE.Vector3();
+        leftHand.object3D.getWorldPosition(leftPos);
+        rightHand.object3D.getWorldPosition(rightPos);
+        var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+
+        // Get current position
+        var mypos = this.el.object3D.position.clone();
+        // Movement direction
+        var dir = mid.clone().sub(mypos);
+        var dist = dir.length();
+        if (dist < 0.1) return; // already at player
+
+        dir.normalize();
+
+        // Accelerate over time: from 0.4 up to 7 units/sec in 60 seconds after first 10s
+        let speed = 0.4 + (7 - 0.4) * Math.min((elapsed - 10) / 60, 1);
+        // Move toward player
+        this.el.object3D.position.add(dir.multiplyScalar(speed / 60));
+      }
+    });
+
     // Move projectile, check collision with player sphere
     AFRAME.registerComponent('projectile-move', {
       schema: {
@@ -280,10 +331,8 @@
           var combinedRadius = 0.12 + 0.4;
           if (dist < combinedRadius) {
             this.hit = true;
-            // Only count a hit if game is not over!
             if (!gameOver) {
               hitCount++;
-              // Explode the player
               if (player.components['player-explode-on-hit']) {
                 player.components['player-explode-on-hit'].explode();
               }
@@ -295,7 +344,6 @@
             return;
           }
         }
-        // Remove projectile after 8s
         if (time - this.start > 8000) this.el.parentNode.removeChild(this.el);
       }
     });
@@ -328,7 +376,7 @@
           rightObj.getWorldPosition(rightPos);
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
           group.object3D.position.copy(mid);
-          group.object3D.position.y += 0.7;
+          group.object3D.position.y += 1.3;
         }
       }
     });
