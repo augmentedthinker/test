@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Game Over & Increasing Speed</title>
+  <title>Quest VR: Pronounced Game Over & Player Explosion</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -29,14 +29,15 @@
               color="#2196F3"
               opacity="0.3"
               radius="0.4"
-              visible="true"></a-sphere>
+              visible="true"
+              player-explode-on-hit></a-sphere>
   </a-entity>
   <a-sky color="#B3E0FF"></a-sky>
   <a-plane id="ground" color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
   <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
   <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
 
-  <!-- Central clickable/exploding sphere -->
+  <!-- Central clickable sphere (does NOT explode on hit) -->
   <a-sphere id="colorSphere"
             class="clickable"
             position="0 2 0"
@@ -44,12 +45,22 @@
             color="#FFC300"
             shadow="cast: true"
             toggle-color-on-click
-            shoot-on-click
-            explode-on-hit></a-sphere>
+            shoot-on-click></a-sphere>
 
-  <!-- Floating Game Over text (hidden initially) -->
-  <a-entity id="gameOverText" visible="false" position="0 2.7 -1">
-    <a-text value="GAME OVER" color="#ff2222" width="4" align="center" anchor="center"></a-text>
+  <!-- 3D Game Over: Large torus and animated text (will follow player) -->
+  <a-entity id="gameOverGroup" visible="false">
+    <a-torus color="#ff2222" radius="1.2" radius-tubular="0.09" segments-radial="16" segments-tubular="50" position="0 0 0"></a-torus>
+    <a-text id="gameOverText"
+            value="GAME OVER"
+            color="#fff"
+            width="3"
+            align="center"
+            anchor="center"
+            position="0 0.1 0.2"
+            side="double"
+            shader="msdf"
+            font="https://cdn.aframe.io/fonts/kenpixel-msdf.json">
+    </a-text>
   </a-entity>
 
   <script>
@@ -57,7 +68,6 @@
     const laserAudio = document.querySelector('#laser-sfx');
     const explosionAudio = document.querySelector('#explosion-sfx');
 
-    // Unlock audio (for Quest/mobile)
     let audioUnlocked = false;
     function unlockAudio() {
       [laserAudio, explosionAudio].forEach(audio => {
@@ -80,25 +90,54 @@
     let initialProjectileSpeed = 1.5;
     let maxProjectileSpeed = 25;
     let speedStartTime = Date.now();
-    let lastProjectileSpeed = initialProjectileSpeed;
 
-    // Helper to get increasing projectile speed over time (capped)
     function getCurrentProjectileSpeed() {
       const elapsed = (Date.now() - speedStartTime) / 1000;
-      // Over 60 seconds, increase linearly to max
       const speed = initialProjectileSpeed + (maxProjectileSpeed - initialProjectileSpeed) * Math.min(elapsed / 60, 1);
-      lastProjectileSpeed = speed;
       return speed;
     }
 
-    // Show Game Over
+    // -- GAME OVER: Show big 3D sign floating at player's midpoint
     function triggerGameOver() {
       gameOver = true;
-      document.getElementById('gameOverText').setAttribute('visible', true);
-      // Optionally hide central sphere, or freeze the scene
+      const group = document.getElementById('gameOverGroup');
+      group.setAttribute('visible', true);
+
+      // Follow the player position (midpoint between hands, just above player)
+      function followPlayer() {
+        if (!gameOver) return;
+        var leftHand = document.querySelector('#leftHand');
+        var rightHand = document.querySelector('#rightHand');
+        if (leftHand && rightHand && group) {
+          var leftPos = new THREE.Vector3();
+          var rightPos = new THREE.Vector3();
+          leftHand.object3D.getWorldPosition(leftPos);
+          rightHand.object3D.getWorldPosition(rightPos);
+          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+          group.object3D.position.copy(mid);
+          group.object3D.position.y += 0.7; // always above
+        }
+        requestAnimationFrame(followPlayer);
+      }
+      followPlayer();
+
+      // Animate text: spin and pulse
+      const text = document.getElementById('gameOverText');
+      let pulse = 1, direction = 1;
+      function animateText() {
+        if (!gameOver) return;
+        pulse += direction * 0.03;
+        if (pulse > 1.22) direction = -1;
+        if (pulse < 1) direction = 1;
+        text.object3D.scale.set(pulse, pulse, pulse);
+        text.object3D.rotation.y += 0.04;
+        requestAnimationFrame(animateText);
+      }
+      animateText();
+
+      // Hide central sphere and player sphere
       document.getElementById('colorSphere').setAttribute('visible', false);
-      // Optionally, stop movement-controls if you want total freeze:
-      // document.getElementById('cameraRig').removeAttribute('movement-controls');
+      document.getElementById('playerSphere').setAttribute('visible', false);
     }
 
     // Toggle central sphere color on click
@@ -115,8 +154,8 @@
       }
     });
 
-    // Play EXPLOSION on hit (central sphere explodes when hit)
-    AFRAME.registerComponent('explode-on-hit', {
+    // Player "explodes" on hit
+    AFRAME.registerComponent('player-explode-on-hit', {
       init: function () {
         this.exploding = false;
         this.originalScale = this.el.object3D.scale.clone();
@@ -126,7 +165,6 @@
         if (this.exploding) return;
         this.exploding = true;
         let el = this.el;
-
         // Play explosion sound
         try {
           if (explosionAudio && audioUnlocked) {
@@ -135,38 +173,38 @@
             explosionAudio.play();
           }
         } catch (e) {}
-
         vibrateControllers(0.4, 180);
 
-        // Animate: balloon up and fade out
+        // Animate: grow and fade out
         el.setAttribute('color', '#FFF');
         el.setAttribute('animation__grow', {
           property: 'scale',
-          to: '3.6 3.6 3.6',
-          dur: 200,
+          to: '3.0 3.0 3.0',
+          dur: 250,
           easing: 'easeOutCubic'
         });
         el.setAttribute('animation__fade', {
           property: 'material.opacity',
           to: 0,
-          dur: 250,
+          dur: 300,
           easing: 'easeInCubic',
-          delay: 180
+          delay: 120
         });
-
-        // Spawn 60 particles (dramatic)
-        spawnParticles(el.object3D.position, 60);
+        // Spawn many yellow particles at explosion point
+        let pos = new THREE.Vector3();
+        el.object3D.getWorldPosition(pos);
+        spawnParticles(pos, 60);
 
         setTimeout(() => {
           el.setAttribute('scale', '1 1 1');
           el.setAttribute('color', this.originalColor);
-          el.setAttribute('material', 'opacity', 1);
+          el.setAttribute('material', 'opacity', 0.3);
           this.exploding = false;
-        }, 950);
+        }, 900);
       }
     });
 
-    // Play LASER when firing projectile at player (sphere is fired)
+    // Fire projectile at player, sound plays on shoot
     AFRAME.registerComponent('shoot-on-click', {
       init: function () {
         this.el.addEventListener('click', () => {
@@ -203,7 +241,6 @@
           projectile.setAttribute('radius', 0.12);
           projectile.setAttribute('color', '#E53935');
           projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
-          // Set dynamic speed based on time
           projectile.setAttribute('projectile-move', {
             direction: `${direction.x} ${direction.y} ${direction.z}`,
             speed: getCurrentProjectileSpeed()
@@ -246,14 +283,13 @@
             // Only count a hit if game is not over!
             if (!gameOver) {
               hitCount++;
+              // Explode the player
+              if (player.components['player-explode-on-hit']) {
+                player.components['player-explode-on-hit'].explode();
+              }
               if (hitCount >= 3) {
                 triggerGameOver();
               }
-            }
-            // EXPLODE!
-            var colorSphere = document.querySelector('#colorSphere');
-            if (colorSphere && colorSphere.components['explode-on-hit']) {
-              colorSphere.components['explode-on-hit'].explode();
             }
             this.el.parentNode.removeChild(this.el);
             return;
@@ -270,6 +306,7 @@
         var leftHand = document.querySelector('#leftHand');
         var rightHand = document.querySelector('#rightHand');
         var playerSphere = document.querySelector('#playerSphere');
+        var group = document.getElementById('gameOverGroup');
         if (leftHand && rightHand && playerSphere) {
           var leftObj = leftHand.object3D;
           var rightObj = rightHand.object3D;
@@ -280,6 +317,18 @@
           var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
           playerSphere.object3D.parent.worldToLocal(mid);
           playerSphere.object3D.position.copy(mid);
+        }
+        // If game over, keep GameOverGroup following user
+        if (group && group.getAttribute('visible')) {
+          var leftObj = leftHand.object3D;
+          var rightObj = rightHand.object3D;
+          var leftPos = new THREE.Vector3();
+          var rightPos = new THREE.Vector3();
+          leftObj.getWorldPosition(leftPos);
+          rightObj.getWorldPosition(rightPos);
+          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+          group.object3D.position.copy(mid);
+          group.object3D.position.y += 0.7;
         }
       }
     });
@@ -312,7 +361,6 @@
         const p = document.createElement('a-sphere');
         p.setAttribute('radius', 0.12 + Math.random() * 0.08);
         p.setAttribute('color', '#FFD600');
-        // Random direction (bigger/faster)
         const theta = Math.random() * 2 * Math.PI;
         const phi = Math.acos(2 * Math.random() - 1);
         const dir = new THREE.Vector3(
@@ -342,11 +390,9 @@
         this.el.object3D.position.x += this.data.vx * dt / 1000;
         this.el.object3D.position.y += this.data.vy * dt / 1000;
         this.el.object3D.position.z += this.data.vz * dt / 1000;
-        // Fade out after 0.3s
         if (this.life > 300) {
           this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 300) / 500, 0));
         }
-        // Remove after 1.1s
         if (this.life > 1100) {
           this.el.parentNode && this.el.parentNode.removeChild(this.el);
         }
