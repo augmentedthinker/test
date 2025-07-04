@@ -2,20 +2,17 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Massive Particles & Working Sounds</title>
+  <title>Quest VR: Functional Sound, Visuals, Particles</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
-<a-scene background="color: #ECECEC">
-  <!-- Sound Assets (short, reliable mp3s; you can replace these if you want) -->
-  <a-assets>
-    <audio id="laser" src="https://cdn.jsdelivr.net/gh/joshwcomeau/laser-sounds@main/sounds/laser1.mp3"></audio>
-    <audio id="explosion" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa45ad.mp3"></audio>
-  </a-assets>
-  <a-entity id="laserSound" sound="src: #laser; volume: 3"></a-entity>
-  <a-entity id="explosionSound" sound="src: #explosion; volume: 7"></a-entity>
+<!-- Plain audio tags for reliable sound playback -->
+<audio id="laserSound" src="https://cdn.jsdelivr.net/gh/joshwcomeau/laser-sounds@main/sounds/laser1.mp3" preload="auto"></audio>
+<audio id="explosionSound" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa45ad.mp3" preload="auto"></audio>
 
+<a-scene background="color: #ECECEC">
+  <a-assets></a-assets>
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0"></a-entity>
     <a-entity id="leftHand"
@@ -51,6 +48,10 @@
             explode-on-hit></a-sphere>
 
   <script>
+    // Get audio DOM elements
+    const laserAudio = document.getElementById('laserSound');
+    const explosionAudio = document.getElementById('explosionSound');
+
     // Toggle central sphere color on click
     AFRAME.registerComponent('toggle-color-on-click', {
       schema: {
@@ -76,12 +77,12 @@
         if (this.exploding) return;
         this.exploding = true;
         let el = this.el;
-        // Play explosion sound
-        let exp = document.querySelector('#explosionSound');
-        if (exp && exp.components && exp.components.sound) {
-          exp.components.sound.stopSound();
-          exp.components.sound.playSound();
-        }
+        // Play explosion sound (reset first for rapid repeat)
+        try {
+          explosionAudio.currentTime = 0;
+          explosionAudio.volume = 1;
+          explosionAudio.play();
+        } catch (e) {}
 
         vibrateControllers(0.4, 180);
 
@@ -101,7 +102,7 @@
           delay: 180
         });
 
-        // Spawn 60 particles (4x more)
+        // Spawn 60 particles (dramatic)
         spawnParticles(el.object3D.position, 60);
 
         setTimeout(() => {
@@ -120,12 +121,12 @@
       },
       init: function () {
         this.el.addEventListener('click', () => {
-          // Play laser sound
-          let laser = document.querySelector('#laserSound');
-          if (laser && laser.components && laser.components.sound) {
-            laser.components.sound.stopSound();
-            laser.components.sound.playSound();
-          }
+          // Play laser sound (reset for rapid repeat)
+          try {
+            laserAudio.currentTime = 0;
+            laserAudio.volume = 0.7;
+            laserAudio.play();
+          } catch (e) {}
 
           // Get midpoint between controllers in WORLD space
           var leftObj = document.querySelector('#leftHand').object3D;
