@@ -2,16 +2,16 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Functional Sound, Visuals, Particles (A-Frame Sound Component)</title>
+  <title>Quest VR: Custom Sound (GitHub Raw MP3)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
 <a-scene background="color: #ECECEC">
   <a-assets>
-    <!-- Preload sounds for reliable Quest compatibility -->
-    <audio id="laser-sfx" src="https://cdn.jsdelivr.net/gh/joshwcomeau/laser-sounds@main/sounds/laser1.mp3"></audio>
-    <audio id="explosion-sfx" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa45ad.mp3"></audio>
+    <!-- Using RAW GitHub links for correct audio file serving! -->
+    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3"></audio>
+    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3"></audio>
   </a-assets>
 
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
@@ -37,7 +37,7 @@
   <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
   <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
 
-  <!-- Main clickable/exploding sphere, with a-sound for click/laser SFX -->
+  <!-- Central clickable/exploding sphere -->
   <a-sphere id="colorSphere"
             class="clickable"
             position="0 2 0"
@@ -46,16 +46,30 @@
             shadow="cast: true"
             toggle-color-on-click
             shoot-on-click
-            explode-on-hit
-            sound__laser="src: #laser-sfx; on: click; volume: 1;">
-  </a-sphere>
-
-  <!-- Explosion sound source (positional) -->
-  <a-entity id="explosionSource"
-            sound="src: #explosion-sfx; positional: true; poolSize: 3; refDistance: 2; rolloffFactor: 1;">
-  </a-entity>
+            explode-on-hit></a-sphere>
 
   <script>
+    // Audio DOM elements
+    const laserAudio = document.querySelector('#laser-sfx');
+    const explosionAudio = document.querySelector('#explosion-sfx');
+
+    // Unlock audio (for Quest/mobile)
+    let audioUnlocked = false;
+    function unlockAudio() {
+      [laserAudio, explosionAudio].forEach(audio => {
+        if (!audio) return;
+        try {
+          audio.muted = false;
+          audio.play().catch(()=>{});
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (e) {}
+      });
+      audioUnlocked = true;
+    }
+    window.addEventListener('click', unlockAudio, {once:true});
+    window.addEventListener('touchstart', unlockAudio, {once:true});
+
     // Toggle central sphere color on click
     AFRAME.registerComponent('toggle-color-on-click', {
       schema: {
@@ -70,7 +84,7 @@
       }
     });
 
-    // Explosive "burst" animation, sound, particles, and haptics on hit
+    // Play EXPLOSION on hit (central sphere explodes when hit)
     AFRAME.registerComponent('explode-on-hit', {
       init: function () {
         this.exploding = false;
@@ -82,12 +96,14 @@
         this.exploding = true;
         let el = this.el;
 
-        // Play explosion positional sound at explosionSource
-        let explosionSource = document.getElementById('explosionSource');
-        if (explosionSource && explosionSource.components.sound) {
-          explosionSource.setAttribute('position', el.getAttribute('position'));
-          explosionSource.components.sound.playSound();
-        }
+        // Play explosion sound
+        try {
+          if (explosionAudio && audioUnlocked) {
+            explosionAudio.currentTime = 0;
+            explosionAudio.volume = 1;
+            explosionAudio.play();
+          }
+        } catch (e) {}
 
         vibrateControllers(0.4, 180);
 
@@ -119,14 +135,21 @@
       }
     });
 
-    // Shoot projectile at player when main sphere clicked, with laser sound (now handled by a-sound)
+    // Play LASER when firing projectile at player (sphere is fired)
     AFRAME.registerComponent('shoot-on-click', {
       schema: {
         speed: {type: 'number', default: 1.5}
       },
       init: function () {
         this.el.addEventListener('click', () => {
-          // Sound plays automatically by a-sound; only handle projectile logic here
+          // Play laser sound (reset for rapid repeat)
+          try {
+            if (laserAudio && audioUnlocked) {
+              laserAudio.currentTime = 0;
+              laserAudio.volume = 1;
+              laserAudio.play();
+            }
+          } catch (e) {}
 
           // Get midpoint between controllers in WORLD space
           var leftObj = document.querySelector('#leftHand').object3D;
@@ -291,16 +314,6 @@
         }
       }
     });
-
-    // Ensure Web Audio is unlocked by first user gesture (Quest, mobile)
-    window.addEventListener('click', () => {
-      var soundEls = document.querySelectorAll('[sound]');
-      soundEls.forEach(function(s) {
-        if (s.components.sound && s.components.sound.context && s.components.sound.context.state !== 'running') {
-          s.components.sound.context.resume();
-        }
-      });
-    }, {once:true});
   </script>
 </a-scene>
 </body>
