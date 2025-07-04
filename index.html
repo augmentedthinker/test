@@ -2,14 +2,13 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Custom Sound (GitHub Raw MP3)</title>
+  <title>Quest VR: Game Over & Increasing Speed</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
 <a-scene background="color: #ECECEC">
   <a-assets>
-    <!-- Using RAW GitHub links for correct audio file serving! -->
     <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3"></audio>
     <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3"></audio>
   </a-assets>
@@ -48,6 +47,11 @@
             shoot-on-click
             explode-on-hit></a-sphere>
 
+  <!-- Floating Game Over text (hidden initially) -->
+  <a-entity id="gameOverText" visible="false" position="0 2.7 -1">
+    <a-text value="GAME OVER" color="#ff2222" width="4" align="center" anchor="center"></a-text>
+  </a-entity>
+
   <script>
     // Audio DOM elements
     const laserAudio = document.querySelector('#laser-sfx');
@@ -69,6 +73,33 @@
     }
     window.addEventListener('click', unlockAudio, {once:true});
     window.addEventListener('touchstart', unlockAudio, {once:true});
+
+    // GAME STATE
+    let hitCount = 0;
+    let gameOver = false;
+    let initialProjectileSpeed = 1.5;
+    let maxProjectileSpeed = 25;
+    let speedStartTime = Date.now();
+    let lastProjectileSpeed = initialProjectileSpeed;
+
+    // Helper to get increasing projectile speed over time (capped)
+    function getCurrentProjectileSpeed() {
+      const elapsed = (Date.now() - speedStartTime) / 1000;
+      // Over 60 seconds, increase linearly to max
+      const speed = initialProjectileSpeed + (maxProjectileSpeed - initialProjectileSpeed) * Math.min(elapsed / 60, 1);
+      lastProjectileSpeed = speed;
+      return speed;
+    }
+
+    // Show Game Over
+    function triggerGameOver() {
+      gameOver = true;
+      document.getElementById('gameOverText').setAttribute('visible', true);
+      // Optionally hide central sphere, or freeze the scene
+      document.getElementById('colorSphere').setAttribute('visible', false);
+      // Optionally, stop movement-controls if you want total freeze:
+      // document.getElementById('cameraRig').removeAttribute('movement-controls');
+    }
 
     // Toggle central sphere color on click
     AFRAME.registerComponent('toggle-color-on-click', {
@@ -137,11 +168,10 @@
 
     // Play LASER when firing projectile at player (sphere is fired)
     AFRAME.registerComponent('shoot-on-click', {
-      schema: {
-        speed: {type: 'number', default: 1.5}
-      },
       init: function () {
         this.el.addEventListener('click', () => {
+          if (gameOver) return; // No new shots if game over
+
           // Play laser sound (reset for rapid repeat)
           try {
             if (laserAudio && audioUnlocked) {
@@ -173,9 +203,10 @@
           projectile.setAttribute('radius', 0.12);
           projectile.setAttribute('color', '#E53935');
           projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+          // Set dynamic speed based on time
           projectile.setAttribute('projectile-move', {
             direction: `${direction.x} ${direction.y} ${direction.z}`,
-            speed: this.data.speed
+            speed: getCurrentProjectileSpeed()
           });
           scene.appendChild(projectile);
         });
@@ -196,7 +227,7 @@
         this.hit = false;
       },
       tick: function (time, deltaTime) {
-        if (this.hit) return;
+        if (this.hit || gameOver) return;
         if (!this.start) this.start = time;
         var move = this.directionVec.clone().multiplyScalar(this.speed * deltaTime / 1000);
         this.el.object3D.position.add(move);
@@ -212,6 +243,13 @@
           var combinedRadius = 0.12 + 0.4;
           if (dist < combinedRadius) {
             this.hit = true;
+            // Only count a hit if game is not over!
+            if (!gameOver) {
+              hitCount++;
+              if (hitCount >= 3) {
+                triggerGameOver();
+              }
+            }
             // EXPLODE!
             var colorSphere = document.querySelector('#colorSphere');
             if (colorSphere && colorSphere.components['explode-on-hit']) {
