@@ -1,196 +1,99 @@
-<!DOCTYPE html>
-<html lang="en">
+<!-- VR Cube Room + Controller Debugger + Ball Shooter (Meta Quest ready) -->
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <title>VR Cube Room with Tetris</title>
+    <meta charset="utf-8">
+    <title>VR Controller Demo (Cube Room)</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- We'll use A-Frame's text component for floating debug -->
+    <script>
+      // Controller Debugger Component
+      AFRAME.registerComponent('controller-debug', {
+        schema: { hand: { type: 'string', default: 'right' } },
+        init: function () {
+          this.statusText = '';
+          this.textEl = document.getElementById(this.data.hand + '-controller-debug');
+          this.listen = this.listen.bind(this);
+
+          // List of Quest events (can extend if needed)
+          this.events = [
+            'triggerdown', 'triggerup', 'gripdown', 'gripup',
+            'thumbstickdown', 'thumbstickup', 'abuttondown', 'abuttonup',
+            'bbuttondown', 'bbuttonup', 'xbuttondown', 'xbuttonup',
+            'ybuttondown', 'ybuttonup', 'thumbstickmoved'
+          ];
+          this.events.forEach(e => this.el.addEventListener(e, this.listen));
+        },
+        listen: function (evt) {
+          // Build a status string
+          let str = `[${this.data.hand}] Event: ${evt.type}`;
+          if (evt.detail && evt.detail.x !== undefined && evt.detail.y !== undefined) {
+            str += `\nThumbstick: x=${evt.detail.x.toFixed(2)}, y=${evt.detail.y.toFixed(2)}`;
+          }
+          this.textEl.setAttribute('value', str);
+        }
+      });
+
+      // Ball Shooter Component (attach to right controller)
+      AFRAME.registerComponent('ball-shooter', {
+        init: function () {
+          this.el.addEventListener('triggerdown', () => {
+            // Create a sphere in front of the camera rig
+            const scene = this.el.sceneEl;
+            const camera = scene.querySelector('[camera]');
+            const camObj = camera.object3D;
+            const pos = new THREE.Vector3();
+            camObj.getWorldPosition(pos);
+            const dir = new THREE.Vector3();
+            camObj.getWorldDirection(dir);
+
+            // Ball entity
+            const ball = document.createElement('a-sphere');
+            ball.setAttribute('radius', 0.08);
+            ball.setAttribute('color', '#FCD303');
+            ball.setAttribute('position', `${pos.x + dir.x * 0.4} ${pos.y + dir.y * 0.4} ${pos.z + dir.z * 0.4}`);
+            ball.setAttribute('velocity', `${dir.x * 3} ${dir.y * 3} ${dir.z * 3}`); // shoot forward
+            ball.setAttribute('dynamic-body', 'mass:0.4; shape:sphere;');
+            ball.setAttribute('shadow', '');
+
+            scene.appendChild(ball);
+
+            // Remove after 5s to avoid clutter
+            setTimeout(() => ball.parentNode && ball.parentNode.removeChild(ball), 5000);
+          });
+        }
+      });
+    </script>
+    <!-- Physics (optional, but fun for balls) -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-physics-system@4.0.1/dist/aframe-physics-system.min.js"></script>
   </head>
   <body>
-    <a-scene>
-      <!-- Player rig -->
-      <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
-        <a-entity camera look-controls wasd-controls></a-entity>
-        <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-        <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+    <a-scene physics="gravity: -9.8" shadow="type: pcfsoft">
+      <!-- VR Rig with controllers -->
+      <a-entity id="cameraRig" position="0 1.6 0">
+        <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
+        <!-- Left controller with debug -->
+        <a-entity id="leftHand" meta-touch-controls="hand: left"
+                  controller-debug="hand: left"></a-entity>
+        <!-- Right controller with debug & shooter -->
+        <a-entity id="rightHand" meta-touch-controls="hand: right"
+                  controller-debug="hand: right" ball-shooter></a-entity>
       </a-entity>
 
-      <!-- Cube room using six planes -->
-      <a-box position="0 2 -3" width="6" height="4" depth="6" color="#222" material="side: double; opacity: 0.9"></a-box>
+      <!-- Floating debug displays -->
+      <a-entity id="left-controller-debug"
+                text="value: [left]; width: 2; color: #0ff"
+                position="-1.3 2.6 -1.5" scale="1 1 1"></a-entity>
+      <a-entity id="right-controller-debug"
+                text="value: [right]; width: 2; color: #ff0"
+                position="1.3 2.6 -1.5" scale="1 1 1"></a-entity>
 
-      <!-- Canvas for Tetris texture -->
-      <a-assets>
-        <canvas id="tetrisCanvas" width="300" height="600"></canvas>
-      </a-assets>
-
-      <!-- Arcade cabinet frame -->
-      <a-box position="0 2 -0.05" width="2.2" height="4.2" depth="0.1" color="#000"></a-box>
-      <a-box position="0 4.25 -0.05" width="2.2" height="0.2" depth="0.1" color="#ff0000"></a-box>
-      <a-box position="0 0.0 -0.05" width="2.2" height="0.2" depth="0.1" color="#ff0000"></a-box>
-      <a-box position="-1.1 2 -0.05" width="0.2" height="4.2" depth="0.1" color="#ff0000"></a-box>
-      <a-box position="1.1 2 -0.05" width="0.2" height="4.2" depth="0.1" color="#ff0000"></a-box>
-
-      <!-- Wall with Tetris texture -->
-      <a-plane 
-        position="0 2 0" 
-        rotation="0 0 0"
-        width="2" height="4"
-        material="shader: flat; src: #tetrisCanvas">
-      </a-plane>
+      <!-- Cube Room (6 faces) -->
+      <a-plane position="0 0 0" rotation="-90 0 0" width="4" height="4" color="#b0e57c" static-body></a-plane>
+      <a-plane position="0 3 0" rotation="90 0 0" width="4" height="4" color="#98d4f7" static-body></a-plane>
+      <a-plane position="0 1.5 -2" rotation="0 0 0" width="4" height="3" color="#f7b05b" static-body></a-plane>
+      <a-plane position="0 1.5 2" rotation="0 180 0" width="4" height="3" color="#e868a1" static-body></a-plane>
+      <a-plane position="-2 1.5 0" rotation="0 90 0" width="4" height="3" color="#a280e9" static-body></a-plane>
+      <a-plane position="2 1.5 0" rotation="0 -90 0" width="4" height="3" color="#f55c47" static-body></a-plane>
     </a-scene>
-
-    <!-- Tetris game logic -->
-    <script>
-      const canvas = document.getElementById("tetrisCanvas");
-      const ctx = canvas.getContext("2d");
-      const ROWS = 20;
-      const COLS = 10;
-      const BLOCK_SIZE = 30;
-
-      canvas.width = COLS * BLOCK_SIZE;
-      canvas.height = ROWS * BLOCK_SIZE;
-
-      const COLORS = [null, "cyan", "blue", "orange", "yellow", "green", "purple", "red"];
-      const SHAPES = [
-        [],
-        [[1, 1, 1, 1]],
-        [[2, 0, 0], [2, 2, 2]],
-        [[0, 0, 3], [3, 3, 3]],
-        [[4, 4], [4, 4]],
-        [[0, 5, 5], [5, 5, 0]],
-        [[0, 6, 0], [6, 6, 6]],
-        [[7, 7, 0], [0, 7, 7]]
-      ];
-
-      function createMatrix(w, h) {
-        const matrix = [];
-        while (h--) matrix.push(new Array(w).fill(0));
-        return matrix;
-      }
-
-      function collide(arena, player) {
-        const [m, o] = [player.matrix, player.pos];
-        for (let y = 0; y < m.length; y++) {
-          for (let x = 0; x < m[y].length; x++) {
-            if (m[y][x] && (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) return true;
-          }
-        }
-        return false;
-      }
-
-      function merge(arena, player) {
-        player.matrix.forEach((row, y) => {
-          row.forEach((value, x) => {
-            if (value) arena[y + player.pos.y][x + player.pos.x] = value;
-          });
-        });
-      }
-
-      function rotate(matrix, dir) {
-        for (let y = 0; y < matrix.length; ++y) {
-          for (let x = 0; x < y; ++x) {
-            [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
-          }
-        }
-        if (dir > 0) matrix.forEach(row => row.reverse());
-        else matrix.reverse();
-      }
-
-      function playerDrop() {
-        player.pos.y++;
-        if (collide(arena, player)) {
-          player.pos.y--;
-          merge(arena, player);
-          playerReset();
-          arenaSweep();
-        }
-        dropCounter = 0;
-      }
-
-      function playerMove(dir) {
-        player.pos.x += dir;
-        if (collide(arena, player)) player.pos.x -= dir;
-      }
-
-      function playerReset() {
-        const shape = SHAPES[(player.shape = (Math.random() * 7 | 0) + 1)];
-        player.matrix = shape;
-        player.pos.y = 0;
-        player.pos.x = ((COLS / 2) | 0) - ((shape[0].length / 2) | 0);
-        if (collide(arena, player)) arena.forEach(row => row.fill(0));
-      }
-
-      function arenaSweep() {
-        outer: for (let y = arena.length - 1; y >= 0; y--) {
-          for (let x = 0; x < arena[y].length; x++) {
-            if (arena[y][x] === 0) continue outer;
-          }
-          const row = arena.splice(y, 1)[0].fill(0);
-          arena.unshift(row);
-          y++;
-        }
-      }
-
-      function drawMatrix(matrix, offset) {
-        matrix.forEach((row, y) => {
-          row.forEach((value, x) => {
-            if (value) {
-              ctx.fillStyle = COLORS[value];
-              ctx.fillRect((x + offset.x) * BLOCK_SIZE, (y + offset.y) * BLOCK_SIZE, BLOCK_SIZE - 1, BLOCK_SIZE - 1);
-            }
-          });
-        });
-      }
-
-      function draw() {
-        ctx.fillStyle = "#000";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        drawMatrix(arena, { x: 0, y: 0 });
-        drawMatrix(player.matrix, player.pos);
-      }
-
-      let dropCounter = 0;
-      let dropInterval = 1000;
-      let lastTime = 0;
-
-      function update(time = 0) {
-        const deltaTime = time - lastTime;
-        lastTime = time;
-        dropCounter += deltaTime;
-        if (dropCounter > dropInterval) playerDrop();
-        draw();
-        requestAnimationFrame(update);
-      }
-
-      const arena = createMatrix(COLS, ROWS);
-      const player = { pos: { x: 0, y: 0 }, matrix: null, shape: 0 };
-
-      playerReset();
-      update();
-
-      // Keyboard controls
-      document.addEventListener("keydown", e => {
-        if (e.key === "ArrowLeft") playerMove(-1);
-        else if (e.key === "ArrowRight") playerMove(1);
-        else if (e.key === "ArrowDown") playerDrop();
-        else if (e.key === "q") rotate(player.matrix, -1);
-        else if (e.key === "w") rotate(player.matrix, 1);
-      });
-
-      // VR Controller Input
-      AFRAME.registerComponent('tetris-controls', {
-        init: function () {
-          this.el.addEventListener('abuttondown', () => rotate(player.matrix, 1));
-          this.el.addEventListener('bbuttondown', () => rotate(player.matrix, -1));
-          this.el.addEventListener('thumbstickmoved', evt => {
-            if (evt.detail.x < -0.95) playerMove(-1);
-            else if (evt.detail.x > 0.95) playerMove(1);
-            if (evt.detail.y > 0.95) playerDrop();
-          });
-        }
-      });
-
-      document.querySelector('#leftHand').setAttribute('tetris-controls', '');
-      document.querySelector('#rightHand').setAttribute('tetris-controls', '');
-    </script>
   </body>
 </html>
