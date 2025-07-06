@@ -2,86 +2,222 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>A-Frame Basic Environment</title>
-  <meta name="description" content="A basic A-Frame environment for Meta Quest, based on provided PRPs.">
+  <title>A-Frame Dynamic Environment</title>
+  <meta name="description" content="A dynamic A-Frame environment with weather, a day/night cycle, and procedural audio.">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
-  <!-- A-Frame Core Library (v1.5.0 as specified in PRPs) -->
+  <!-- A-Frame Core Library -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   
-  <!-- 
-    A-Frame Extras for additional components like movement-controls.
-    This is mentioned in the "Product Requirements Prompt_ A-Frame Baseline for Meta Quest.pdf"
-    to enable smooth locomotion with thumbsticks.
-  -->
+  <!-- A-Frame Extras for movement-controls -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
   
-  <!-- 
-    A-Frame Environment Component.
-    This powerful component, recommended in "Environmental Design in A-Frame VR.pdf",
-    generates a complete background environment (sky, ground, lighting, dressing) with one line of code.
-    Version 1.3.4 is used for compatibility with A-Frame 1.5.0.
-  -->
+  <!-- A-Frame Environment Component for the landscape -->
   <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
+  
+  <!-- 
+    A-Frame Particle System Component for weather effects (rain/snow).
+    This is required for the dynamic weather system as per "Environmental Design in A-Frame VR.pdf".
+  -->
+  <script src="https://unpkg.com/aframe-particle-system-component@1.1.3/dist/aframe-particle-system-component.min.js"></script>
+
+  <!-- 
+    Tone.js for procedural audio generation.
+    This allows us to create ambient and weather sounds without needing external audio files,
+    ensuring the entire experience is self-contained in this single HTML file.
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+
 </head>
 <body>
-  <!-- 
-    The A-Frame scene, which acts as the root for all VR content.
-    The 'stats' component is added for easy performance monitoring (FPS, draw calls),
-    a key validation requirement from the PRPs.
-  -->
+  
   <a-scene stats>
     
-    <!-- 
-      Assets Management System.
-      As per best practices in the PRPs, all assets like images, models, and sounds
-      should be preloaded here to prevent runtime stalls. This example has no external assets.
-    -->
     <a-assets>
-      <!-- <img id="my-texture" src="path/to/image.png"> -->
+      <!-- Assets are preloaded here. We have no external assets in this version. -->
     </a-assets>
 
     <!-- 
       Player Rig.
-      This entity group represents the player and includes the camera and controllers.
-      Positioning the rig moves the entire player setup. 'movement-controls' enables
-      thumbstick locomotion. This structure follows the "A-Frame Baseline for Meta Quest.pdf".
+      Includes camera, controllers, and now the particle emitters for weather,
+      which are parented to the camera to follow the user's view.
     -->
     <a-entity id="playerRig" position="0 0 5" movement-controls="fly: false; speed: 0.15;">
-      <!-- 
-        The camera entity, representing the user's viewpoint.
-        'look-controls' enables head-based rotation.
-        It's placed at a height of 1.6 meters to simulate average eye level.
-      -->
-      <a-entity camera position="0 1.6 0" look-controls></a-entity>
+      <a-entity id="camera" camera position="0 1.6 0" look-controls>
+        <!-- 
+          Rain and Snow particle emitters. They start with particleCount: 0 so they are 'off'.
+          The environment-manager component will turn them on by changing this count.
+          They are positioned slightly above and in front of the camera.
+        -->
+        <a-entity id="rain" particle-system="preset: rain; particleCount: 0; size: 0.5; maxAge: 2" position="0 2 -3"></a-entity>
+        <a-entity id="snow" particle-system="preset: snow; particleCount: 0; size: 0.5; maxAge: 5" position="0 2 -3"></a-entity>
+      </a-entity>
       
-      <!-- 
-        Controller entities using 'meta-touch-controls' for Quest controllers.
-        This component automatically loads controller models and handles input events.
-        A raycaster is attached for potential future interactions.
-      -->
-      <a-entity id="leftHand" meta-touch-controls="hand: left" raycaster="objects: .clickable"></a-entity>
-      <a-entity id="rightHand" meta-touch-controls="hand: right" raycaster="objects: .clickable"></a-entity>
+      <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
+      <!-- The right hand listens for 'abuttondown' to trigger weather changes. -->
+      <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
     </a-entity>
 
     <!-- 
-      Static Environment.
-      Using the 'environment' component to generate a complete scene.
-      - preset: forest - Creates a forest theme with trees, hills, and appropriate lighting.
-      - groundColor: #6B8E23 - Customizes the ground color for a lush look.
-      - shadow: true - Enables shadows from the main directional light for more realism.
-      - shadowSize: 10 - A moderate shadow map size to balance quality and performance.
-      - fog: 0.7 - Adds atmospheric fog for depth perception.
-      This setup is a direct implementation of the plan in "Environmental Design in A-Frame VR.pdf".
+      The main environment entity. Its properties will be dynamically changed by our script.
     -->
-    <a-entity 
+    <a-entity id="environment" 
       environment="preset: forest; 
                    groundColor: #6B8E23; 
                    shadow: true; 
                    shadowSize: 10;
-                   fog: 0.7">
+                   fog: 0.7;
+                   skyType: atmosphere;
+                   lightPosition: {x: 0, y: 1.5, z: -1.0}">
     </a-entity>
 
+    <!-- 
+      This is our custom logic controller. It manages all the dynamic features.
+    -->
+    <a-entity id="manager" environment-manager></a-entity>
+
   </a-scene>
+
+  <script>
+    /**
+     * This component manages the dynamic aspects of the environment, including:
+     * 1. A Day/Night Cycle that animates the sun's position.
+     * 2. A Weather System (clear, rain, snow) controlled by the 'A' button.
+     * 3. Procedurally generated ambient and weather audio using Tone.js.
+     *
+     * This follows the implementation plan outlined in the "Environmental Design in A-Frame VR.pdf" document.
+     */
+    AFRAME.registerComponent('environment-manager', {
+      schema: {
+        cycleDuration: { type: 'number', default: 240000 } // 4 minutes for a full day/night cycle
+      },
+
+      init: function () {
+        // --- Component Setup ---
+        this.envEl = document.querySelector('#environment');
+        this.rainEl = document.querySelector('#rain');
+        this.snowEl = document.querySelector('#snow');
+        this.rightHand = document.querySelector('#rightHand');
+        
+        this.weatherStates = ['clear', 'rain', 'snow'];
+        this.currentWeatherIndex = 0;
+        this.time = 0;
+
+        // --- Audio Setup (Procedural) ---
+        this.audioInitialized = false;
+        this.sounds = {};
+
+        // --- Bind event listeners ---
+        this.onAButtonDown = this.onAButtonDown.bind(this);
+        this.rightHand.addEventListener('abuttondown', this.onAButtonDown);
+        
+        // A user gesture is required to start audio context. We'll start it on the first button press.
+        console.log("Environment manager initialized. Press 'A' button on the right controller to start audio and change weather.");
+      },
+
+      /**
+       * Creates procedural audio sources using Tone.js. This avoids needing external files.
+       */
+      initAudio: function() {
+        // Ambient forest sound (gentle wind)
+        this.sounds.ambient = new Tone.Noise("pink").toDestination();
+        this.sounds.ambient.volume.value = -30; // very quiet
+        const filter = new Tone.AutoFilter("4n").toDestination().start();
+        this.sounds.ambient.connect(filter);
+
+        // Rain sound (white noise with filtering)
+        this.sounds.rain = new Tone.Noise("white").toDestination();
+        this.sounds.rain.volume.value = -15;
+        const rainFilter = new Tone.Filter(800, "lowpass").toDestination();
+        this.sounds.rain.connect(rainFilter);
+
+        this.audioInitialized = true;
+        console.log("Audio context started.");
+      },
+
+      /**
+       * Handles the 'abuttondown' event to cycle through weather states.
+       */
+      onAButtonDown: function () {
+        // Initialize audio on the first user interaction
+        if (!this.audioInitialized) {
+          Tone.start();
+          this.initAudio();
+        }
+
+        // Cycle to the next weather state
+        this.currentWeatherIndex = (this.currentWeatherIndex + 1) % this.weatherStates.length;
+        const newWeather = this.weatherStates[this.currentWeatherIndex];
+        this.setWeather(newWeather);
+      },
+
+      /**
+       * Updates the scene to reflect the new weather state.
+       * @param {string} weather - The target weather state ('clear', 'rain', or 'snow').
+       */
+      setWeather: function (weather) {
+        console.log(`Changing weather to: ${weather}`);
+        
+        // Stop all sounds before starting new ones
+        this.sounds.ambient.stop();
+        this.sounds.rain.stop();
+
+        switch (weather) {
+          case 'clear':
+            this.envEl.setAttribute('environment', 'preset', 'forest');
+            this.rainEl.setAttribute('particle-system', 'particleCount', 0);
+            this.snowEl.setAttribute('particle-system', 'particleCount', 0);
+            this.sounds.ambient.start();
+            break;
+          case 'rain':
+            this.envEl.setAttribute('environment', 'preset', 'threetowers'); // A darker, overcast preset
+            this.rainEl.setAttribute('particle-system', 'particleCount', 8000);
+            this.snowEl.setAttribute('particle-system', 'particleCount', 0);
+            this.sounds.rain.start();
+            break;
+          case 'snow':
+            this.envEl.setAttribute('environment', 'preset', 'starry'); // A preset good for snow
+            this.rainEl.setAttribute('particle-system', 'particleCount', 0);
+            this.snowEl.setAttribute('particle-system', 'particleCount', 5000);
+            this.sounds.ambient.start(); // Use wind sound for snow
+            break;
+        }
+      },
+
+      /**
+       * The tick function is called on every frame and is used here to animate the day/night cycle.
+       */
+      tick: function (time, timeDelta) {
+        // --- Day/Night Cycle Logic ---
+        this.time += timeDelta;
+        
+        // Calculate the sun's position based on a circular path over time
+        const angle = (this.time / this.data.cycleDuration) * 2 * Math.PI;
+        const sunX = Math.cos(angle) * 10;
+        const sunY = Math.sin(angle) * 10;
+
+        // Get the current light position and update it
+        // We only animate the y (height) and x (east/west) position for a simple sunrise/sunset effect.
+        const lightPosition = this.envEl.getAttribute('environment').lightPosition;
+        lightPosition.y = sunY;
+        lightPosition.x = sunX;
+        
+        // When the weather is clear, we update the sun position.
+        // For other weather, we might want a fixed, overcast light position, which is handled by the preset change.
+        if (this.weatherStates[this.currentWeatherIndex] === 'clear') {
+            this.envEl.setAttribute('environment', 'lightPosition', lightPosition);
+        }
+      },
+
+      remove: function () {
+        // Clean up event listeners when the component is removed
+        this.rightHand.removeEventListener('abuttondown', this.onAButtonDown);
+        // Stop any playing sounds
+        if (this.audioInitialized) {
+            Object.values(this.sounds).forEach(sound => sound.dispose());
+        }
+      }
+    });
+  </script>
 </body>
 </html>
