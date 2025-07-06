@@ -1,29 +1,43 @@
-<!-- Enhanced VR Scene: Day/Night Cycle, Movement, Controllers, Lasers (Meta Quest, A-Frame v1.5.0+) -->
 <html>
   <head>
     <title>VR Scene - Day/Night Cycle (Meta Quest)</title>
-    <!-- A-Frame core -->
+    <!-- Core and community A-Frame scripts -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- Community: Environment, Teleport, Movement controls -->
     <script src="https://unpkg.com/aframe-environment-component@1.5.3/dist/aframe-environment-component.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
     <script src="https://unpkg.com/aframe-teleport-controls@0.6.3/dist/aframe-teleport-controls.min.js"></script>
+    <script>
+      // Custom component for day/night sun animation
+      AFRAME.registerComponent('day-night-cycle', {
+        schema: {
+          duration: {type: 'number', default: 120}, // in seconds
+          intensity: {type: 'number', default: 0.8} // arc height
+        },
+        init: function () {
+          this.env = document.getElementById('env');
+          this.startTime = null;
+        },
+        tick: function (time, timeDelta) {
+          if (!this.startTime) this.startTime = time;
+          var elapsed = ((time - this.startTime) / 1000) % this.data.duration;
+          var t = elapsed / this.data.duration; // 0 to 1
+          // Sun moves in a half-circle: noon (y=+intensity) to midnight (y=-intensity)
+          var angle = t * Math.PI; // 0 to PI
+          var sunY = Math.cos(angle) * this.data.intensity;
+          var sunZ = -Math.sin(angle) * this.data.intensity;
+          this.env.setAttribute('environment', 'lightPosition', `0 ${sunY} ${sunZ}`);
+        }
+      });
+    </script>
   </head>
   <body>
     <a-scene background="color: #88ccee">
-      <!-- Environment: handles sky, sun, terrain, lighting -->
+      <!-- Environment entity with day/night animation -->
       <a-entity id="env"
-        environment="preset: forest; shadow: true; fog: 0.1; groundColor: #6B8E23; groundColor2: #228B22">
+        environment="preset: forest; shadow: true; fog: 0.1; groundColor: #6B8E23; groundColor2: #228B22"
+        day-night-cycle="duration: 120; intensity: 0.8">
       </a-entity>
       
-      <!-- Animate sun position for day/night cycle (2 mins full loop) -->
-      <a-entity
-        animation__sun="property: environment.lightPosition; 
-                        to: 0 -1 -0.2; 
-                        dur: 120000; 
-                        loop: true; dir: alternate; easing: linear">
-      </a-entity>
-
       <!-- Camera rig, locomotion, controllers, lasers, teleport -->
       <a-entity id="cameraRig" movement-controls position="0 1.6 0">
         <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
@@ -51,11 +65,3 @@
     </a-scene>
   </body>
 </html>
-
-<!--
-- Environment component: https://github.com/supermedium/aframe-environment-component
-- Movement controls: https://aframe.io/docs/1.7.0/components/movement-controls.html
-- Teleport controls: https://github.com/fernandojsg/aframe-teleport-controls
-- Controller models/lasers: https://aframe.io/docs/1.7.0/components/meta-touch-controls.html
-- You can adjust day/night cycle speed by changing dur: 120000 (ms).
--->
