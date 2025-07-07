@@ -1,222 +1,144 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>A-Frame Dynamic Environment</title>
-  <meta name="description" content="A dynamic A-Frame environment with weather, a day/night cycle, and procedural audio.">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- A-Frame Core Library -->
+  <title>VR Space</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  
-  <!-- A-Frame Extras for movement-controls -->
   <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-  
-  <!-- A-Frame Environment Component for the landscape -->
-  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
-  
-  <!-- 
-    A-Frame Particle System Component for weather effects (rain/snow).
-    This is required for the dynamic weather system as per "Environmental Design in A-Frame VR.pdf".
-  -->
-  <script src="https://unpkg.com/aframe-particle-system-component@1.1.3/dist/aframe-particle-system-component.min.js"></script>
-
-  <!-- 
-    Tone.js for procedural audio generation.
-    This allows us to create ambient and weather sounds without needing external audio files,
-    ensuring the entire experience is self-contained in this single HTML file.
-  -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
-
+  <script src="https://unpkg.com/aframe-particle-system-component@1.0.9/dist/aframe-particle-system-component.min.js"></script>
 </head>
 <body>
-  
-  <a-scene stats>
-    
-    <a-assets>
-      <!-- Assets are preloaded here. We have no external assets in this version. -->
-    </a-assets>
+  <audio id="clickSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fclick.mp3?v=1632427939399" preload="auto"></audio>
+  <audio id="explosionSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fexplosion.mp3?v=1632427943278" preload="auto"></audio>
 
-    <!-- 
-      Player Rig.
-      Includes camera, controllers, and now the particle emitters for weather,
-      which are parented to the camera to follow the user's view.
-    -->
-    <a-entity id="playerRig" position="0 0 5" movement-controls="fly: false; speed: 0.15;">
-      <a-entity id="camera" camera position="0 1.6 0" look-controls>
-        <!-- 
-          Rain and Snow particle emitters. They start with particleCount: 0 so they are 'off'.
-          The environment-manager component will turn them on by changing this count.
-          They are positioned slightly above and in front of the camera.
-        -->
-        <a-entity id="rain" particle-system="preset: rain; particleCount: 0; size: 0.5; maxAge: 2" position="0 2 -3"></a-entity>
-        <a-entity id="snow" particle-system="preset: snow; particleCount: 0; size: 0.5; maxAge: 5" position="0 2 -3"></a-entity>
-      </a-entity>
-      
-      <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-      <!-- The right hand listens for 'abuttondown' to trigger weather changes. -->
-      <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+  <a-scene>
+    <!-- Camera and controllers -->
+    <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity id="camera" camera look-controls></a-entity>
+      <a-entity id="leftHand" oculus-touch-controls="hand: left" laser-controls="hand: left; color: #ff0000"></a-entity>
+      <a-entity id="rightHand" oculus-touch-controls="hand: right" laser-controls="hand: right; color: #0000ff"></a-entity>
     </a-entity>
 
-    <!-- 
-      The main environment entity. Its properties will be dynamically changed by our script.
-    -->
-    <a-entity id="environment" 
-      environment="preset: forest; 
-                   groundColor: #6B8E23; 
-                   shadow: true; 
-                   shadowSize: 10;
-                   fog: 0.7;
-                   skyType: atmosphere;
-                   lightPosition: {x: 0, y: 1.5, z: -1.0}">
+    <!-- Clickable sphere -->
+    <a-sphere id="clickableSphere" position="0 2 -2" radius="0.2" color="#ffff00" clickable>
+    </a-sphere>
+
+    <!-- Player sphere -->
+    <a-sphere id="playerSphere" radius="0.1" color="#00ff00">
+    </a-sphere>
+
+    <!-- Projectile template -->
+    <a-entity id="projectileTemplate" visible="false">
+        <a-sphere radius="0.05" color="#ff00ff"></a-sphere>
     </a-entity>
 
-    <!-- 
-      This is our custom logic controller. It manages all the dynamic features.
-    -->
-    <a-entity id="manager" environment-manager></a-entity>
+    <a-sky color="#222"></a-sky>
 
   </a-scene>
 
   <script>
-    /**
-     * This component manages the dynamic aspects of the environment, including:
-     * 1. A Day/Night Cycle that animates the sun's position.
-     * 2. A Weather System (clear, rain, snow) controlled by the 'A' button.
-     * 3. Procedurally generated ambient and weather audio using Tone.js.
-     *
-     * This follows the implementation plan outlined in the "Environmental Design in A-Frame VR.pdf" document.
-     */
-    AFRAME.registerComponent('environment-manager', {
-      schema: {
-        cycleDuration: { type: 'number', default: 240000 } // 4 minutes for a full day/night cycle
-      },
+    document.addEventListener('DOMContentLoaded', () => {
+      const clickSound = document.getElementById('clickSound');
+      const explosionSound = document.getElementById('explosionSound');
+      const clickableSphere = document.getElementById('clickableSphere');
+      const playerSphere = document.getElementById('playerSphere');
+      const leftHand = document.getElementById('leftHand');
+      const rightHand = document.getElementById('rightHand');
+      const scene = document.querySelector('a-scene');
 
-      init: function () {
-        // --- Component Setup ---
-        this.envEl = document.querySelector('#environment');
-        this.rainEl = document.querySelector('#rain');
-        this.snowEl = document.querySelector('#snow');
-        this.rightHand = document.querySelector('#rightHand');
-        
-        this.weatherStates = ['clear', 'rain', 'snow'];
-        this.currentWeatherIndex = 0;
-        this.time = 0;
-
-        // --- Audio Setup (Procedural) ---
-        this.audioInitialized = false;
-        this.sounds = {};
-
-        // --- Bind event listeners ---
-        this.onAButtonDown = this.onAButtonDown.bind(this);
-        this.rightHand.addEventListener('abuttondown', this.onAButtonDown);
-        
-        // A user gesture is required to start audio context. We'll start it on the first button press.
-        console.log("Environment manager initialized. Press 'A' button on the right controller to start audio and change weather.");
-      },
-
-      /**
-       * Creates procedural audio sources using Tone.js. This avoids needing external files.
-       */
-      initAudio: function() {
-        // Ambient forest sound (gentle wind)
-        this.sounds.ambient = new Tone.Noise("pink").toDestination();
-        this.sounds.ambient.volume.value = -30; // very quiet
-        const filter = new Tone.AutoFilter("4n").toDestination().start();
-        this.sounds.ambient.connect(filter);
-
-        // Rain sound (white noise with filtering)
-        this.sounds.rain = new Tone.Noise("white").toDestination();
-        this.sounds.rain.volume.value = -15;
-        const rainFilter = new Tone.Filter(800, "lowpass").toDestination();
-        this.sounds.rain.connect(rainFilter);
-
-        this.audioInitialized = true;
-        console.log("Audio context started.");
-      },
-
-      /**
-       * Handles the 'abuttondown' event to cycle through weather states.
-       */
-      onAButtonDown: function () {
-        // Initialize audio on the first user interaction
-        if (!this.audioInitialized) {
-          Tone.start();
-          this.initAudio();
-        }
-
-        // Cycle to the next weather state
-        this.currentWeatherIndex = (this.currentWeatherIndex + 1) % this.weatherStates.length;
-        const newWeather = this.weatherStates[this.currentWeatherIndex];
-        this.setWeather(newWeather);
-      },
-
-      /**
-       * Updates the scene to reflect the new weather state.
-       * @param {string} weather - The target weather state ('clear', 'rain', or 'snow').
-       */
-      setWeather: function (weather) {
-        console.log(`Changing weather to: ${weather}`);
-        
-        // Stop all sounds before starting new ones
-        this.sounds.ambient.stop();
-        this.sounds.rain.stop();
-
-        switch (weather) {
-          case 'clear':
-            this.envEl.setAttribute('environment', 'preset', 'forest');
-            this.rainEl.setAttribute('particle-system', 'particleCount', 0);
-            this.snowEl.setAttribute('particle-system', 'particleCount', 0);
-            this.sounds.ambient.start();
-            break;
-          case 'rain':
-            this.envEl.setAttribute('environment', 'preset', 'threetowers'); // A darker, overcast preset
-            this.rainEl.setAttribute('particle-system', 'particleCount', 8000);
-            this.snowEl.setAttribute('particle-system', 'particleCount', 0);
-            this.sounds.rain.start();
-            break;
-          case 'snow':
-            this.envEl.setAttribute('environment', 'preset', 'starry'); // A preset good for snow
-            this.rainEl.setAttribute('particle-system', 'particleCount', 0);
-            this.snowEl.setAttribute('particle-system', 'particleCount', 5000);
-            this.sounds.ambient.start(); // Use wind sound for snow
-            break;
-        }
-      },
-
-      /**
-       * The tick function is called on every frame and is used here to animate the day/night cycle.
-       */
-      tick: function (time, timeDelta) {
-        // --- Day/Night Cycle Logic ---
-        this.time += timeDelta;
-        
-        // Calculate the sun's position based on a circular path over time
-        const angle = (this.time / this.data.cycleDuration) * 2 * Math.PI;
-        const sunX = Math.cos(angle) * 10;
-        const sunY = Math.sin(angle) * 10;
-
-        // Get the current light position and update it
-        // We only animate the y (height) and x (east/west) position for a simple sunrise/sunset effect.
-        const lightPosition = this.envEl.getAttribute('environment').lightPosition;
-        lightPosition.y = sunY;
-        lightPosition.x = sunX;
-        
-        // When the weather is clear, we update the sun position.
-        // For other weather, we might want a fixed, overcast light position, which is handled by the preset change.
-        if (this.weatherStates[this.currentWeatherIndex] === 'clear') {
-            this.envEl.setAttribute('environment', 'lightPosition', lightPosition);
-        }
-      },
-
-      remove: function () {
-        // Clean up event listeners when the component is removed
-        this.rightHand.removeEventListener('abuttondown', this.onAButtonDown);
-        // Stop any playing sounds
-        if (this.audioInitialized) {
-            Object.values(this.sounds).forEach(sound => sound.dispose());
-        }
+      // Update player sphere position
+      function updatePlayerSpherePosition() {
+        const leftPosition = new THREE.Vector3();
+        const rightPosition = new THREE.Vector3();
+        leftHand.object3D.getWorldPosition(leftPosition);
+        rightHand.object3D.getWorldPosition(rightPosition);
+        const centerPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
+        playerSphere.setAttribute('position', centerPosition);
       }
+
+      // Click event for the sphere
+      clickableSphere.addEventListener('click', () => {
+        clickSound.play();
+        clickableSphere.setAttribute('color', `#${Math.floor(Math.random()*16777215).toString(16)}`);
+
+        const projectile = document.getElementById('projectileTemplate').cloneNode(true);
+        projectile.setAttribute('visible', true);
+        const startPosition = clickableSphere.getAttribute('position');
+        projectile.setAttribute('position', startPosition);
+
+        const leftPosition = new THREE.Vector3();
+        const rightPosition = new THREE.Vector3();
+        leftHand.object3D.getWorldPosition(leftPosition);
+        rightHand.object3D.getWorldPosition(rightPosition);
+        const targetPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
+
+        projectile.setAttribute('animation', {
+          property: 'position',
+          to: `${targetPosition.x} ${targetPosition.y} ${targetPosition.z}`,
+          dur: 1000,
+          easing: 'linear'
+        });
+
+        scene.appendChild(projectile);
+
+        // Projectile collision check
+        let collisionCheck = setInterval(() => {
+            const projectilePosition = projectile.object3D.position;
+            const playerPosition = playerSphere.object3D.position;
+            const distance = projectilePosition.distanceTo(playerPosition);
+
+            if (distance < playerSphere.getAttribute('radius')) {
+                explosionSound.play();
+                if (navigator.getGamepads) {
+                    const gamepads = navigator.getGamepads();
+                    for (const gamepad of gamepads) {
+                        if (gamepad && gamepad.hapticActuators) {
+                            gamepad.hapticActuators[0].pulse(1, 200);
+                        }
+                    }
+                }
+
+                const explosion = document.createElement('a-entity');
+                explosion.setAttribute('position', playerPosition);
+                explosion.setAttribute('particle-system', {
+                    preset: 'snow',
+                    color: '#ff0000,#ffff00,#0000ff',
+                    particleCount: 5000,
+                    size: 0.2,
+                    maxAge: 2,
+                    velocityValue: '5 5 5',
+                    velocitySpread: '10 10 10',
+                    accelerationValue: '0 -10 0',
+                    accelerationSpread: '5 5 5'
+                });
+                scene.appendChild(explosion);
+
+                setTimeout(() => {
+                    scene.removeChild(explosion);
+                }, 2000);
+
+                scene.removeChild(projectile);
+                clearInterval(collisionCheck);
+            }
+        }, 50);
+
+        setTimeout(() => {
+            try {
+              scene.removeChild(projectile);
+              clearInterval(collisionCheck);
+            } catch(e) {}
+        }, 1000);
+      });
+
+      // Continuously update player sphere position
+      setInterval(updatePlayerSpherePosition, 10);
+    });
+
+    AFRAME.registerComponent('clickable', {
+        init: function () {
+            this.el.addEventListener('mousedown', (e) => {
+                this.el.emit('click', e, false);
+            });
+        }
     });
   </script>
 </body>
