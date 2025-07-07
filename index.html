@@ -1,145 +1,201 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>VR Space</title>
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-  <script src="https://unpkg.com/aframe-particle-system-component@1.0.9/dist/aframe-particle-system-component.min.js"></script>
+    <meta charset="utf-8">
+    <title>VR Cube Space - 10x10x10</title>
+    <meta name="description" content="A 10x10x10 cube space in VR">
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
 </head>
 <body>
-  <audio id="clickSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fclick.mp3?v=1632427939399" preload="auto"></audio>
-  <audio id="explosionSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fexplosion.mp3?v=1632427943278" preload="auto"></audio>
+    <a-scene 
+        vr-mode-ui="enabled: true" 
+        embedded 
+        style="height: 100vh; width: 100vw;"
+        background="color: #000033">
+        
+        <!-- Assets -->
+        <a-assets>
+            <!-- Define materials -->
+            <a-mixin id="wall-material" 
+                     material="color: #4CC3D9; opacity: 0.8; transparent: true; side: double"></a-mixin>
+            <a-mixin id="floor-material" 
+                     material="color: #7BC8A4; roughness: 0.8"></a-mixin>
+            <a-mixin id="ceiling-material" 
+                     material="color: #EF2D5E; opacity: 0.7; transparent: true"></a-mixin>
+        </a-assets>
 
-  <a-scene>
-    <!-- Camera and controllers -->
-    <a-entity id="cameraRig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls></a-entity>
-      <a-entity id="leftHand" oculus-touch-controls="hand: left" laser-controls="hand: left; color: #ff0000"></a-entity>
-      <a-entity id="rightHand" oculus-touch-controls="hand: right" laser-controls="hand: right; color: #0000ff"></a-entity>
-    </a-entity>
+        <!-- Lighting -->
+        <a-light type="ambient" color="#404040" intensity="0.4"></a-light>
+        <a-light type="directional" position="5 10 5" color="#ffffff" intensity="0.6"></a-light>
+        <a-light type="point" position="0 8 0" color="#ffffff" intensity="0.5"></a-light>
 
-    <!-- Clickable sphere -->
-    <a-sphere id="clickableSphere" position="0 2 -2" radius="0.2" color="#ffff00" clickable>
-    </a-sphere>
+        <!-- Floor (10x10) -->
+        <a-plane 
+            mixin="floor-material"
+            position="0 0 0" 
+            rotation="-90 0 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-    <!-- Player sphere -->
-    <a-sphere id="playerSphere" radius="0.1" color="#00ff00">
-    </a-sphere>
+        <!-- Ceiling (10x10) -->
+        <a-plane 
+            mixin="ceiling-material"
+            position="0 10 0" 
+            rotation="90 0 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-    <!-- Projectile template -->
-    <a-entity id="projectileTemplate" visible="false">
-        <a-sphere radius="0.05" color="#ff00ff"></a-sphere>
-    </a-entity>
+        <!-- North Wall (Z = 5) -->
+        <a-plane 
+            mixin="wall-material"
+            position="0 5 5" 
+            rotation="0 0 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-    <a-sky color="#222"></a-sky>
+        <!-- South Wall (Z = -5) -->
+        <a-plane 
+            mixin="wall-material"
+            position="0 5 -5" 
+            rotation="0 180 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-  </a-scene>
+        <!-- East Wall (X = 5) -->
+        <a-plane 
+            mixin="wall-material"
+            position="5 5 0" 
+            rotation="0 -90 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const clickSound = document.getElementById('clickSound');
-      const explosionSound = document.getElementById('explosionSound');
-      const clickableSphere = document.getElementById('clickableSphere');
-      const playerSphere = document.getElementById('playerSphere');
-      const leftHand = document.getElementById('leftHand');
-      const rightHand = document.getElementById('rightHand');
-      const scene = document.querySelector('a-scene');
+        <!-- West Wall (X = -5) -->
+        <a-plane 
+            mixin="wall-material"
+            position="-5 5 0" 
+            rotation="0 90 0" 
+            width="10" 
+            height="10">
+        </a-plane>
 
-      // Update player sphere position
-      function updatePlayerSpherePosition() {
-        const leftPosition = new THREE.Vector3();
-        const rightPosition = new THREE.Vector3();
-        leftHand.object3D.getWorldPosition(leftPosition);
-        rightHand.object3D.getWorldPosition(rightPosition);
-        const centerPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
-        playerSphere.setAttribute('position', centerPosition);
-      }
+        <!-- Camera with VR controls -->
+        <a-entity 
+            id="cameraRig" 
+            position="0 1.6 0"
+            movement-controls="fly: false; constrainToNavMesh: false">
+            
+            <a-camera 
+                look-controls="pointerLockEnabled: true"
+                wasd-controls="acceleration: 20"
+                position="0 0 0">
+                
+                <!-- VR Controllers -->
+                <a-entity 
+                    id="leftHand" 
+                    hand-controls="hand: left; handModelStyle: lowPoly; color: #ffcccc">
+                </a-entity>
+                
+                <a-entity 
+                    id="rightHand" 
+                    hand-controls="hand: right; handModelStyle: lowPoly; color: #ccffcc">
+                </a-entity>
+            </a-camera>
+        </a-entity>
 
-      // Click event for the sphere
-      clickableSphere.addEventListener('click', () => {
-        clickSound.play();
-        clickableSphere.setAttribute('color', `#${Math.floor(Math.random()*16777215).toString(16)}`);
+        <!-- Reference objects for scale -->
+        <!-- Center cube (1x1x1) -->
+        <a-box 
+            position="0 1 0" 
+            width="1" 
+            height="1" 
+            depth="1" 
+            color="#FFC65D" 
+            material="roughness: 0.5">
+        </a-box>
 
-        const projectile = document.getElementById('projectileTemplate').cloneNode(true);
-        projectile.setAttribute('visible', true);
-        const startPosition = clickableSphere.getAttribute('position');
-        projectile.setAttribute('position', startPosition);
+        <!-- Corner markers -->
+        <a-sphere position="4.5 0.5 4.5" radius="0.2" color="#FF6B6B"></a-sphere>
+        <a-sphere position="-4.5 0.5 4.5" radius="0.2" color="#4ECDC4"></a-sphere>
+        <a-sphere position="4.5 0.5 -4.5" radius="0.2" color="#45B7D1"></a-sphere>
+        <a-sphere position="-4.5 0.5 -4.5" radius="0.2" color="#96CEB4"></a-sphere>
 
-        const leftPosition = new THREE.Vector3();
-        const rightPosition = new THREE.Vector3();
-        leftHand.object3D.getWorldPosition(leftPosition);
-        rightHand.object3D.getWorldPosition(rightPosition);
-        const targetPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
+        <!-- Grid lines on floor for reference -->
+        <a-entity id="grid">
+            <!-- X-axis lines -->
+            <a-box position="0 0.01 -4" width="10" height="0.02" depth="0.05" color="#333333"></a-box>
+            <a-box position="0 0.01 -2" width="10" height="0.02" depth="0.05" color="#333333"></a-box>
+            <a-box position="0 0.01 0" width="10" height="0.02" depth="0.05" color="#666666"></a-box>
+            <a-box position="0 0.01 2" width="10" height="0.02" depth="0.05" color="#333333"></a-box>
+            <a-box position="0 0.01 4" width="10" height="0.02" depth="0.05" color="#333333"></a-box>
+            
+            <!-- Z-axis lines -->
+            <a-box position="-4 0.01 0" width="0.05" height="0.02" depth="10" color="#333333"></a-box>
+            <a-box position="-2 0.01 0" width="0.05" height="0.02" depth="10" color="#333333"></a-box>
+            <a-box position="0 0.01 0" width="0.05" height="0.02" depth="10" color="#666666"></a-box>
+            <a-box position="2 0.01 0" width="0.05" height="0.02" depth="10" color="#333333"></a-box>
+            <a-box position="4 0.01 0" width="0.05" height="0.02" depth="10" color="#333333"></a-box>
+        </a-entity>
 
-        projectile.setAttribute('animation', {
-          property: 'position',
-          to: `${targetPosition.x} ${targetPosition.y} ${targetPosition.z}`,
-          dur: 1000,
-          easing: 'linear'
-        });
+        <!-- Text labels for orientation -->
+        <a-text 
+            value="NORTH" 
+            position="0 8 4.8" 
+            align="center" 
+            color="#FFFFFF" 
+            scale="2 2 2">
+        </a-text>
+        
+        <a-text 
+            value="SOUTH" 
+            position="0 8 -4.8" 
+            rotation="0 180 0"
+            align="center" 
+            color="#FFFFFF" 
+            scale="2 2 2">
+        </a-text>
 
-        scene.appendChild(projectile);
+        <a-text 
+            value="EAST" 
+            position="4.8 8 0" 
+            rotation="0 -90 0"
+            align="center" 
+            color="#FFFFFF" 
+            scale="2 2 2">
+        </a-text>
 
-        // Projectile collision check
-        let collisionCheck = setInterval(() => {
-            const projectilePosition = projectile.object3D.position;
-            const playerPosition = playerSphere.object3D.position;
-            const distance = projectilePosition.distanceTo(playerPosition);
+        <a-text 
+            value="WEST" 
+            position="-4.8 8 0" 
+            rotation="0 90 0"
+            align="center" 
+            color="#FFFFFF" 
+            scale="2 2 2">
+        </a-text>
 
-            if (distance < playerSphere.getAttribute('radius')) {
-                explosionSound.play();
-                if (navigator.getGamepads) {
-                    const gamepads = navigator.getGamepads();
-                    for (const gamepad of gamepads) {
-                        if (gamepad && gamepad.hapticActuators) {
-                            gamepad.hapticActuators[0].pulse(1, 200);
-                        }
-                    }
-                }
+    </a-scene>
 
-                const explosion = document.createElement('a-entity');
-                explosion.setAttribute('position', playerPosition);
-                explosion.setAttribute('particle-system', {
-                    preset: 'snow',
-                    color: '#ff0000,#ffff00,#0000ff',
-                    particleCount: 5000,
-                    size: 0.2,
-                    maxAge: 2,
-                    velocityValue: '5 5 5',
-                    velocitySpread: '10 10 10',
-                    accelerationValue: '0 -10 0',
-                    accelerationSpread: '5 5 5'
-                });
-                scene.appendChild(explosion);
-
-                setTimeout(() => {
-                    scene.removeChild(explosion);
-                }, 2000);
-
-                scene.removeChild(projectile);
-                clearInterval(collisionCheck);
-            }
-        }, 50);
-
-        setTimeout(() => {
-            try {
-              scene.removeChild(projectile);
-              clearInterval(collisionCheck);
-            } catch(e) {}
-        }, 1000);
-      });
-
-      // Continuously update player sphere position
-      setInterval(updatePlayerSpherePosition, 10);
-    });
-
-    AFRAME.registerComponent('clickable', {
-        init: function () {
-            this.el.addEventListener('mousedown', (e) => {
-                this.el.emit('click', e, false);
+    <script>
+        // Optional: Add some interactivity
+        document.addEventListener(\'DOMContentLoaded\', function() {
+            console.log(\'VR Cube Space loaded successfully\');
+            
+            // Log when entering VR mode
+            document.querySelector(\'a-scene\').addEventListener(\'enter-vr\', function() {
+                console.log(\'Entered VR mode\');
             });
-        }
-    });
-  </script>
+            
+            // Log when exiting VR mode
+            document.querySelector(\'a-scene\').addEventListener(\'exit-vr\', function() {
+                console.log(\'Exited VR mode\');
+            });
+        });
+    </script>
 </body>
 </html>
+
