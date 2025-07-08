@@ -1,145 +1,116 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>VR Space</title>
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-  <script src="https://unpkg.com/aframe-particle-system-component@1.0.9/dist/aframe-particle-system-component.min.js"></script>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-hit-test@0.0.3/dist/aframe-hit-test.min.js"></script>
+    <title>Geometric AR Objects</title>
 </head>
 <body>
-  <audio id="clickSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fclick.mp3?v=1632427939399" preload="auto"></audio>
-  <audio id="explosionSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fexplosion.mp3?v=1632427943278" preload="auto"></audio>
+    <a-scene 
+        background="color: transparent"
+        webxr="requiredFeatures: hit-test,local-floor; optionalFeatures: anchors,plane-detection,depth-sensing,dom-overlay"
+        renderer="antialias: true; colorManagement: true"
+        vr-mode-ui="enabled: false"
+        device-orientation-permission-ui="enabled: false">
 
-  <a-scene>
-    <!-- Camera and controllers -->
-    <a-entity id="cameraRig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls></a-entity>
-      <a-entity id="leftHand" oculus-touch-controls="hand: left" laser-controls="hand: left; color: #ff0000"></a-entity>
-      <a-entity id="rightHand" oculus-touch-controls="hand: right" laser-controls="hand: right; color: #0000ff"></a-entity>
-    </a-entity>
+        <a-assets>
+            <a-mixin id="cube" 
+                     geometry="primitive: box; width: 0.3; height: 0.3; depth: 0.3"
+                     material="color: #4CC3D9; metalness: 0.2; roughness: 0.8"
+                     animation="property: rotation; to: 0 360 0; loop: true; dur: 10000"></a-mixin>
+            <a-mixin id="table-top" 
+                     geometry="primitive: box; width: 1.0; height: 0.05; depth: 0.6"
+                     material="color: #8B4513; metalness: 0.2; roughness: 0.8"></a-mixin>
+            <a-mixin id="table-leg" 
+                     geometry="primitive: box; width: 0.08; height: 0.7; depth: 0.08"
+                     material="color: #8B4513; metalness: 0.2; roughness: 0.8"></a-mixin>
+        </a-assets>
 
-    <!-- Clickable sphere -->
-    <a-sphere id="clickableSphere" position="0 2 -2" radius="0.2" color="#ffff00" clickable>
-    </a-sphere>
+        <!-- Basic A-Frame box -->
+        <a-box position="0 1 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
 
-    <!-- Player sphere -->
-    <a-sphere id="playerSphere" radius="0.1" color="#00ff00">
-    </a-sphere>
+        <!-- Camera -->
+        <a-camera position="0 1.6 0"></a-camera>
 
-    <!-- Projectile template -->
-    <a-entity id="projectileTemplate" visible="false">
-        <a-sphere radius="0.05" color="#ff00ff"></a-sphere>
-    </a-entity>
+        <script>
+            // Function to create a table object
+            function createTable(container) {
+                // Table top
+                const tableTop = document.createElement('a-entity');
+                tableTop.setAttribute('mixin', 'table-top');
+                tableTop.setAttribute('position', '0 0.7 0');
+                container.appendChild(tableTop);
+                
+                // Table legs
+                const legPositions = [
+                    { x: 0.4, z: 0.4 }, { x: -0.4, z: 0.4 },
+                    { x: 0.4, z: -0.4 }, { x: -0.4, z: -0.4 }
+                ];
+                
+                legPositions.forEach(pos => {
+                    const leg = document.createElement('a-entity');
+                    leg.setAttribute('mixin', 'table-leg');
+                    leg.setAttribute('position', `${pos.x} 0.35 ${pos.z}`);
+                    container.appendChild(leg);
+                });
+            }
 
-    <a-sky color="#222"></a-sky>
+            // Example of how to use the mixin and create a table (you'd typically do this on a hit-test or user interaction)
+            // For demonstration, let's add a cube using the mixin and a table when the scene loads
+            document.querySelector('a-scene').addEventListener('loaded', function () {
+                const scene = this;
 
-  </a-scene>
+                // Add a cube using the mixin
+                const cubeFromMixin = document.createElement('a-entity');
+                cubeFromMixin.setAttribute('mixin', 'cube');
+                cubeFromMixin.setAttribute('position', '-1 1 -5'); // Adjust position as needed
+                scene.appendChild(cubeFromMixin);
 
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const clickSound = document.getElementById('clickSound');
-      const explosionSound = document.getElementById('explosionSound');
-      const clickableSphere = document.getElementById('clickableSphere');
-      const playerSphere = document.getElementById('playerSphere');
-      const leftHand = document.getElementById('leftHand');
-      const rightHand = document.getElementById('rightHand');
-      const scene = document.querySelector('a-scene');
+                // Add a table
+                const tableContainer = document.createElement('a-entity');
+                tableContainer.setAttribute('position', '1 0 -4'); // Adjust position as needed
+                scene.appendChild(tableContainer);
+                createTable(tableContainer);
+            });
 
-      // Update player sphere position
-      function updatePlayerSpherePosition() {
-        const leftPosition = new THREE.Vector3();
-        const rightPosition = new THREE.Vector3();
-        leftHand.object3D.getWorldPosition(leftPosition);
-        rightHand.object3D.getWorldPosition(rightPosition);
-        const centerPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
-        playerSphere.setAttribute('position', centerPosition);
-      }
+            // WebXR session management and hit-testing (as provided in the document)
+            const scene = document.querySelector('a-scene');
+            let hitTestSource = null;
 
-      // Click event for the sphere
-      clickableSphere.addEventListener('click', () => {
-        clickSound.play();
-        clickableSphere.setAttribute('color', `#${Math.floor(Math.random()*16777215).toString(16)}`);
+            if (navigator.xr) {
+                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                    if (supported) {
+                        console.log('Immersive AR supported');
+                        // You would typically have a button to enter AR here
+                        // For this example, we'll assume AR mode is entered via A-Frame's default UI or a custom button
+                    } else {
+                        console.log('Immersive AR not supported');
+                    }
+                });
+            }
 
-        const projectile = document.getElementById('projectileTemplate').cloneNode(true);
-        projectile.setAttribute('visible', true);
-        const startPosition = clickableSphere.getAttribute('position');
-        projectile.setAttribute('position', startPosition);
-
-        const leftPosition = new THREE.Vector3();
-        const rightPosition = new THREE.Vector3();
-        leftHand.object3D.getWorldPosition(leftPosition);
-        rightHand.object3D.getWorldPosition(rightPosition);
-        const targetPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
-
-        projectile.setAttribute('animation', {
-          property: 'position',
-          to: `${targetPosition.x} ${targetPosition.y} ${targetPosition.z}`,
-          dur: 1000,
-          easing: 'linear'
-        });
-
-        scene.appendChild(projectile);
-
-        // Projectile collision check
-        let collisionCheck = setInterval(() => {
-            const projectilePosition = projectile.object3D.position;
-            const playerPosition = playerSphere.object3D.position;
-            const distance = projectilePosition.distanceTo(playerPosition);
-
-            if (distance < playerSphere.getAttribute('radius')) {
-                explosionSound.play();
-                if (navigator.getGamepads) {
-                    const gamepads = navigator.getGamepads();
-                    for (const gamepad of gamepads) {
-                        if (gamepad && gamepad.hapticActuators) {
-                            gamepad.hapticActuators[0].pulse(1, 200);
-                        }
+            scene.addEventListener('enter-vr', async function() {
+                const session = scene.renderer.xr.getSession();
+                if (session && session.requestReferenceSpace) {
+                    try {
+                        const referenceSpace = await session.requestReferenceSpace('viewer');
+                        hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
+                        console.log('Hit test source created');
+                    } catch (error) {
+                        console.log('Hit test not supported:', error);
                     }
                 }
-
-                const explosion = document.createElement('a-entity');
-                explosion.setAttribute('position', playerPosition);
-                explosion.setAttribute('particle-system', {
-                    preset: 'snow',
-                    color: '#ff0000,#ffff00,#0000ff',
-                    particleCount: 5000,
-                    size: 0.2,
-                    maxAge: 2,
-                    velocityValue: '5 5 5',
-                    velocitySpread: '10 10 10',
-                    accelerationValue: '0 -10 0',
-                    accelerationSpread: '5 5 5'
-                });
-                scene.appendChild(explosion);
-
-                setTimeout(() => {
-                    scene.removeChild(explosion);
-                }, 2000);
-
-                scene.removeChild(projectile);
-                clearInterval(collisionCheck);
-            }
-        }, 50);
-
-        setTimeout(() => {
-            try {
-              scene.removeChild(projectile);
-              clearInterval(collisionCheck);
-            } catch(e) {}
-        }, 1000);
-      });
-
-      // Continuously update player sphere position
-      setInterval(updatePlayerSpherePosition, 10);
-    });
-
-    AFRAME.registerComponent('clickable', {
-        init: function () {
-            this.el.addEventListener('mousedown', (e) => {
-                this.el.emit('click', e, false);
             });
-        }
-    });
-  </script>
+
+            scene.addEventListener('exit-vr', () => {
+                hitTestSource = null;
+                console.log('Exited AR mode');
+            });
+
+            // You would typically use hit-test results to place objects dynamically
+            // For this example, objects are placed statically on scene load.
+        </script>
+    </a-scene>
 </body>
 </html>
+
