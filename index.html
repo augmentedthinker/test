@@ -1,117 +1,145 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>WebXR AR Test (Revised)</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <style>
-      body {
-        margin: 0;
-        overflow: hidden;
-      }
-      /* Optional: Style the enter AR button if default is not clear */
-      #ar-button {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        padding: 10px 20px;
-        font-size: 1.2em;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-        z-index: 1000; /* Ensure it's above the canvas */
-      }
-    </style>
-  </head>
-  <body>
-    <a-scene
-      xr-mode-ui="enabled: true"
-      ar-mode-ui="enabled: true"
-      renderer="colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
-    >
-      <a-entity
-        camera
-        look-controls
-        wasd-controls
-        position="0 1.6 0"
-        cursor="rayOrigin: mouse"
-        raycaster="objects: [raycaster-target]"
-      ></a-entity>
+<head>
+  <title>VR Space</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
+  <script src="https://unpkg.com/aframe-particle-system-component@1.0.9/dist/aframe-particle-system-component.min.js"></script>
+</head>
+<body>
+  <audio id="clickSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fclick.mp3?v=1632427939399" preload="auto"></audio>
+  <audio id="explosionSound" src="https://cdn.glitch.com/8d718063-48d1-444c-9636-33c7a97f9133%2Fexplosion.mp3?v=1632427943278" preload="auto"></audio>
 
-      <a-box
-        position="0 1 -3"
-        rotation="0 45 0"
-        color="#4CC3D9"
-        animation="property: rotation; to: 0 360 0; loop: true; dur: 10000"
-      ></a-box>
+  <a-scene>
+    <!-- Camera and controllers -->
+    <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity id="camera" camera look-controls></a-entity>
+      <a-entity id="leftHand" oculus-touch-controls="hand: left" laser-controls="hand: left; color: #ff0000"></a-entity>
+      <a-entity id="rightHand" oculus-touch-controls="hand: right" laser-controls="hand: right; color: #0000ff"></a-entity>
+    </a-entity>
 
-      <a-entity background="false"></a-entity>
+    <!-- Clickable sphere -->
+    <a-sphere id="clickableSphere" position="0 2 -2" radius="0.2" color="#ffff00" clickable>
+    </a-sphere>
 
-      <a-entity
-        webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay, bounded-floor, local-floor, hand-tracking, light-estimation;"
-      ></a-entity>
-    </a-scene>
+    <!-- Player sphere -->
+    <a-sphere id="playerSphere" radius="0.1" color="#00ff00">
+    </a-sphere>
 
-    <button id="ar-button" style="display: none;">Enter AR</button>
+    <!-- Projectile template -->
+    <a-entity id="projectileTemplate" visible="false">
+        <a-sphere radius="0.05" color="#ff00ff"></a-sphere>
+    </a-entity>
 
-    <script>
+    <a-sky color="#222"></a-sky>
+
+  </a-scene>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const clickSound = document.getElementById('clickSound');
+      const explosionSound = document.getElementById('explosionSound');
+      const clickableSphere = document.getElementById('clickableSphere');
+      const playerSphere = document.getElementById('playerSphere');
+      const leftHand = document.getElementById('leftHand');
+      const rightHand = document.getElementById('rightHand');
       const scene = document.querySelector('a-scene');
-      const arButton = document.getElementById('ar-button');
 
-      if (scene) {
-        // Wait for the scene to be loaded (A-Frame initialization)
-        scene.addEventListener('loaded', () => {
-          // Check if 'immersive-ar' session is supported
-          if (navigator.xr) {
-            navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-              if (supported) {
-                arButton.style.display = 'block'; // Show the AR button
-              } else {
-                console.warn('Immersive AR not supported on this device/browser.');
-              }
-            });
-          } else {
-            console.warn('WebXR not available in this browser.');
-          }
-        });
-
-        arButton.addEventListener('click', () => {
-          if (scene.hasLoaded) {
-            // Request the AR session directly
-            scene.enterVR(); // A-Frame's enterVR handles both VR/AR based on support
-            // For more explicit AR, you would do:
-            // navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local-floor', 'hit-test'] })
-            //   .then(session => {
-            //     console.log('AR session started:', session);
-            //     // Handle the session, though A-Frame typically takes over.
-            //   })
-            //   .catch(err => {
-            //     console.error('Failed to start AR session:', err);
-            //   });
-            arButton.style.display = 'none'; // Hide the button once clicked
-          }
-        });
-
-        // Listen for when an AR session starts (or any XR session)
-        scene.addEventListener('enter-vr', function () {
-          // This fires for both VR and AR.
-          // You can check scene.is('ar-mode') for specific logic.
-          console.log('Entered XR mode!');
-          if (scene.is('ar-mode')) {
-            console.log('Specifically, entered AR mode!');
-            // Additional setup for AR mode if needed
-          }
-        });
-
-        // Listen for when an XR session ends
-        scene.addEventListener('exit-vr', function () {
-          console.log('Exited XR mode!');
-          arButton.style.display = 'block'; // Show button again if user exits
-        });
+      // Update player sphere position
+      function updatePlayerSpherePosition() {
+        const leftPosition = new THREE.Vector3();
+        const rightPosition = new THREE.Vector3();
+        leftHand.object3D.getWorldPosition(leftPosition);
+        rightHand.object3D.getWorldPosition(rightPosition);
+        const centerPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
+        playerSphere.setAttribute('position', centerPosition);
       }
-    </script>
-  </body>
+
+      // Click event for the sphere
+      clickableSphere.addEventListener('click', () => {
+        clickSound.play();
+        clickableSphere.setAttribute('color', `#${Math.floor(Math.random()*16777215).toString(16)}`);
+
+        const projectile = document.getElementById('projectileTemplate').cloneNode(true);
+        projectile.setAttribute('visible', true);
+        const startPosition = clickableSphere.getAttribute('position');
+        projectile.setAttribute('position', startPosition);
+
+        const leftPosition = new THREE.Vector3();
+        const rightPosition = new THREE.Vector3();
+        leftHand.object3D.getWorldPosition(leftPosition);
+        rightHand.object3D.getWorldPosition(rightPosition);
+        const targetPosition = new THREE.Vector3().addVectors(leftPosition, rightPosition).multiplyScalar(0.5);
+
+        projectile.setAttribute('animation', {
+          property: 'position',
+          to: `${targetPosition.x} ${targetPosition.y} ${targetPosition.z}`,
+          dur: 1000,
+          easing: 'linear'
+        });
+
+        scene.appendChild(projectile);
+
+        // Projectile collision check
+        let collisionCheck = setInterval(() => {
+            const projectilePosition = projectile.object3D.position;
+            const playerPosition = playerSphere.object3D.position;
+            const distance = projectilePosition.distanceTo(playerPosition);
+
+            if (distance < playerSphere.getAttribute('radius')) {
+                explosionSound.play();
+                if (navigator.getGamepads) {
+                    const gamepads = navigator.getGamepads();
+                    for (const gamepad of gamepads) {
+                        if (gamepad && gamepad.hapticActuators) {
+                            gamepad.hapticActuators[0].pulse(1, 200);
+                        }
+                    }
+                }
+
+                const explosion = document.createElement('a-entity');
+                explosion.setAttribute('position', playerPosition);
+                explosion.setAttribute('particle-system', {
+                    preset: 'snow',
+                    color: '#ff0000,#ffff00,#0000ff',
+                    particleCount: 5000,
+                    size: 0.2,
+                    maxAge: 2,
+                    velocityValue: '5 5 5',
+                    velocitySpread: '10 10 10',
+                    accelerationValue: '0 -10 0',
+                    accelerationSpread: '5 5 5'
+                });
+                scene.appendChild(explosion);
+
+                setTimeout(() => {
+                    scene.removeChild(explosion);
+                }, 2000);
+
+                scene.removeChild(projectile);
+                clearInterval(collisionCheck);
+            }
+        }, 50);
+
+        setTimeout(() => {
+            try {
+              scene.removeChild(projectile);
+              clearInterval(collisionCheck);
+            } catch(e) {}
+        }, 1000);
+      });
+
+      // Continuously update player sphere position
+      setInterval(updatePlayerSpherePosition, 10);
+    });
+
+    AFRAME.registerComponent('clickable', {
+        init: function () {
+            this.el.addEventListener('mousedown', (e) => {
+                this.el.emit('click', e, false);
+            });
+        }
+    });
+  </script>
+</body>
 </html>
