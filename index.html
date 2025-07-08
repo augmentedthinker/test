@@ -2,17 +2,36 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <title>My First WebXR AR Space</title>
+    <title>WebXR AR Test (Revised)</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <style>
       body {
         margin: 0;
         overflow: hidden;
       }
+      /* Optional: Style the enter AR button if default is not clear */
+      #ar-button {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        font-size: 1.2em;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        z-index: 1000; /* Ensure it's above the canvas */
+      }
     </style>
   </head>
   <body>
-    <a-scene xr-mode-ui="enabled: true" vr-mode-ui="enabled: false">
+    <a-scene
+      xr-mode-ui="enabled: true"
+      ar-mode-ui="enabled: true"
+      renderer="colorManagement: true; physicallyCorrectLights: true; logarithmicDepthBuffer: true;"
+    >
       <a-entity
         camera
         look-controls
@@ -20,8 +39,7 @@
         position="0 1.6 0"
         cursor="rayOrigin: mouse"
         raycaster="objects: [raycaster-target]"
-      >
-      </a-entity>
+      ></a-entity>
 
       <a-box
         position="0 1 -3"
@@ -31,6 +49,69 @@
       ></a-box>
 
       <a-entity background="false"></a-entity>
+
+      <a-entity
+        webxr="requiredFeatures: hit-test; optionalFeatures: dom-overlay, bounded-floor, local-floor, hand-tracking, light-estimation;"
+      ></a-entity>
     </a-scene>
+
+    <button id="ar-button" style="display: none;">Enter AR</button>
+
+    <script>
+      const scene = document.querySelector('a-scene');
+      const arButton = document.getElementById('ar-button');
+
+      if (scene) {
+        // Wait for the scene to be loaded (A-Frame initialization)
+        scene.addEventListener('loaded', () => {
+          // Check if 'immersive-ar' session is supported
+          if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+              if (supported) {
+                arButton.style.display = 'block'; // Show the AR button
+              } else {
+                console.warn('Immersive AR not supported on this device/browser.');
+              }
+            });
+          } else {
+            console.warn('WebXR not available in this browser.');
+          }
+        });
+
+        arButton.addEventListener('click', () => {
+          if (scene.hasLoaded) {
+            // Request the AR session directly
+            scene.enterVR(); // A-Frame's enterVR handles both VR/AR based on support
+            // For more explicit AR, you would do:
+            // navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local-floor', 'hit-test'] })
+            //   .then(session => {
+            //     console.log('AR session started:', session);
+            //     // Handle the session, though A-Frame typically takes over.
+            //   })
+            //   .catch(err => {
+            //     console.error('Failed to start AR session:', err);
+            //   });
+            arButton.style.display = 'none'; // Hide the button once clicked
+          }
+        });
+
+        // Listen for when an AR session starts (or any XR session)
+        scene.addEventListener('enter-vr', function () {
+          // This fires for both VR and AR.
+          // You can check scene.is('ar-mode') for specific logic.
+          console.log('Entered XR mode!');
+          if (scene.is('ar-mode')) {
+            console.log('Specifically, entered AR mode!');
+            // Additional setup for AR mode if needed
+          }
+        });
+
+        // Listen for when an XR session ends
+        scene.addEventListener('exit-vr', function () {
+          console.log('Exited XR mode!');
+          arButton.style.display = 'block'; // Show button again if user exits
+        });
+      }
+    </script>
   </body>
 </html>
