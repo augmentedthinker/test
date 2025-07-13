@@ -1,46 +1,209 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AR Floating Cube</title>
-  <!-- Load Three.js -->
-  <script src="https://unpkg.com/three@0.126.0/build/three.min.js"></script>
+  <title>Gemini's WebXR Cube Demo</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background-color: #111;
+      color: #fff;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      z-index: 100;
+      display: block;
+      padding: 10px 0;
+    }
+    /* AR Button styles are handled by the ARButton script below */
+  </style>
 </head>
-<body style="margin:0; overflow:hidden; background:#000;">
-  <button id="ar-btn" style="position:fixed;top:20px;left:20px;z-index:10;padding:12px 24px;font-size:1.2em;">Start AR</button>
-  <script>
-    let xrSession = null;
-    let renderer, scene, camera, cube;
-    let refSpace;
+<body>
+  <div id="info">
+    A WebXR Demo by Christopher & Gemini
+  </div>
 
-    document.getElementById('ar-btn').onclick = activateXR;
-
-    async function activateXR() {
-      if (!navigator.xr) {
-        alert("WebXR is not supported on this browser.");
-        return;
+  <!-- Using an import map is a modern way to define module locations -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       }
-      try {
-        xrSession = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local'] });
-      } catch (e) {
-        alert("Failed to start AR session: " + e);
-        return;
+    }
+  </script>
+
+  <script type="module">
+    // Import the main Three.js library
+    import * as THREE from 'three';
+
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
+    // Inlining it here keeps everything in a single file as requested.
+    class ARButton {
+      static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
+
+        function showStartAR( /*device*/ ) {
+          if (sessionInit.domOverlay === undefined) {
+            const overlay = document.createElement('div');
+            overlay.style.display = 'none';
+            document.body.appendChild(overlay);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 38);
+            svg.setAttribute('height', 38);
+            svg.style.position = 'absolute';
+            svg.style.right = '20px';
+            svg.style.top = '20px';
+            svg.addEventListener('click', function() {
+              currentSession.end();
+            });
+            overlay.appendChild(svg);
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', 2);
+            svg.appendChild(path);
+            if (sessionInit.optionalFeatures === undefined) {
+              sessionInit.optionalFeatures = [];
+            }
+            sessionInit.optionalFeatures.push('dom-overlay');
+            sessionInit.domOverlay = {
+              root: overlay
+            };
+          }
+
+          let currentSession = null;
+
+          async function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+            button.textContent = 'STOP AR';
+            sessionInit.domOverlay.root.style.display = '';
+            currentSession = session;
+          }
+
+          function onSessionEnded( /*event*/ ) {
+            currentSession.removeEventListener('end', onSessionEnded);
+            button.textContent = 'START AR';
+            sessionInit.domOverlay.root.style.display = 'none';
+            currentSession = null;
+          }
+
+          button.style.display = '';
+          button.style.cursor = 'pointer';
+          button.style.left = 'calc(50% - 50px)';
+          button.style.width = '100px';
+          button.textContent = 'START AR';
+          button.onmouseenter = function() {
+            button.style.opacity = '1.0';
+          };
+          button.onmouseleave = function() {
+            button.style.opacity = '0.5';
+          };
+          button.onclick = function() {
+            if (currentSession === null) {
+              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+            } else {
+              currentSession.end();
+            }
+          };
+        }
+
+        function disableButton() {
+          button.style.display = '';
+          button.style.cursor = 'auto';
+          button.style.left = 'calc(50% - 75px)';
+          button.style.width = '150px';
+          button.onmouseenter = null;
+          button.onmouseleave = null;
+          button.onclick = null;
+        }
+
+        function showARNotSupported() {
+          disableButton();
+          button.textContent = 'AR NOT SUPPORTED';
+        }
+
+        function stylizeElement(element) {
+          element.style.position = 'absolute';
+          element.style.bottom = '20px';
+          element.style.padding = '12px 6px';
+          element.style.border = '1px solid #fff';
+          element.style.borderRadius = '4px';
+          element.style.background = 'rgba(0,0,0,0.1)';
+          element.style.color = '#fff';
+          element.style.font = 'normal 13px sans-serif';
+          element.style.textAlign = 'center';
+          element.style.opacity = '0.5';
+          element.style.outline = 'none';
+          element.style.zIndex = '999';
+        }
+
+        if ('xr' in navigator) {
+          button.id = 'ARButton';
+          stylizeElement(button);
+          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
+            supported ? showStartAR() : showARNotSupported();
+          }).catch(showARNotSupported);
+          return button;
+        } else {
+          const message = document.createElement('a');
+          if (window.isSecureContext === false) {
+            message.href = document.location.href.replace(/^http:/, 'https:');
+            message.innerHTML = 'WEBXR NEEDS HTTPS';
+          } else {
+            message.href = 'https://immersiveweb.dev/';
+            message.innerHTML = 'WEBXR NOT AVAILABLE';
+          }
+          message.style.left = 'calc(50% - 90px)';
+          message.style.width = '180px';
+          message.style.textDecoration = 'none';
+          stylizeElement(message);
+          return message;
+        }
       }
-      document.getElementById('ar-btn').style.display = 'none';
+    }
 
-      const canvas = document.createElement('canvas');
-      document.body.appendChild(canvas);
-      const gl = canvas.getContext('webgl', { xrCompatible: true });
-      renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl, alpha: true });
-      renderer.autoClear = false;
-      renderer.setSize(window.innerWidth, window.innerHeight);
+    // --- Main Application Logic ---
+    let camera, scene, renderer;
+    let cube;
 
+    init();
+    animate();
+
+    function init() {
+      // Create the main scene
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera();
-      camera.matrixAutoUpdate = false;
 
-      // Create a colored cube
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true // alpha: true is required for AR passthrough
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      document.body.appendChild(renderer.domElement);
+
+      // Add the AR button to the body. It will handle session start/end.
+      // We pass the renderer and a session configuration object.
+      // 'local' is a good starting point for reference space.
+      document.body.appendChild(ARButton.createButton(renderer, {
+        requiredFeatures: ['local']
+      }));
+
+      // Create the same multi-colored cube from your original code.
+      // This is a great way to test orientation.
+      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
       const materials = [
         new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
         new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
@@ -49,37 +212,55 @@
         new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
         new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
       ];
-      cube = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, 0.2, 0.2),
-        materials
-      );
-      cube.position.set(0, 0, -1); // 1 meter in front of you
+      cube = new THREE.Mesh(geometry, materials);
+
+      // Position the cube 1 meter in front of the user.
+      // The Z-axis is negative away from the camera in WebGL.
+      cube.position.set(0, 0, -1);
+      
+      // Add the cube to the scene.
       scene.add(cube);
 
-      xrSession.updateRenderState({ baseLayer: new XRWebGLLayer(xrSession, gl) });
-      refSpace = await xrSession.requestReferenceSpace('local');
+      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
+      // it's good practice for when you use more advanced materials.
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
 
-      xrSession.requestAnimationFrame(onXRFrame);
+      // Add a listener to handle window resizing, which is good practice.
+      window.addEventListener('resize', onWindowResize, false);
     }
 
-    function onXRFrame(time, frame) {
-      xrSession.requestAnimationFrame(onXRFrame);
-      const session = frame.session;
-      const glLayer = session.renderState.baseLayer;
-      const pose = frame.getViewerPose(refSpace);
-      if (!pose) return;
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
 
-      gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
-      renderer.setSize(glLayer.framebufferWidth, glLayer.framebufferHeight, false);
+    function animate() {
+      // Use the renderer's built-in animation loop, which is XR-aware.
+      // This will call the 'render' function on every frame.
+      renderer.setAnimationLoop(render);
+    }
 
-      for (const view of pose.views) {
-        const viewport = glLayer.getViewport(view);
-        renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
-        camera.matrix.fromArray(view.transform.matrix);
-        camera.projectionMatrix.fromArray(view.projectionMatrix);
-        camera.updateMatrixWorld(true);
-        renderer.render(scene, camera);
+    // This function is called every frame
+    function render(timestamp, frame) {
+      // The 'frame' object is available if an XR session is active.
+      if (frame) {
+        // You could get poses and other data from the 'frame' object here,
+        // but Three.js's WebXRManager handles the camera updates for you.
       }
+      
+      // Make the cube slowly rotate to make it more interesting.
+      if (cube) {
+        cube.rotation.y += 0.01;
+        cube.rotation.x += 0.005;
+      }
+      
+      // Render the scene with the camera.
+      // In an AR session, Three.js will automatically handle rendering
+      // for each eye and clearing the background for passthrough.
+      renderer.render(scene, camera);
     }
   </script>
 </body>
