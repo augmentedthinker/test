@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Quest 2 AR Baseline Minimal Example</title>
-  <!-- A-Frame v1.7.0: See https://aframe.io/docs/1.7.0/ -->
+  <title>Quest AR Baseline Minimal Example</title>
+  <!-- A-Frame v1.7.0, official CDN: https://aframe.io/docs/1.7.0/ -->
   <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
   <style>
     #hud {
@@ -11,7 +11,7 @@
       top: 12px;
       left: 50%;
       transform: translateX(-50%);
-      background: rgba(20,20,30,0.72);
+      background: rgba(20,20,30,0.75);
       color: #fff;
       padding: 5px 16px;
       border-radius: 13px;
@@ -20,21 +20,23 @@
       pointer-events: none;
       font-family: system-ui, sans-serif;
       box-shadow: 0 2px 12px rgba(0,0,0,0.1);
-      opacity: 0.95;
+      opacity: 0.97;
     }
   </style>
 </head>
 <body>
-  <div id="hud">A-button ⟶ change cube colour</div>
+  <div id="hud">A-button or Trigger ⟶ change cube colour</div>
   <a-scene
-    webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #hud"
+    webxr="requiredFeatures: local-floor,immersive-ar; optionalFeatures: dom-overlay; overlayElement: #hud"
     renderer="alpha: true; antialias: true"
     vr-mode-ui="enabled: false"
     xr-mode-ui>
-    <!-- Transparent sky for passthrough. See https://aframe.io/docs/1.7.0/primitives/a-sky.html -->
+    <!-- Transparent sky so passthrough background is visible. See https://aframe.io/docs/1.7.0/primitives/a-sky.html -->
     <a-sky color="#000" opacity="0"></a-sky>
+    <!-- Controller entities -->
     <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
     <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+    <!-- Interactive floating cube -->
     <a-box id="cube"
       position="0 1.5 -1"
       depth="0.2" height="0.2" width="0.2"
@@ -44,9 +46,8 @@
     <a-camera position="0 1.6 0"></a-camera>
   </a-scene>
   <script>
-    // See https://aframe.io/docs/1.7.0/components/meta-touch-controls.html for event names
+    // See https://aframe.io/docs/1.7.0/components/meta-touch-controls.html for controller API
     // See https://www.w3.org/TR/webxr-ar-module-1/ for AR session spec
-    // See https://aframe.io/docs/1.7.0/components/webxr.html for DOM Overlay API
     const cube = document.getElementById('cube');
     const left = document.getElementById('leftHand');
     const right = document.getElementById('rightHand');
@@ -61,6 +62,7 @@
         cube.setAttribute('color', randomColor());
       }
     }
+    // Attach raycasters to controller entities for direct intersection
     left.setAttribute('raycaster', 'objects: .clickable; showLine: true; far: 10');
     right.setAttribute('raycaster', 'objects: .clickable; showLine: true; far: 10');
     left.setAttribute('cursor', 'fuse: false');
@@ -69,7 +71,6 @@
     right.addEventListener('triggerdown', tryColorChange);
     left.addEventListener('abuttondown', tryColorChange);
     right.addEventListener('abuttondown', tryColorChange);
-    // [UNVERIFIED_ASSUMPTION]: Raycasters attached to controller model entities.
   </script>
 </body>
 </html>
