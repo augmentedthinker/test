@@ -1,319 +1,162 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gemini's Interactive WebXR Cube</title>
+  <title>A-Frame Interactive WebXR Cube</title>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-      background-color: #111;
-      color: #fff;
-    }
-    #info {
-      position: absolute;
-      top: 10px;
-      width: 100%;
-      text-align: center;
-      z-index: 100;
-      display: block;
-      padding: 10px 0;
-    }
-    /* AR Button styles are handled by the ARButton script below */
-  </style>
+  <meta name="description" content="A-Frame WebXR demo with controller interaction based on user PRP.">
+  <!-- A-Frame v1.5.0 as specified in the PRP -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script>
+    /**
+     * A-Frame component to handle interaction with the cube.
+     * When the cube is clicked (via controller trigger), it changes color.
+     * When the cursor hovers over it, it scales up slightly.
+     */
+    AFRAME.registerComponent('interactive-cube', {
+      init: function () {
+        const el = this.el; // The <a-box> element
+
+        // Change color on click
+        el.addEventListener('click', function () {
+          const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+          // setAttribute can change any component's properties. Here we change the material's color.
+          el.setAttribute('color', randomColor);
+        });
+
+        // Scale up on hover
+        el.addEventListener('mouseenter', function () {
+          el.setAttribute('scale', '1.2 1.2 1.2');
+        });
+
+        // Scale back down when hover ends
+        el.addEventListener('mouseleave', function () {
+          el.setAttribute('scale', '1 1 1');
+        });
+      }
+    });
+
+    /**
+     * A-Frame component to act as a controller input debugger.
+     * It listens to all standard Quest controller events and updates on-screen text.
+     * This is based on the 'controller_debugger.html' requirement from the PRP.
+     */
+    AFRAME.registerComponent('controller-debugger', {
+      schema: {
+        hand: {type: 'string', default: 'right'},
+        textEl: {type: 'selector'}
+      },
+      init: function () {
+        const el = this.el; // The controller entity
+        const data = this.data;
+        let lastState = "Ready";
+
+        const updateText = (newState) => {
+          lastState = newState;
+          if (data.textEl) {
+            data.textEl.setAttribute('value', `Hand: ${data.hand}\nLast Event: ${lastState}`);
+          }
+        };
+
+        // Standard button events from the PRP
+        el.addEventListener('triggerdown', () => updateText('trigger down'));
+        el.addEventListener('triggerup', () => updateText('trigger up'));
+        el.addEventListener('gripdown', () => updateText('grip down'));
+        el.addEventListener('gripup', () => updateText('grip up'));
+        el.addEventListener('thumbstickdown', () => updateText('thumbstick down'));
+        el.addEventListener('thumbstickup', () => updateText('thumbstick up'));
+        
+        // Face buttons (A/B on right, X/Y on left)
+        el.addEventListener('abuttondown', () => updateText('A button down'));
+        el.addEventListener('abuttonup', () => updateText('A button up'));
+        el.addEventListener('bbuttondown', () => updateText('B button down'));
+        el.addEventListener('bbuttonup', () => updateText('B button up'));
+        el.addEventListener('xbuttondown', () => updateText('X button down'));
+        el.addEventListener('xbuttonup', () => updateText('X button up'));
+        el.addEventListener('ybuttondown', () => updateText('Y button down'));
+        el.addEventListener('ybuttonup', () => updateText('Y button up'));
+
+        // Thumbstick movement
+        el.addEventListener('thumbstickmoved', function (evt) {
+          const x = evt.detail.x.toFixed(2);
+          const y = evt.detail.y.toFixed(2);
+          updateText(`thumbstick moved\nX: ${x}, Y: ${y}`);
+        });
+
+        // Initialize text
+        updateText('Ready');
+      }
+    });
+  </script>
 </head>
 <body>
-  <div id="info">
-    Interactive WebXR Demo by Christopher & Gemini
-  </div>
+  <!-- A-Frame Scene with WebXR UI configured for an AR passthrough experience -->
+  <a-scene webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking, dom-overlay; overlayElement: body;">
 
-  <!-- Using an import map is a modern way to define module locations -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
+    <!-- Asset Management System, as recommended by the PRP, to preload assets. -->
+    <a-assets>
+      <!-- While we have no assets now, this is the correct place for them. -->
+    </a-assets>
 
-  <script type="module">
-    // Import the main Three.js library and the controller model factory
-    import * as THREE from 'three';
-    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+    <!-- 
+      The rotating cube. We use <a-animation> for the rotation, which is A-Frame's declarative way to animate.
+      The 'interactive-cube' component we registered in the <script> tag is attached here.
+    -->
+    <a-box id="my-cube" 
+           position="0 1.6 -1.5" 
+           color="#00ff00" 
+           shadow 
+           interactive-cube>
+      <a-animation attribute="rotation"
+                   to="0 360 360"
+                   dur="4000"
+                   easing="linear"
+                   repeat="indefinite"></a-animation>
+    </a-box>
 
-    // --- Inlined ARButton.js from Three.js examples ---
-    // This class creates the "Start AR" button and handles the WebXR session setup.
-    class ARButton {
-      static createButton(renderer, sessionInit = {}) {
-        const button = document.createElement('button');
+    <!-- 
+      Camera and Controller Setup, as per the PRP.
+      The camera rig allows the player and controllers to move together.
+      Position is set to 1.6m high to simulate average user height.
+    -->
+    <a-entity id="cameraRig" position="0 0 0">
+      <!-- The camera itself, with look-controls for head tracking. -->
+      <a-entity id="head" camera position="0 1.6 0" look-controls></a-entity>
 
-        function showStartAR( /*device*/ ) {
-          if (sessionInit.domOverlay === undefined) {
-            const overlay = document.createElement('div');
-            overlay.style.display = 'none';
-            document.body.appendChild(overlay);
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', 38);
-            svg.setAttribute('height', 38);
-            svg.style.position = 'absolute';
-            svg.style.right = '20px';
-            svg.style.top = '20px';
-            svg.addEventListener('click', function() {
-              currentSession.end();
-            });
-            overlay.appendChild(svg);
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
-            path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', 2);
-            svg.appendChild(path);
-            if (sessionInit.optionalFeatures === undefined) {
-              sessionInit.optionalFeatures = [];
-            }
-            sessionInit.optionalFeatures.push('dom-overlay');
-            sessionInit.domOverlay = {
-              root: overlay
-            };
-          }
+      <!-- 
+        Left Controller.
+        'meta-touch-controls' loads the model and handles events.
+        'controller-debugger' is our custom component to show input.
+      -->
+      <a-entity id="leftHand" 
+                meta-touch-controls="hand: left"
+                controller-debugger="hand: left; textEl: #left-debug-text">
+      </a-entity>
 
-          let currentSession = null;
-
-          async function onSessionStarted(session) {
-            session.addEventListener('end', onSessionEnded);
-            renderer.xr.setReferenceSpaceType('local');
-            await renderer.xr.setSession(session);
-            button.textContent = 'STOP AR';
-            sessionInit.domOverlay.root.style.display = '';
-            currentSession = session;
-          }
-
-          function onSessionEnded( /*event*/ ) {
-            currentSession.removeEventListener('end', onSessionEnded);
-            button.textContent = 'START AR';
-            sessionInit.domOverlay.root.style.display = 'none';
-            currentSession = null;
-          }
-
-          button.style.display = '';
-          button.style.cursor = 'pointer';
-          button.style.left = 'calc(50% - 50px)';
-          button.style.width = '100px';
-          button.textContent = 'START AR';
-          button.onmouseenter = function() {
-            button.style.opacity = '1.0';
-          };
-          button.onmouseleave = function() {
-            button.style.opacity = '0.5';
-          };
-          button.onclick = function() {
-            if (currentSession === null) {
-              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-            } else {
-              currentSession.end();
-            }
-          };
-        }
-
-        function disableButton() {
-          button.style.display = '';
-          button.style.cursor = 'auto';
-          button.style.left = 'calc(50% - 75px)';
-          button.style.width = '150px';
-          button.onmouseenter = null;
-          button.onmouseleave = null;
-          button.onclick = null;
-        }
-
-        function showARNotSupported() {
-          disableButton();
-          button.textContent = 'AR NOT SUPPORTED';
-        }
-
-        function stylizeElement(element) {
-          element.style.position = 'absolute';
-          element.style.bottom = '20px';
-          element.style.padding = '12px 6px';
-          element.style.border = '1px solid #fff';
-          element.style.borderRadius = '4px';
-          element.style.background = 'rgba(0,0,0,0.1)';
-          element.style.color = '#fff';
-          element.style.font = 'normal 13px sans-serif';
-          element.style.textAlign = 'center';
-          element.style.opacity = '0.5';
-          element.style.outline = 'none';
-          element.style.zIndex = '999';
-        }
-
-        if ('xr' in navigator) {
-          button.id = 'ARButton';
-          stylizeElement(button);
-          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
-            supported ? showStartAR() : showARNotSupported();
-          }).catch(showARNotSupported);
-          return button;
-        } else {
-          const message = document.createElement('a');
-          if (window.isSecureContext === false) {
-            message.href = document.location.href.replace(/^http:/, 'https:');
-            message.innerHTML = 'WEBXR NEEDS HTTPS';
-          } else {
-            message.href = 'https://immersiveweb.dev/';
-            message.innerHTML = 'WEBXR NOT AVAILABLE';
-          }
-          message.style.left = 'calc(50% - 90px)';
-          message.style.width = '180px';
-          message.style.textDecoration = 'none';
-          stylizeElement(message);
-          return message;
-        }
-      }
-    }
-
-    // --- Main Application Logic ---
-    let camera, scene, renderer;
-    let cube, controller1, controller2;
-    let raycaster;
-    let intersected = []; // To keep track of hovered objects
-
-    const tempMatrix = new THREE.Matrix4(); // To avoid creating new matrices in the loop
-
-    init();
-    animate();
-
-    function init() {
-      scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-      renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true
-      });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['local', 'hand-tracking'] // Added hand-tracking for fun
-      }));
-
-      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const material = new THREE.MeshStandardMaterial({ // Switched to StandardMaterial for lighting effects
-          color: 0x00ff00,
-          roughness: 0.7,
-          metalness: 0.0
-      });
-      cube = new THREE.Mesh(geometry, material);
-      cube.position.set(0, 1, -1.5); // Adjusted position to be more comfortable to interact with
-      scene.add(cube);
-
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-      light.position.set(0.5, 1, 0.25);
-      scene.add(light);
-      
-      // --- Controller Setup ---
-
-      // Controller 1 (typically right hand)
-      controller1 = renderer.xr.getController(0);
-      controller1.addEventListener('selectstart', onSelectStart);
-      scene.add(controller1);
-      
-      // Controller 2 (typically left hand)
-      controller2 = renderer.xr.getController(1);
-      scene.add(controller2);
-
-      // --- Controller Model Factory ---
-      const controllerModelFactory = new XRControllerModelFactory();
-
-      // Controller Grip 1
-      const controllerGrip1 = renderer.xr.getControllerGrip(0);
-      controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-      scene.add(controllerGrip1);
-
-      // Controller Grip 2
-      const controllerGrip2 = renderer.xr.getControllerGrip(1);
-      controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-      scene.add(controllerGrip2);
-      
-      // --- Raycaster and Pointer Line ---
-      
-      // A line to show the controller's pointing direction
-      const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-      const line = new THREE.Line(lineGeometry);
-      line.name = 'line';
-      line.scale.z = 5; // Make the line 5 meters long
-      controller1.add(line); // Attach the line to the controller
-
-      // The raycaster will be used for hit-testing
-      raycaster = new THREE.Raycaster();
-
-      window.addEventListener('resize', onWindowResize, false);
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
+      <!-- 
+        Right Controller.
+        'laser-controls' provides the raycaster and visible laser pointer.
+        The rayOrigin is set to 'grip' for a more natural pointing origin.
+        It will automatically interact with objects that have the 'interactive-cube' component.
+      -->
+      <a-entity id="rightHand"
+                meta-touch-controls="hand: right"
+                laser-controls="hand: right; rayOrigin: grip"
+                raycaster="objects: [interactive-cube]"
+                controller-debugger="hand: right; textEl: #right-debug-text">
+      </a-entity>
+    </a-entity>
     
-    function onSelectStart(event) {
-        // This function is triggered when the user presses the controller's trigger
-        const controller = event.target;
-        
-        // Find intersected objects
-        const intersections = getIntersections(controller);
+    <!-- 
+      On-screen text for the controller debugger.
+      These are positioned in the world space to be readable.
+    -->
+    <a-text id="left-debug-text" value="Left Hand: Waiting" position="-0.5 1.8 -1" scale="0.2 0.2 0.2" color="white"></a-text>
+    <a-text id="right-debug-text" value="Right Hand: Waiting" position="0.5 1.8 -1" scale="0.2 0.2 0.2" color="white"></a-text>
 
-        if (intersections.length > 0) {
-            const intersection = intersections[0];
-            const object = intersection.object;
-            
-            // Change the cube's color to a random color
-            object.material.color.setHex(Math.random() * 0xffffff);
-        }
-    }
+    <!-- A simple ground plane and sky for context -->
+    <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#333" shadow></a-plane>
+    <a-sky color="#111"></a-sky>
 
-    function getIntersections(controller) {
-        // Get the controller's position and orientation
-        tempMatrix.identity().extractRotation(controller.matrixWorld);
-        raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-        // Check for intersections
-        return raycaster.intersectObjects(scene.children, false);
-    }
-
-    function animate() {
-      renderer.setAnimationLoop(render);
-    }
-
-    function render() {
-      // Handle highlighting
-      const intersections = getIntersections(controller1);
-      
-      if (intersections.length > 0) {
-          const intersection = intersections[0];
-          const object = intersection.object;
-          
-          // If the object is not already in the intersected list, add it and highlight it
-          if (intersected.indexOf(object) === -1) {
-              // Store original emissive color if it exists
-              object.userData.originalEmissive = object.material.emissive.getHex();
-              object.material.emissive.setHex(0x555555); // Highlight with a gray emissive color
-              intersected.push(object);
-          }
-      } else {
-          // If there are no intersections, unhighlight any previously intersected objects
-          if (intersected.length > 0) {
-              const object = intersected[0];
-              object.material.emissive.setHex(object.userData.originalEmissive || 0x000000);
-              intersected = [];
-          }
-      }
-
-      renderer.render(scene, camera);
-    }
-  </script>
+  </a-scene>
 </body>
 </html>
