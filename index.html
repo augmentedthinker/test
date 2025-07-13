@@ -1,304 +1,86 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Basic A-Frame AR/VR Space</title>
-    <meta name="description" content="A basic hybrid AR/VR scene using A-Frame for Meta Quest.">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- A-Frame Library (v1.5.0 as specified in PRPs) -->
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- A-Frame Environment Component for rich VR environments -->
-    <script src="https://unpkg.com/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
-    
-    <style>
-        /* Basic styling for the entry UI */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-            margin: 0;
-            background-color: #111;
-            color: #fff;
-        }
-        #entry-ui {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            z-index: 10;
-        }
-        #entry-ui h1 {
-            font-size: 2.5rem;
-        }
-        #entry-ui p {
-            font-size: 1.1rem;
-            max-width: 80%;
-            text-align: center;
-        }
-        .xr-button {
-            background-color: #007AFF;
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 12px;
-            font-size: 1.2rem;
-            cursor: pointer;
-            margin: 10px;
-            transition: background-color 0.3s;
-        }
-        .xr-button:hover {
-            background-color: #0056b3;
-        }
-        #button-container {
-            display: none; /* Hidden until XR support is checked */
-        }
-        #unsupported-message {
-            display: none; /* Hidden by default */
-            background-color: #ff4500;
-            padding: 10px 20px;
-            border-radius: 8px;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AR Floating Cube</title>
+  <!-- Load Three.js -->
+  <script src="https://unpkg.com/three@0.126.0/build/three.min.js"></script>
 </head>
-<body>
-    <!-- UI for entering AR or VR mode -->
-    <div id="entry-ui">
-        <h1>Welcome to the AR/VR Space</h1>
-        <p>Choose a mode to begin. AR mode requires a supported device like the Meta Quest and will show your real-world surroundings.</p>
-        <div id="button-container">
-            <button id="enter-ar" class="xr-button">Enter AR</button>
-            <button id="enter-vr" class="xr-button">Enter VR</button>
-        </div>
-        <div id="unsupported-message">
-            <p>Your browser or device does not support WebXR.</p>
-        </div>
-    </div>
+<body style="margin:0; overflow:hidden; background:#000;">
+  <button id="ar-btn" style="position:fixed;top:20px;left:20px;z-index:10;padding:12px 24px;font-size:1.2em;">Start AR</button>
+  <script>
+    let xrSession = null;
+    let renderer, scene, camera, cube;
+    let refSpace;
 
-    <!-- 
-      A-Frame Scene
-      - `webxr`: Configured for both AR and VR. AR features like `hit-test` are requested.
-      - `renderer="colorManagement: true"`: Important for accurate colors, especially with the environment component.
-      - `background="transparent"` and `renderer="alpha: true"` are needed for AR passthrough.
-    -->
-    <a-scene 
-        id="xr-scene"
-        background="transparent"
-        renderer="colorManagement: true; alpha: true"
-        webxr="optionalFeatures: hit-test, local-floor, anchors, plane-detection, dom-overlay;">
+    document.getElementById('ar-btn').onclick = activateXR;
 
-        <!-- 
-          Asset Management System
-          - Preloads assets for better performance, as recommended in the PRPs.
-        -->
-        <a-assets>
-            <a-mixin 
-                id="placed-object"
-                geometry="primitive: box; height: 0.2; width: 0.2; depth: 0.2;"
-                material="color: #4CC3D9; metalness: 0.1; roughness: 0.8;"
-                shadow="cast: true; receive: false">
-            </a-mixin>
-        </a-assets>
+    async function activateXR() {
+      if (!navigator.xr) {
+        alert("WebXR is not supported on this browser.");
+        return;
+      }
+      try {
+        xrSession = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local'] });
+      } catch (e) {
+        alert("Failed to start AR session: " + e);
+        return;
+      }
+      document.getElementById('ar-btn').style.display = 'none';
 
-        <!-- 
-          VR Environment
-          - Uses the aframe-environment-component to create a rich, performant VR world.
-          - This entity will be hidden when in AR mode.
-          - The 'forest' preset is a good example from the Environmental Design PRP.
-        -->
-        <a-entity 
-            id="vr-environment" 
-            environment="preset: forest; groundColor: #445; shadow: true;"
-            visible="false">
-        </a-entity>
+      const canvas = document.createElement('canvas');
+      document.body.appendChild(canvas);
+      const gl = canvas.getContext('webgl', { xrCompatible: true });
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, context: gl, alpha: true });
+      renderer.autoClear = false;
+      renderer.setSize(window.innerWidth, window.innerHeight);
 
-        <!-- 
-          Player Rig
-          - A standard setup as per the "A-Frame Baseline for Meta Quest" PRP.
-          - The rig holds the camera and controllers, allowing for easy movement implementation later.
-        -->
-        <a-entity id="player-rig" position="0 0 0">
-            <!-- Camera with look-controls -->
-            <a-entity id="camera" 
-                camera 
-                position="0 1.6 0" 
-                look-controls>
-            </a-entity>
+      scene = new THREE.Scene();
+      camera = new THREE.PerspectiveCamera();
+      camera.matrixAutoUpdate = false;
 
-            <!-- 
-              Controllers
-              - `meta-touch-controls`: The correct component for Quest controllers.
-              - `raycaster`: Used for pointing and interacting with the world (both virtual and real via hit-test).
-              - The raycaster is configured to interact with `.raycastable` objects.
-              - `placement-controller`: Custom component to handle object placement logic.
-            -->
-            <a-entity id="left-hand" 
-                meta-touch-controls="hand: left"
-                raycaster="objects: .raycastable; far: 5;"
-                placement-controller>
-            </a-entity>
-            
-            <a-entity id="right-hand" 
-                meta-touch-controls="hand: right"
-                raycaster="objects: .raycastable; far: 5;"
-                placement-controller>
-            </a-entity>
-        </a-entity>
+      // Create a colored cube
+      const materials = [
+        new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
+        new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
+        new THREE.MeshBasicMaterial({ color: 0x0000ff }), // top
+        new THREE.MeshBasicMaterial({ color: 0xffff00 }), // bottom
+        new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
+        new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
+      ];
+      cube = new THREE.Mesh(
+        new THREE.BoxGeometry(0.2, 0.2, 0.2),
+        materials
+      );
+      cube.position.set(0, 0, -1); // 1 meter in front of you
+      scene.add(cube);
 
-        <!-- A simple reticle to show where the user is pointing. Attached to the active controller. -->
-        <a-entity id="reticle"
-            geometry="primitive: ring; radiusInner: 0.01; radiusOuter: 0.015"
-            material="color: #FFC107; shader: flat"
-            visible="false">
-        </a-entity>
-    </a-scene>
+      xrSession.updateRenderState({ baseLayer: new XRWebGLLayer(xrSession, gl) });
+      refSpace = await xrSession.requestReferenceSpace('local');
 
-    <script>
-        // --- Component for handling object placement ---
-        // This component listens for a trigger press on the controller.
-        // In AR mode, it uses hit-testing to place an object on a real-world surface.
-        // In VR mode, it uses the raycaster intersection point on the virtual ground.
-        AFRAME.registerComponent('placement-controller', {
-            init: function () {
-                this.sceneEl = document.querySelector('a-scene');
-                this.reticle = document.querySelector('#reticle');
-                this.hitTestSource = null;
-                this.isAR = false;
+      xrSession.requestAnimationFrame(onXRFrame);
+    }
 
-                // Listen for trigger press to place an object
-                this.el.addEventListener('triggerdown', this.onTriggerDown.bind(this));
+    function onXRFrame(time, frame) {
+      xrSession.requestAnimationFrame(onXRFrame);
+      const session = frame.session;
+      const glLayer = session.renderState.baseLayer;
+      const pose = frame.getViewerPose(refSpace);
+      if (!pose) return;
 
-                // Set up logic when entering/exiting XR modes
-                this.sceneEl.addEventListener('enter-vr', () => {
-                    this.isAR = this.sceneEl.is('ar-mode');
-                    if (this.isAR) {
-                        this.setupAR();
-                    } else {
-                        this.setupVR();
-                    }
-                });
+      gl.bindFramebuffer(gl.FRAMEBUFFER, glLayer.framebuffer);
+      renderer.setSize(glLayer.framebufferWidth, glLayer.framebufferHeight, false);
 
-                this.sceneEl.addEventListener('exit-vr', () => {
-                    if (this.hitTestSource) {
-                        this.hitTestSource.cancel();
-                        this.hitTestSource = null;
-                    }
-                });
-            },
-
-            tick: function() {
-                // In AR mode, we update the reticle's position based on the hit-test result.
-                if (this.isAR && this.sceneEl.is('ar-mode')) {
-                    const frame = this.sceneEl.renderer.xr.getFrame();
-                    if (!frame || !this.hitTestSource) return;
-
-                    const hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                    if (hitTestResults.length > 0) {
-                        const pose = hitTestResults[0].getPose(this.sceneEl.renderer.xr.getReferenceSpace());
-                        this.reticle.setAttribute('visible', true);
-                        this.reticle.setAttribute('position', pose.transform.position);
-                    } else {
-                        this.reticle.setAttribute('visible', false);
-                    }
-                } 
-                // In VR mode, update the reticle based on raycaster intersection.
-                else if (!this.isAR && this.sceneEl.is('vr-mode')) {
-                     const intersection = this.el.components.raycaster.getIntersection(document.querySelector('#vr-environment'));
-                     if (intersection) {
-                         this.reticle.setAttribute('visible', true);
-                         this.reticle.setAttribute('position', intersection.point);
-                     } else {
-                         this.reticle.setAttribute('visible', false);
-                     }
-                } else {
-                    this.reticle.setAttribute('visible', false);
-                }
-            },
-
-            onTriggerDown: function () {
-                if (this.reticle.getAttribute('visible')) {
-                    const position = this.reticle.getAttribute('position');
-                    
-                    const newObject = document.createElement('a-entity');
-                    newObject.setAttribute('mixin', 'placed-object');
-                    newObject.setAttribute('position', position);
-                    
-                    this.sceneEl.appendChild(newObject);
-                }
-            },
-
-            setupAR: async function() {
-                console.log("Setting up AR Mode");
-                const session = this.sceneEl.renderer.xr.getSession();
-                
-                // Hide the VR environment
-                document.querySelector('#vr-environment').setAttribute('visible', 'false');
-
-                // Request hit-test source
-                try {
-                    const referenceSpace = await session.requestReferenceSpace('viewer');
-                    this.hitTestSource = await session.requestHitTestSource({ space: referenceSpace });
-                    console.log("Hit-test source obtained.");
-                } catch (e) {
-                    console.error("Could not get hit-test source:", e);
-                }
-            },
-
-            setupVR: function() {
-                console.log("Setting up VR Mode");
-                // Make sure the VR environment is visible
-                const env = document.querySelector('#vr-environment');
-                env.setAttribute('visible', 'true');
-                // Make the environment ground raycastable for object placement
-                env.object3D.traverse(node => {
-                    if(node.isMesh) {
-                        node.el.classList.add('raycastable');
-                    }
-                });
-            }
-        });
-
-        // --- UI and Session Management Logic ---
-        window.addEventListener('DOMContentLoaded', () => {
-            const entryUI = document.querySelector('#entry-ui');
-            const buttonContainer = document.querySelector('#button-container');
-            const enterARButton = document.querySelector('#enter-ar');
-            const enterVRButton = document.querySelector('#enter-vr');
-            const unsupportedMessage = document.querySelector('#unsupported-message');
-            const sceneEl = document.querySelector('#xr-scene');
-
-            if (navigator.xr) {
-                // Check for AR support
-                navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                    buttonContainer.style.display = 'block';
-                    if (!supported) {
-                        enterARButton.style.display = 'none';
-                    }
-                });
-
-                // Enter AR
-                enterARButton.addEventListener('click', () => {
-                    sceneEl.enterVR();
-                    entryUI.style.display = 'none';
-                });
-
-                // Enter VR
-                enterVRButton.addEventListener('click', () => {
-                    // To force VR, we can't request AR features.
-                    // A-Frame's enterVR() will prefer AR if available.
-                    // A more robust solution might re-configure the scene, but for this basic
-                    // example, we assume the user's device settings handle the preference.
-                    // On Quest, if you launch in VR mode, it will stay in VR.
-                    sceneEl.enterVR();
-                    entryUI.style.display = 'none';
-                });
-
-            } else {
-                unsupportedMessage.style.display = 'block';
-            }
-        });
-    </script>
+      for (const view of pose.views) {
+        const viewport = glLayer.getViewport(view);
+        renderer.setViewport(viewport.x, viewport.y, viewport.width, viewport.height);
+        camera.matrix.fromArray(view.transform.matrix);
+        camera.projectionMatrix.fromArray(view.projectionMatrix);
+        camera.updateMatrixWorld(true);
+        renderer.render(scene, camera);
+      }
+    }
+  </script>
 </body>
 </html>
