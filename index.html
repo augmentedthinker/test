@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gemini's WebXR Cube Demo</title>
+  <title>Gemini's Interactive WebXR Cube</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -26,25 +26,26 @@
 </head>
 <body>
   <div id="info">
-    A WebXR Demo by Christopher & Gemini
+    Interactive WebXR Demo by Christopher & Gemini
   </div>
 
   <!-- Using an import map is a modern way to define module locations -->
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
       }
     }
   </script>
 
   <script type="module">
-    // Import the main Three.js library
+    // Import the main Three.js library and the controller model factory
     import * as THREE from 'three';
+    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
     // --- Inlined ARButton.js from Three.js examples ---
     // This class creates the "Start AR" button and handles the WebXR session setup.
-    // Inlining it here keeps everything in a single file as requested.
     class ARButton {
       static createButton(renderer, sessionInit = {}) {
         const button = document.createElement('button');
@@ -173,61 +174,81 @@
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
-    let cube;
+    let cube, controller1, controller2;
+    let raycaster;
+    let intersected = []; // To keep track of hovered objects
+
+    const tempMatrix = new THREE.Matrix4(); // To avoid creating new matrices in the loop
 
     init();
     animate();
 
     function init() {
-      // Create the main scene
       scene = new THREE.Scene();
-
-      // Create a camera. Its position will be updated by the WebXR device.
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-      // Create the WebGL renderer and configure it for XR.
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: true // alpha: true is required for AR passthrough
+        alpha: true
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      renderer.xr.enabled = true;
       document.body.appendChild(renderer.domElement);
 
-      // Add the AR button to the body. It will handle session start/end.
-      // We pass the renderer and a session configuration object.
-      // 'local' is a good starting point for reference space.
       document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['local']
+        requiredFeatures: ['local', 'hand-tracking'] // Added hand-tracking for fun
       }));
 
-      // Create the same multi-colored cube from your original code.
-      // This is a great way to test orientation.
       const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const materials = [
-        new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
-        new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
-        new THREE.MeshBasicMaterial({ color: 0x0000ff }), // top
-        new THREE.MeshBasicMaterial({ color: 0xffff00 }), // bottom
-        new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
-        new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
-      ];
-      cube = new THREE.Mesh(geometry, materials);
-
-      // Position the cube 1 meter in front of the user.
-      // The Z-axis is negative away from the camera in WebGL.
-      cube.position.set(0, 0, -1);
-      
-      // Add the cube to the scene.
+      const material = new THREE.MeshStandardMaterial({ // Switched to StandardMaterial for lighting effects
+          color: 0x00ff00,
+          roughness: 0.7,
+          metalness: 0.0
+      });
+      cube = new THREE.Mesh(geometry, material);
+      cube.position.set(0, 1, -1.5); // Adjusted position to be more comfortable to interact with
       scene.add(cube);
 
-      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
-      // it's good practice for when you use more advanced materials.
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
       scene.add(light);
+      
+      // --- Controller Setup ---
 
-      // Add a listener to handle window resizing, which is good practice.
+      // Controller 1 (typically right hand)
+      controller1 = renderer.xr.getController(0);
+      controller1.addEventListener('selectstart', onSelectStart);
+      scene.add(controller1);
+      
+      // Controller 2 (typically left hand)
+      controller2 = renderer.xr.getController(1);
+      scene.add(controller2);
+
+      // --- Controller Model Factory ---
+      const controllerModelFactory = new XRControllerModelFactory();
+
+      // Controller Grip 1
+      const controllerGrip1 = renderer.xr.getControllerGrip(0);
+      controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+      scene.add(controllerGrip1);
+
+      // Controller Grip 2
+      const controllerGrip2 = renderer.xr.getControllerGrip(1);
+      controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+      scene.add(controllerGrip2);
+      
+      // --- Raycaster and Pointer Line ---
+      
+      // A line to show the controller's pointing direction
+      const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+      const line = new THREE.Line(lineGeometry);
+      line.name = 'line';
+      line.scale.z = 5; // Make the line 5 meters long
+      controller1.add(line); // Attach the line to the controller
+
+      // The raycaster will be used for hit-testing
+      raycaster = new THREE.Raycaster();
+
       window.addEventListener('resize', onWindowResize, false);
     }
 
@@ -236,30 +257,61 @@
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
+    
+    function onSelectStart(event) {
+        // This function is triggered when the user presses the controller's trigger
+        const controller = event.target;
+        
+        // Find intersected objects
+        const intersections = getIntersections(controller);
+
+        if (intersections.length > 0) {
+            const intersection = intersections[0];
+            const object = intersection.object;
+            
+            // Change the cube's color to a random color
+            object.material.color.setHex(Math.random() * 0xffffff);
+        }
+    }
+
+    function getIntersections(controller) {
+        // Get the controller's position and orientation
+        tempMatrix.identity().extractRotation(controller.matrixWorld);
+        raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+        // Check for intersections
+        return raycaster.intersectObjects(scene.children, false);
+    }
 
     function animate() {
-      // Use the renderer's built-in animation loop, which is XR-aware.
-      // This will call the 'render' function on every frame.
       renderer.setAnimationLoop(render);
     }
 
-    // This function is called every frame
-    function render(timestamp, frame) {
-      // The 'frame' object is available if an XR session is active.
-      if (frame) {
-        // You could get poses and other data from the 'frame' object here,
-        // but Three.js's WebXRManager handles the camera updates for you.
-      }
+    function render() {
+      // Handle highlighting
+      const intersections = getIntersections(controller1);
       
-      // Make the cube slowly rotate to make it more interesting.
-      if (cube) {
-        cube.rotation.y += 0.01;
-        cube.rotation.x += 0.005;
+      if (intersections.length > 0) {
+          const intersection = intersections[0];
+          const object = intersection.object;
+          
+          // If the object is not already in the intersected list, add it and highlight it
+          if (intersected.indexOf(object) === -1) {
+              // Store original emissive color if it exists
+              object.userData.originalEmissive = object.material.emissive.getHex();
+              object.material.emissive.setHex(0x555555); // Highlight with a gray emissive color
+              intersected.push(object);
+          }
+      } else {
+          // If there are no intersections, unhighlight any previously intersected objects
+          if (intersected.length > 0) {
+              const object = intersected[0];
+              object.material.emissive.setHex(object.userData.originalEmissive || 0x000000);
+              intersected = [];
+          }
       }
-      
-      // Render the scene with the camera.
-      // In an AR session, Three.js will automatically handle rendering
-      // for each eye and clearing the background for passthrough.
+
       renderer.render(scene, camera);
     }
   </script>
