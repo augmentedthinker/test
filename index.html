@@ -1,162 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>A-Frame Interactive WebXR Cube</title>
-  <meta charset="utf-8">
-  <meta name="description" content="A-Frame WebXR demo with controller interaction based on user PRP.">
-  <!-- A-Frame v1.5.0 as specified in the PRP -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script>
-    /**
-     * A-Frame component to handle interaction with the cube.
-     * When the cube is clicked (via controller trigger), it changes color.
-     * When the cursor hovers over it, it scales up slightly.
-     */
-    AFRAME.registerComponent('interactive-cube', {
-      init: function () {
-        const el = this.el; // The <a-box> element
-
-        // Change color on click
-        el.addEventListener('click', function () {
-          const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-          // setAttribute can change any component's properties. Here we change the material's color.
-          el.setAttribute('color', randomColor);
-        });
-
-        // Scale up on hover
-        el.addEventListener('mouseenter', function () {
-          el.setAttribute('scale', '1.2 1.2 1.2');
-        });
-
-        // Scale back down when hover ends
-        el.addEventListener('mouseleave', function () {
-          el.setAttribute('scale', '1 1 1');
-        });
-      }
-    });
-
-    /**
-     * A-Frame component to act as a controller input debugger.
-     * It listens to all standard Quest controller events and updates on-screen text.
-     * This is based on the 'controller_debugger.html' requirement from the PRP.
-     */
-    AFRAME.registerComponent('controller-debugger', {
-      schema: {
-        hand: {type: 'string', default: 'right'},
-        textEl: {type: 'selector'}
-      },
-      init: function () {
-        const el = this.el; // The controller entity
-        const data = this.data;
-        let lastState = "Ready";
-
-        const updateText = (newState) => {
-          lastState = newState;
-          if (data.textEl) {
-            data.textEl.setAttribute('value', `Hand: ${data.hand}\nLast Event: ${lastState}`);
-          }
-        };
-
-        // Standard button events from the PRP
-        el.addEventListener('triggerdown', () => updateText('trigger down'));
-        el.addEventListener('triggerup', () => updateText('trigger up'));
-        el.addEventListener('gripdown', () => updateText('grip down'));
-        el.addEventListener('gripup', () => updateText('grip up'));
-        el.addEventListener('thumbstickdown', () => updateText('thumbstick down'));
-        el.addEventListener('thumbstickup', () => updateText('thumbstick up'));
-        
-        // Face buttons (A/B on right, X/Y on left)
-        el.addEventListener('abuttondown', () => updateText('A button down'));
-        el.addEventListener('abuttonup', () => updateText('A button up'));
-        el.addEventListener('bbuttondown', () => updateText('B button down'));
-        el.addEventListener('bbuttonup', () => updateText('B button up'));
-        el.addEventListener('xbuttondown', () => updateText('X button down'));
-        el.addEventListener('xbuttonup', () => updateText('X button up'));
-        el.addEventListener('ybuttondown', () => updateText('Y button down'));
-        el.addEventListener('ybuttonup', () => updateText('Y button up'));
-
-        // Thumbstick movement
-        el.addEventListener('thumbstickmoved', function (evt) {
-          const x = evt.detail.x.toFixed(2);
-          const y = evt.detail.y.toFixed(2);
-          updateText(`thumbstick moved\nX: ${x}, Y: ${y}`);
-        });
-
-        // Initialize text
-        updateText('Ready');
-      }
-    });
-  </script>
+  <meta charset="UTF-8">
+  <title>Quest 2 AR Baseline Minimal Example</title>
+  <!-- A-Frame v1.7.0: See https://aframe.io/docs/1.7.0/ -->
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+  <style>
+    #hud {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(20,20,30,0.72);
+      color: #fff;
+      padding: 5px 16px;
+      border-radius: 13px;
+      font-size: 1rem;
+      z-index: 10001;
+      pointer-events: none;
+      font-family: system-ui, sans-serif;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      opacity: 0.95;
+    }
+  </style>
 </head>
 <body>
-  <!-- A-Frame Scene with WebXR UI configured for an AR passthrough experience -->
-  <a-scene webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking, dom-overlay; overlayElement: body;">
-
-    <!-- Asset Management System, as recommended by the PRP, to preload assets. -->
-    <a-assets>
-      <!-- While we have no assets now, this is the correct place for them. -->
-    </a-assets>
-
-    <!-- 
-      The rotating cube. We use <a-animation> for the rotation, which is A-Frame's declarative way to animate.
-      The 'interactive-cube' component we registered in the <script> tag is attached here.
-    -->
-    <a-box id="my-cube" 
-           position="0 1.6 -1.5" 
-           color="#00ff00" 
-           shadow 
-           interactive-cube>
-      <a-animation attribute="rotation"
-                   to="0 360 360"
-                   dur="4000"
-                   easing="linear"
-                   repeat="indefinite"></a-animation>
-    </a-box>
-
-    <!-- 
-      Camera and Controller Setup, as per the PRP.
-      The camera rig allows the player and controllers to move together.
-      Position is set to 1.6m high to simulate average user height.
-    -->
-    <a-entity id="cameraRig" position="0 0 0">
-      <!-- The camera itself, with look-controls for head tracking. -->
-      <a-entity id="head" camera position="0 1.6 0" look-controls></a-entity>
-
-      <!-- 
-        Left Controller.
-        'meta-touch-controls' loads the model and handles events.
-        'controller-debugger' is our custom component to show input.
-      -->
-      <a-entity id="leftHand" 
-                meta-touch-controls="hand: left"
-                controller-debugger="hand: left; textEl: #left-debug-text">
-      </a-entity>
-
-      <!-- 
-        Right Controller.
-        'laser-controls' provides the raycaster and visible laser pointer.
-        The rayOrigin is set to 'grip' for a more natural pointing origin.
-        It will automatically interact with objects that have the 'interactive-cube' component.
-      -->
-      <a-entity id="rightHand"
-                meta-touch-controls="hand: right"
-                laser-controls="hand: right; rayOrigin: grip"
-                raycaster="objects: [interactive-cube]"
-                controller-debugger="hand: right; textEl: #right-debug-text">
-      </a-entity>
-    </a-entity>
-    
-    <!-- 
-      On-screen text for the controller debugger.
-      These are positioned in the world space to be readable.
-    -->
-    <a-text id="left-debug-text" value="Left Hand: Waiting" position="-0.5 1.8 -1" scale="0.2 0.2 0.2" color="white"></a-text>
-    <a-text id="right-debug-text" value="Right Hand: Waiting" position="0.5 1.8 -1" scale="0.2 0.2 0.2" color="white"></a-text>
-
-    <!-- A simple ground plane and sky for context -->
-    <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#333" shadow></a-plane>
-    <a-sky color="#111"></a-sky>
-
+  <div id="hud">A-button ⟶ change cube colour</div>
+  <a-scene
+    webxr="requiredFeatures: local-floor; optionalFeatures: dom-overlay; overlayElement: #hud"
+    renderer="alpha: true; antialias: true"
+    vr-mode-ui="enabled: false"
+    xr-mode-ui>
+    <!-- Transparent sky for passthrough. See https://aframe.io/docs/1.7.0/primitives/a-sky.html -->
+    <a-sky color="#000" opacity="0"></a-sky>
+    <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
+    <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+    <a-box id="cube"
+      position="0 1.5 -1"
+      depth="0.2" height="0.2" width="0.2"
+      color="steelblue"
+      class="clickable"
+      raycaster-target></a-box>
+    <a-camera position="0 1.6 0"></a-camera>
   </a-scene>
+  <script>
+    // See https://aframe.io/docs/1.7.0/components/meta-touch-controls.html for event names
+    // See https://www.w3.org/TR/webxr-ar-module-1/ for AR session spec
+    // See https://aframe.io/docs/1.7.0/components/webxr.html for DOM Overlay API
+    const cube = document.getElementById('cube');
+    const left = document.getElementById('leftHand');
+    const right = document.getElementById('rightHand');
+    function randomColor() {
+      return `hsl(${Math.floor(Math.random()*360)},70%,55%)`;
+    }
+    function tryColorChange(evt) {
+      const raycaster = this.components.raycaster;
+      if (!raycaster) return;
+      const intersection = raycaster.getIntersection(cube);
+      if (intersection) {
+        cube.setAttribute('color', randomColor());
+      }
+    }
+    left.setAttribute('raycaster', 'objects: .clickable; showLine: true; far: 10');
+    right.setAttribute('raycaster', 'objects: .clickable; showLine: true; far: 10');
+    left.setAttribute('cursor', 'fuse: false');
+    right.setAttribute('cursor', 'fuse: false');
+    left.addEventListener('triggerdown', tryColorChange);
+    right.addEventListener('triggerdown', tryColorChange);
+    left.addEventListener('abuttondown', tryColorChange);
+    right.addEventListener('abuttondown', tryColorChange);
+    // [UNVERIFIED_ASSUMPTION]: Raycasters attached to controller model entities.
+  </script>
 </body>
 </html>
