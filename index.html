@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Cleaned VR Experience - Working Features Only</title>
+    <title>Complete VR Experience - Projectile Hit Reaction Implemented</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -70,7 +70,7 @@
             color="#ADD8E6"
             opacity="0.7"
             body-tracker="leftHand: #leftHand; rightHand: #rightHand"
-        ></a-sphere>
+            sphere-collider="objects: .projectile;" event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100" ></a-sphere>
 
     </a-scene>
 
@@ -135,6 +135,7 @@
                     const sphere = document.createElement('a-sphere');
                     sphere.setAttribute('radius', data.sphereRadius);
                     sphere.setAttribute('color', data.sphereColor);
+                    sphere.setAttribute('class', 'projectile'); // PRP Step 4.2: Mark as projectile
 
                     const originPos = new AFRAME.THREE.Vector3();
                     el.object3D.getWorldPosition(originPos);
@@ -166,7 +167,14 @@
                 this.velocity = new AFRAME.THREE.Vector3(this.data.velocity.x, this.data.velocity.y, this.data.velocity.z);
                 this.lifeTimer = this.data.lifeTime;
                 this.creationTime = performance.now();
-                // Removed hit event listener
+
+                // PRP Step 4.4: Re-add hit event listener for projectile removal and debug
+                this.el.addEventListener('hit', (evt) => {
+                    if (evt.detail.el && evt.detail.el.id === 'playerBody') {
+                        console.log('Projectile hit playerBody! Removing projectile.'); // For debugging
+                        this.el.remove();
+                    }
+                });
             },
 
             tick: function (time, deltaTime) {
@@ -182,7 +190,6 @@
                 }
             }
         });
-        // Removed log-hits component
     </script>
 </body>
 </html>
