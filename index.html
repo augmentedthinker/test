@@ -1,211 +1,371 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>VR Experience - Sounds & Collision Reworked (Corrected URLs)</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
+  <meta charset="utf-8">
+  <title>Quest VR: Sounds & Player Hit Reaction</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
-    <a-scene>
-        <a-assets>
-            <audio id="fireSound" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
-            <audio id="hitSound" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
-        </a-assets>
+<a-scene background="color: #ECECEC">
+  <a-assets>
+    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
+    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
+  </a-assets>
 
-        <a-plane
-            position="0 0 -4"
-            rotation="-90 0 0"
-            width="10"
-            height="10"
-            color="#7BC8A4"
-        ></a-plane>
+  <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
+    <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0"></a-entity>
+    <a-entity id="leftHand"
+              oculus-touch-controls="hand: left; model: true" laser-controls="hand: left"
+              raycaster="objects: .clickable; far: 100"
+              line="color: blue; opacity: 0.9"></a-entity>
+    <a-entity id="rightHand"
+              oculus-touch-controls="hand: right; model: true" laser-controls="hand: right"
+              raycaster="objects: .clickable; far: 100"
+              line="color: red; opacity: 0.9"></a-entity>
+    <a-sphere id="playerSphere"
+              color="#2196F3"
+              opacity="0.3"
+              radius="0.4"
+              visible="true"
+              player-hit-reaction></a-sphere> </a-entity>
+  <a-sky color="#B3E0FF"></a-sky>
+  <a-plane id="ground" color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
+  <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
+  <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
 
-        <a-sky
-            color="#87CEEB"
-        ></a-sky>
-
-        <a-entity
-            id="player-rig"
-            movement-controls="speed: 0.1;"
-            position="0 0 0"
-        >
-            <a-entity
-                id="camera"
-                camera
-                look-controls
-                position="0 1.6 0"
-            ></a-entity>
-
-            <a-entity
-                id="leftHand"
-                oculus-touch-controls="hand: left"
-                raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #FF00FF; lineOpacity: 0.5;"
-                cursor="rayOrigin: entity"
-            ></a-entity>
-
-            <a-entity
-                id="rightHand"
-                oculus-touch-controls="hand: right"
-                raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #00FFFF; lineOpacity: 0.5;"
-                cursor="rayOrigin: entity"
-            ></a-entity>
-        </a-entity>
-
-        <a-box
-            position="-2 1 -5"
-            color="red"
-            scale="0.5 0.5 0.5"
+  <a-sphere id="colorSphere"
             class="clickable"
-            event-set__click="material.color: green"
-            fire-sphere="targetEntity: #playerBody; speed: 2; fireSound: #fireSound;"
-        ></a-box>
+            position="0 2 0"
+            radius="0.4"
+            color="#FFC300"
+            shadow="cast: true"
+            toggle-color-on-click
+            shoot-on-click></a-sphere> <script>
+    // Audio DOM elements
+    const laserAudio = document.querySelector('#laser-sfx');
+    const explosionAudio = document.querySelector('#explosion-sfx');
 
-        <a-sphere
-            position="2 1 -5"
-            color="yellow"
-            radius="0.5"
-            class="clickable"
-            event-set__click="material.color: blue"
-            fire-sphere="targetEntity: #playerBody; speed: 2; fireSound: #fireSound;"
-        ></a-sphere>
+    // Unlock audio (for Quest/mobile)
+    let audioUnlocked = false;
+    function unlockAudio() {
+      [laserAudio, explosionAudio].forEach(audio => {
+        if (!audio) return;
+        try {
+          audio.muted = false;
+          audio.play().catch(()=>{}); // Play and immediately pause to unlock
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (e) {}
+      });
+      audioUnlocked = true;
+      console.log('Audio unlocked!');
+    }
+    // Only unlock audio on the first user interaction
+    window.addEventListener('click', unlockAudio, {once:true});
+    window.addEventListener('touchstart', unlockAudio, {once:true});
 
-        <a-sphere
-            id="playerBody"
-            radius="0.3"
-            color="#ADD8E6"
-            opacity="0.7"
-            body-tracker="leftHand: #leftHand; rightHand: #rightHand"
-            sphere-collider="objects: .projectile;"
-            event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100"
-            sound="on: hit; src: #hitSound; poolSize: 5;"
-        ></a-sphere>
 
-    </a-scene>
+    // Toggle central sphere color on click
+    AFRAME.registerComponent('toggle-color-on-click', {
+      schema: {
+        colors: {type: 'array', default: ['#FFC300', '#32CD32', '#1976D2', '#E53935']}
+      },
+      init: function () {
+        this.colorIndex = 0;
+        this.el.addEventListener('click', () => {
+          this.colorIndex = (this.colorIndex + 1) % this.data.colors.length;
+          this.el.setAttribute('color', this.data.colors[this.colorIndex]);
+        });
+      }
+    });
 
-    <script>
-        // Custom A-Frame component to track the midpoint between two entities (Player Body Tracker)
-        AFRAME.registerComponent('body-tracker', {
-            schema: {
-                leftHand: {type: 'selector'},
-                rightHand: {type: 'selector'}
-            },
+    // NEW COMPONENT: Handle player sphere reaction to hits
+    AFRAME.registerComponent('player-hit-reaction', {
+      init: function () {
+        this.isReacting = false;
+        this.originalScale = this.el.object3D.scale.clone();
+        this.originalColor = this.el.getAttribute('color');
+        this.originalOpacity = this.el.getAttribute('opacity');
+        this.playerCam = document.querySelector('#playerCam');
+      },
+      reactToHit: function () {
+        if (this.isReacting) return; // Prevent multiple simultaneous reactions
+        this.isReacting = true;
+        let el = this.el; // The playerSphere element
 
-            init: function () {
-                this.leftHandEl = this.data.leftHand;
-                this.rightHandEl = this.data.rightHand;
+        // Play explosion sound
+        try {
+          if (explosionAudio && audioUnlocked) {
+            explosionAudio.currentTime = 0;
+            explosionAudio.volume = 1; // Ensure volume is 1
+            explosionAudio.play();
+            console.log('Playing explosion sound!');
+          }
+        } catch (e) { console.error("Error playing explosion sound:", e); }
 
-                if (!this.leftHandEl || !this.rightHandEl) {
-                    console.warn("body-tracker: Could not find one or both hand entities.");
-                    return;
-                }
+        // Vibrate controllers
+        vibrateControllers(0.4, 180);
 
-                this.leftHandPosition = new AFRAME.THREE.Vector3();
-                this.rightHandPosition = new AFRAME.THREE.Vector3();
-                this.midpoint = new AFRAME.THREE.Vector3();
-            },
+        // Visual reaction: grow, change color, then revert
+        el.setAttribute('color', '#FF0000'); // Red flash
+        el.setAttribute('opacity', 0.8);
 
-            tick: function () {
-                if (!this.leftHandEl.object3D || !this.rightHandEl.object3D) {
-                    return;
-                }
-
-                this.leftHandEl.object3D.getWorldPosition(this.leftHandPosition);
-                this.rightHandEl.object3D.getWorldPosition(this.rightHandPosition);
-
-                this.midpoint.copy(this.leftHandPosition).lerp(this.rightHandPosition, 0.5);
-
-                this.el.object3D.position.copy(this.midpoint);
-                this.el.object3D.position.y -= 0.5;
-            }
+        el.setAttribute('animation__grow', {
+          property: 'scale',
+          to: '0.6 0.6 0.6', // Grow larger than original radius 0.4
+          dur: 100,
+          easing: 'easeOutCubic'
+        });
+        el.setAttribute('animation__shrink', {
+          property: 'scale',
+          to: `${this.originalScale.x} ${this.originalScale.y} ${this.originalScale.z}`,
+          dur: 200,
+          delay: 100,
+          easing: 'easeInCubic'
+        });
+        el.setAttribute('animation__color', {
+          property: 'color',
+          to: this.originalColor,
+          dur: 200,
+          delay: 100,
+          easing: 'easeInCubic'
+        });
+        el.setAttribute('animation__opacity', {
+            property: 'opacity',
+            to: this.originalOpacity,
+            dur: 200,
+            delay: 100,
+            easing: 'easeInCubic'
         });
 
-        // Custom A-Frame component for objects that fire spheres
-        AFRAME.registerComponent('fire-sphere', {
-            schema: {
-                targetEntity: {type: 'selector'},
-                speed: {type: 'number', default: 1.5},
-                sphereRadius: {type: 'number', default: 0.1},
-                sphereColor: {type: 'color', default: 'white'},
-                lifeTime: {type: 'number', default: 5000},
-                fireSound: {type: 'selector'}
-            },
+        // Spawn particles from player's position (or slightly offset for effect)
+        const playerWorldPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(playerWorldPos);
+        spawnParticles(playerWorldPos, 30); // Reduced particle count for performance
 
-            init: function () {
-                const el = this.el;
-                const data = this.data;
+        // Optional: Camera shake for impact
+        if (this.playerCam) {
+            this.playerCam.setAttribute('animation__shakeX', {
+                property: 'position.x',
+                from: this.playerCam.object3D.position.x - 0.05,
+                to: this.playerCam.object3D.position.x + 0.05,
+                dir: 'alternate',
+                dur: 50,
+                repeat: 2
+            });
+             this.playerCam.setAttribute('animation__shakeY', {
+                property: 'position.y',
+                from: this.playerCam.object3D.position.y - 0.05,
+                to: this.playerCam.object3D.position.y + 0.05,
+                dir: 'alternate',
+                dur: 50,
+                repeat: 2
+            });
+        }
 
-                this.targetEl = data.targetEntity;
-                if (!this.targetEl) {
-                    console.error("fire-sphere: Target entity not found! Ensure targetEntity is correctly set.");
-                    return;
-                }
-
-                el.addEventListener('click', () => {
-                    // Play fire sound
-                    if (data.fireSound && data.fireSound.components.sound) {
-                        data.fireSound.components.sound.playSound();
-                    } else if (data.fireSound) {
-                        console.warn("Fire sound asset loaded but sound component not ready yet.");
-                    }
+        // Reset reaction state after animation completes
+        setTimeout(() => {
+          this.isReacting = false;
+          // Ensure final state matches original if animations somehow off
+          el.setAttribute('scale', this.originalScale.clone());
+          el.setAttribute('color', this.originalColor);
+          el.setAttribute('opacity', this.originalOpacity);
+        }, 350); // Total duration of animations + small buffer
+      }
+    });
 
 
-                    const sphere = document.createElement('a-sphere');
-                    sphere.setAttribute('radius', data.sphereRadius);
-                    sphere.setAttribute('color', data.sphereColor);
-                    sphere.setAttribute('class', 'projectile');
-
-                    const originPos = new AFRAME.THREE.Vector3();
-                    el.object3D.getWorldPosition(originPos);
-                    sphere.setAttribute('position', `${originPos.x} ${originPos.y} ${originPos.z}`);
-
-                    const targetPos = new AFRAME.THREE.Vector3();
-                    this.targetEl.object3D.getWorldPosition(targetPos);
-
-                    const direction = new AFRAME.THREE.Vector3();
-                    direction.subVectors(targetPos, originPos).normalize();
-
-                    this.sphereVelocity = direction.multiplyScalar(data.speed);
-
-                    sphere.setAttribute('projectile-motion', `velocity: ${this.sphereVelocity.x} ${this.sphereVelocity.y} ${this.sphereVelocity.z}; lifeTime: ${data.lifeTime}`);
-
-                    el.sceneEl.appendChild(sphere);
-                });
+    // Play LASER when firing projectile at player (sphere is fired)
+    AFRAME.registerComponent('shoot-on-click', {
+      schema: {
+        speed: {type: 'number', default: 1.5}
+      },
+      init: function () {
+        this.el.addEventListener('click', () => {
+          // Play laser sound (reset for rapid repeat)
+          try {
+            if (laserAudio && audioUnlocked) {
+              laserAudio.currentTime = 0;
+              laserAudio.volume = 1;
+              laserAudio.play();
+              console.log('Playing laser sound!');
             }
+          } catch (e) { console.error("Error playing laser sound:", e); }
+
+          // Get midpoint between controllers in WORLD space
+          var leftObj = document.querySelector('#leftHand').object3D;
+          var rightObj = document.querySelector('#rightHand').object3D;
+          var leftPos = new THREE.Vector3();
+          var rightPos = new THREE.Vector3();
+          leftObj.getWorldPosition(leftPos);
+          rightObj.getWorldPosition(rightPos);
+          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+
+          // Get the shooting sphere's position in WORLD space
+          var origin = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(origin);
+
+          // Calculate direction vector (normalized)
+          var direction = mid.clone().sub(origin).normalize();
+
+          // Create the projectile
+          var scene = this.el.sceneEl;
+          var projectile = document.createElement('a-sphere');
+          projectile.setAttribute('radius', 0.12);
+          projectile.setAttribute('color', '#E53935');
+          projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+          projectile.setAttribute('projectile-move', {
+            direction: `${direction.x} ${direction.y} ${direction.z}`,
+            speed: this.data.speed
+          });
+          scene.appendChild(projectile);
         });
+      }
+    });
 
-        // Custom A-Frame component for moving fired spheres (Projectiles)
-        AFRAME.registerComponent('projectile-motion', {
-            schema: {
-                velocity: {type: 'vec3'},
-                lifeTime: {type: 'number', default: 5000}
-            },
+    // Move projectile, check collision with player sphere
+    AFRAME.registerComponent('projectile-move', {
+      schema: {
+        direction: {type: 'string', default: '0 0 0'},
+        speed: {type: 'number', default: 1.5}
+      },
+      init: function () {
+        var d = this.data.direction.split(' ').map(Number);
+        this.directionVec = new THREE.Vector3(d[0], d[1], d[2]);
+        this.speed = this.data.speed;
+        this.start = null;
+        this.hit = false;
+      },
+      tick: function (time, deltaTime) {
+        if (this.hit) return; // Stop moving after hit
+        if (!this.el.parentNode) return; // Removed from scene
 
-            init: function () {
-                this.velocity = new AFRAME.THREE.Vector3(this.data.velocity.x, this.data.velocity.y, this.data.velocity.z);
-                this.lifeTimer = this.data.lifeTime;
-                this.creationTime = performance.now();
+        if (!this.start) this.start = time;
+        var move = this.directionVec.clone().multiplyScalar(this.speed * deltaTime / 1000);
+        this.el.object3D.position.add(move);
 
-                this.el.addEventListener('hit', (evt) => {
-                    if (evt.detail.el && evt.detail.el.id === 'playerBody') {
-                        console.log('PROJECTILE HIT PLAYER BODY! Removing projectile. (Debug Log)');
-                        this.el.remove();
-                    }
-                });
-            },
+        // Collision with player sphere (use world positions and manual distance check)
+        var playerSphereEl = document.querySelector('#playerSphere');
+        if (playerSphereEl && playerSphereEl.components['player-hit-reaction']) { // Ensure playerSphere and its component exist
+          var projectilePos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(projectilePos);
+          var playerPos = new THREE.Vector3();
+          playerSphereEl.object3D.getWorldPosition(playerPos);
 
-            tick: function (time, deltaTime) {
-                if (!this.el.parentNode) {
-                    return;
-                }
+          var dist = projectilePos.distanceTo(playerPos);
+          // projectile radius (0.12) + playerSphere radius (0.4)
+          var combinedRadius = 0.12 + 0.4;
 
-                const deltaSeconds = deltaTime / 1000;
-                this.el.object3D.position.addScaledVector(this.velocity, deltaSeconds);
+          if (dist < combinedRadius) {
+            this.hit = true; // Mark as hit to stop further processing
+            console.log('PROJECTILE HIT PLAYER SPHERE! Triggering reaction and removing projectile.'); // CRITICAL DEBUG LOG
+            playerSphereEl.components['player-hit-reaction'].reactToHit(); // Trigger player reaction
+            this.el.parentNode.removeChild(this.el); // Remove projectile
+            return;
+          }
+        }
+        // Remove projectile after 8s if it hasn't hit
+        if (time - this.start > 8000) {
+            this.el.parentNode && this.el.parentNode.removeChild(this.el);
+        }
+      }
+    });
 
-                if (time - this.creationTime > this.lifeTimer) {
-                    this.el.remove();
-                }
-            }
-        });
-    </script>
+    // Always update the player sphere's position to the true midpoint between hands (world coordinates)
+    AFRAME.registerComponent('player-follow-hands', {
+      tick: function () {
+        var leftHand = document.querySelector('#leftHand');
+        var rightHand = document.querySelector('#rightHand');
+        var playerSphere = document.querySelector('#playerSphere');
+        if (leftHand && rightHand && playerSphere) {
+          var leftObj = leftHand.object3D;
+          var rightObj = rightHand.object3D;
+          var leftPos = new THREE.Vector3();
+          var rightPos = new THREE.Vector3();
+          leftObj.getWorldPosition(leftPos);
+          rightObj.getWorldPosition(rightPos);
+          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+          // Convert world midpoint back to local space of the cameraRig for the playerSphere child
+          playerSphere.object3D.parent.worldToLocal(mid);
+          playerSphere.object3D.position.copy(mid);
+        }
+      }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelector('#cameraRig').setAttribute('player-follow-hands', '');
+    });
+
+    // HAPTICS: vibrate both controllers on hit (if supported)
+    function vibrateControllers(duration = 0.4, intensity = 1.0) { // Changed strong to intensity to match API
+      const hands = ['leftHand', 'rightHand'];
+      hands.forEach(handId => {
+        const hand = document.getElementById(handId);
+        if (!hand) return;
+        // Accessing gamepad directly from the controller object, which meta-touch-controls exposes
+        const gamepad = hand.components['oculus-touch-controls'] && // Changed to oculus-touch-controls
+                        hand.components['oculus-touch-controls'].controller &&
+                        hand.components['oculus-touch-controls'].controller.gamepad;
+        if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
+          try {
+            gamepad.hapticActuators[0].pulse(intensity, duration * 1000); // Duration in ms
+          } catch (e) {console.warn("Haptics error:", e);}
+        }
+      });
+    }
+
+    // PARTICLE BURST: spawn many particles
+    function spawnParticles(origin, count) {
+      const scene = document.querySelector('a-scene');
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('a-sphere');
+        p.setAttribute('radius', 0.01 + Math.random() * 0.03); // Smaller particles
+        p.setAttribute('color', '#FFD600');
+        // Random direction (bigger/faster)
+        const theta = Math.random() * 2 * Math.PI;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const dir = new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.sin(phi) * Math.sin(theta),
+          Math.cos(phi)
+        ).multiplyScalar(0.5 + Math.random() * 1.5); // Slower, less erratic for more controlled burst
+
+        p.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+        p.setAttribute('particle-move-fade', {vx: dir.x, vy: dir.y, vz: dir.z});
+        scene.appendChild(p);
+      }
+    }
+
+    // Particle move and fade out component
+    AFRAME.registerComponent('particle-move-fade', {
+      schema: {
+        vx: {type: 'number', default: 0},
+        vy: {type: 'number', default: 0},
+        vz: {type: 'number', default: 0}
+      },
+      init: function () {
+        this.life = 0;
+      },
+      tick: function (time, dt) {
+        this.life += dt;
+        this.el.object3D.position.x += this.data.vx * dt / 1000;
+        this.el.object3D.position.y += this.data.vy * dt / 1000;
+        this.el.object3D.position.z += this.data.vz * dt / 1000;
+
+        // Apply gravity-like effect (particles fall)
+        this.el.object3D.position.y -= 0.5 * dt / 1000; // Small downward pull
+
+        // Fade out after 0.1s, remove after 0.8s
+        if (this.life > 100) {
+          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 100) / 700, 0));
+        }
+        if (this.life > 800) {
+          this.el.parentNode && this.el.parentNode.removeChild(this.el);
+        }
+      }
+    });
+  </script>
+</a-scene>
 </body>
 </html>
