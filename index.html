@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Complete VR Experience - Projectiles Target Body (with Hit Reaction)</title>
+    <title>Complete VR Experience - Collision Debug</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -72,6 +72,7 @@
             body-tracker="leftHand: #leftHand; rightHand: #rightHand"
             sphere-collider="objects: .projectile;"
             event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100"
+            log-hits
         ></a-sphere>
 
     </a-scene>
@@ -120,7 +121,6 @@
         // Custom A-Frame component for objects that fire spheres
         AFRAME.registerComponent('fire-sphere', {
             schema: {
-                // Changed from targetCamera to targetEntity
                 targetEntity: {type: 'selector'}, // The entity to target (e.g., #playerBody)
                 speed: {type: 'number', default: 1.5}, // Speed of the fired sphere
                 sphereRadius: {type: 'number', default: 0.1}, // Radius of the fired sphere
@@ -132,7 +132,6 @@
                 const el = this.el; // The entity this component is attached to (the clickable box/sphere)
                 const data = this.data; // The schema data for this component
 
-                // Get the target entity instead of the camera
                 this.targetEl = data.targetEntity;
                 if (!this.targetEl) {
                     console.error("fire-sphere: Target entity not found! Ensure targetEntity is correctly set.");
@@ -145,7 +144,7 @@
                     const sphere = document.createElement('a-sphere');
 
                     // Set its properties based on component schema
-                    sphere.setAttribute('radius', data.sphereRadius);
+                    sphere.setAttribute('radius', data.sphereRadius); // Explicitly setting radius again
                     sphere.setAttribute('color', data.sphereColor);
                     sphere.setAttribute('class', 'projectile'); // Add a class for collision detection!
 
@@ -187,9 +186,12 @@
                 this.creationTime = performance.now(); // Get current time for lifetime tracking
 
                 // Listen for a 'hit' event. This will be triggered by sphere-collider on the body.
+                // It's also good practice for the projectile itself to have a collider if it's hit by something else,
+                // but for now, we just need the body to register hits.
                 this.el.addEventListener('hit', (evt) => {
                     // Only remove if the hit target is the playerBody
-                    if (evt.detail.el.id === 'playerBody') {
+                    if (evt.detail.el && evt.detail.el.id === 'playerBody') { // Added null check for evt.detail.el
+                        console.log('Projectile hit playerBody! Removing projectile.');
                         this.el.remove(); // Remove the projectile itself on impact
                     }
                 });
@@ -210,6 +212,16 @@
                 if (time - this.creationTime > this.lifeTimer) {
                     this.el.remove(); // Remove the sphere from the scene
                 }
+            }
+        });
+
+        // --- NEW COMPONENT: log-hits ---
+        AFRAME.registerComponent('log-hits', {
+            init: function () {
+                this.el.addEventListener('hit', (evt) => {
+                    console.log('PLAYER BODY HIT!', evt.detail.el.id);
+                    // You can add more complex effects here later, e.g., particle systems, sound
+                });
             }
         });
     </script>
