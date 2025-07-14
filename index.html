@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Complete VR Experience - Collision Debug</title>
+    <title>Cleaned VR Experience - Working Features Only</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -70,9 +70,6 @@
             color="#ADD8E6"
             opacity="0.7"
             body-tracker="leftHand: #leftHand; rightHand: #rightHand"
-            sphere-collider="objects: .projectile;"
-            event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100"
-            log-hits
         ></a-sphere>
 
     </a-scene>
@@ -81,8 +78,8 @@
         // Custom A-Frame component to track the midpoint between two entities (Player Body Tracker)
         AFRAME.registerComponent('body-tracker', {
             schema: {
-                leftHand: {type: 'selector'}, // Selector for the left hand entity
-                rightHand: {type: 'selector'} // Selector for the right hand entity
+                leftHand: {type: 'selector'},
+                rightHand: {type: 'selector'}
             },
 
             init: function () {
@@ -100,37 +97,33 @@
             },
 
             tick: function () {
-                // Ensure hands are still valid elements
                 if (!this.leftHandEl.object3D || !this.rightHandEl.object3D) {
                     return;
                 }
 
-                // Get world positions of the hands
                 this.leftHandEl.object3D.getWorldPosition(this.leftHandPosition);
                 this.rightHandEl.object3D.getWorldPosition(this.rightHandPosition);
 
-                // Calculate midpoint
                 this.midpoint.copy(this.leftHandPosition).lerp(this.rightHandPosition, 0.5);
 
-                // Set the sphere's position to the midpoint
                 this.el.object3D.position.copy(this.midpoint);
-                this.el.object3D.position.y -= 0.5; // Adjust Y to be lower than the hand midpoint
+                this.el.object3D.position.y -= 0.5;
             }
         });
 
         // Custom A-Frame component for objects that fire spheres
         AFRAME.registerComponent('fire-sphere', {
             schema: {
-                targetEntity: {type: 'selector'}, // The entity to target (e.g., #playerBody)
-                speed: {type: 'number', default: 1.5}, // Speed of the fired sphere
-                sphereRadius: {type: 'number', default: 0.1}, // Radius of the fired sphere
-                sphereColor: {type: 'color', default: 'white'}, // Color of the fired sphere
-                lifeTime: {type: 'number', default: 5000} // How long sphere exists in ms
+                targetEntity: {type: 'selector'},
+                speed: {type: 'number', default: 1.5},
+                sphereRadius: {type: 'number', default: 0.1},
+                sphereColor: {type: 'color', default: 'white'},
+                lifeTime: {type: 'number', default: 5000}
             },
 
             init: function () {
-                const el = this.el; // The entity this component is attached to (the clickable box/sphere)
-                const data = this.data; // The schema data for this component
+                const el = this.el;
+                const data = this.data;
 
                 this.targetEl = data.targetEntity;
                 if (!this.targetEl) {
@@ -138,36 +131,25 @@
                     return;
                 }
 
-                // Add an event listener for the click event on the attached entity
                 el.addEventListener('click', () => {
-                    // Create a new sphere element
                     const sphere = document.createElement('a-sphere');
-
-                    // Set its properties based on component schema
-                    sphere.setAttribute('radius', data.sphereRadius); // Explicitly setting radius again
+                    sphere.setAttribute('radius', data.sphereRadius);
                     sphere.setAttribute('color', data.sphereColor);
-                    sphere.setAttribute('class', 'projectile'); // Add a class for collision detection!
 
-                    // Get the world position of the clickable object (where the sphere originates)
                     const originPos = new AFRAME.THREE.Vector3();
                     el.object3D.getWorldPosition(originPos);
                     sphere.setAttribute('position', `${originPos.x} ${originPos.y} ${originPos.z}`);
 
-                    // Get the world position of the target entity (playerBody)
                     const targetPos = new AFRAME.THREE.Vector3();
-                    this.targetEl.object3D.getWorldPosition(targetPos); // Now using this.targetEl
+                    this.targetEl.object3D.getWorldPosition(targetPos);
 
-                    // Calculate the direction vector from the origin to the target
                     const direction = new AFRAME.THREE.Vector3();
-                    direction.subVectors(targetPos, originPos).normalize(); // Normalize to get a unit vector
+                    direction.subVectors(targetPos, originPos).normalize();
 
-                    // Store the velocity for the tick function
                     this.sphereVelocity = direction.multiplyScalar(data.speed);
 
-                    // Attach a custom component to make the sphere move
                     sphere.setAttribute('projectile-motion', `velocity: ${this.sphereVelocity.x} ${this.sphereVelocity.y} ${this.sphereVelocity.z}; lifeTime: ${data.lifeTime}`);
 
-                    // Append the sphere to the scene
                     el.sceneEl.appendChild(sphere);
                 });
             }
@@ -176,54 +158,31 @@
         // Custom A-Frame component for moving fired spheres (Projectiles)
         AFRAME.registerComponent('projectile-motion', {
             schema: {
-                velocity: {type: 'vec3'}, // Initial velocity vector
-                lifeTime: {type: 'number', default: 5000} // How long sphere exists in ms
+                velocity: {type: 'vec3'},
+                lifeTime: {type: 'number', default: 5000}
             },
 
             init: function () {
                 this.velocity = new AFRAME.THREE.Vector3(this.data.velocity.x, this.data.velocity.y, this.data.velocity.z);
                 this.lifeTimer = this.data.lifeTime;
-                this.creationTime = performance.now(); // Get current time for lifetime tracking
-
-                // Listen for a 'hit' event. This will be triggered by sphere-collider on the body.
-                // It's also good practice for the projectile itself to have a collider if it's hit by something else,
-                // but for now, we just need the body to register hits.
-                this.el.addEventListener('hit', (evt) => {
-                    // Only remove if the hit target is the playerBody
-                    if (evt.detail.el && evt.detail.el.id === 'playerBody') { // Added null check for evt.detail.el
-                        console.log('Projectile hit playerBody! Removing projectile.');
-                        this.el.remove(); // Remove the projectile itself on impact
-                    }
-                });
+                this.creationTime = performance.now();
+                // Removed hit event listener
             },
 
             tick: function (time, deltaTime) {
-                // If the sphere has already been removed, stop ticking
                 if (!this.el.parentNode) {
                     return;
                 }
 
-                // Update position based on velocity and deltaTime (time elapsed since last frame)
-                // Convert deltaTime from milliseconds to seconds for consistent units
                 const deltaSeconds = deltaTime / 1000;
                 this.el.object3D.position.addScaledVector(this.velocity, deltaSeconds);
 
-                // Check if the sphere's lifetime has expired
                 if (time - this.creationTime > this.lifeTimer) {
-                    this.el.remove(); // Remove the sphere from the scene
+                    this.el.remove();
                 }
             }
         });
-
-        // --- NEW COMPONENT: log-hits ---
-        AFRAME.registerComponent('log-hits', {
-            init: function () {
-                this.el.addEventListener('hit', (evt) => {
-                    console.log('PLAYER BODY HIT!', evt.detail.el.id);
-                    // You can add more complex effects here later, e.g., particle systems, sound
-                });
-            }
-        });
+        // Removed log-hits component
     </script>
 </body>
 </html>
