@@ -1,68 +1,330 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>A-Frame AR Rotating Cube</title>
+  <title>Gemini's WebXR Cube and Controllers Demo</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  
   <style>
-    /* Simple styling for the body */
     body {
       margin: 0;
-      overflow: hidden; /* Hide scrollbars, common for fullscreen VR/AR experiences */
-    }
-    /* Styles for the custom AR button, which A-Frame will make visible */
-    #arButton {
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 999;
-      background: #4A7D9C; /* Your chosen accent color for the button */
-      color: white;
-      padding: 15px 30px;
-      border-radius: 8px; /* Slightly rounded corners */
-      cursor: pointer;
+      padding: 0;
       font-family: sans-serif;
-      font-size: 1.2em;
-      border: none;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-      display: none; /* A-Frame will make this visible when AR is ready */
-      transition: background-color 0.3s ease, transform 0.1s ease;
+      background-color: #111;
+      color: #fff;
     }
-    #arButton:hover {
-      background-color: #3F6E8F; /* Slightly darker on hover */
-      transform: translateX(-50%) translateY(-2px);
+    #info {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      z-index: 100;
+      display: block;
+      padding: 10px 0;
     }
+    /* AR Button styles are handled by the ARButton script below */
   </style>
 </head>
 <body>
-  <a-scene webxr="requiredFeatures: [local-floor];" vr-mode-ui="enterARButton: #arButton">
-    
-    <a-box
-      position="0 1 -1"
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear;"
-      color="#4CC3D9"
-      shadow="cast: true"
-      scale="0.3 0.3 0.3"
-    ></a-box>
+  <div id="info">
+    A WebXR Demo by Christopher & Gemini
+  </div>
 
-    <a-entity light="type: ambient; color: #BBB; intensity: 0.7"></a-entity>
-    <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="-1 1 1"></a-entity>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    </script>
 
-    <a-entity camera position="0 1.6 0"></a-entity>
+  <script type="module">
+    // Import the main Three.js library
+    import * as THREE from 'three';
 
-  </a-scene>
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
+    // Inlining it here keeps everything in a single file as requested.
+    class ARButton {
+      static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
 
-  <button id="arButton">Enter AR Mode</button>
+        function showStartAR( /*device*/ ) {
+          if (sessionInit.domOverlay === undefined) {
+            const overlay = document.createElement('div');
+            overlay.style.display = 'none';
+            document.body.appendChild(overlay);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 38);
+            svg.setAttribute('height', 38);
+            svg.style.position = 'absolute';
+            svg.style.right = '20px';
+            svg.style.top = '20px';
+            svg.addEventListener('click', function() {
+              currentSession.end();
+            });
+            overlay.appendChild(svg);
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', 2);
+            svg.appendChild(path);
+            if (sessionInit.optionalFeatures === undefined) {
+              sessionInit.optionalFeatures = [];
+            }
+            sessionInit.optionalFeatures.push('dom-overlay');
+            sessionInit.domOverlay = {
+              root: overlay
+            };
+          }
 
-  <script>
-    // A-Frame handles most of the AR setup automatically.
-    // The <a-scene> tag with the 'webxr' and 'vr-mode-ui' components
-    // does the heavy lifting. This script is just to confirm.
-    // The #arButton will automatically appear when WebXR AR is available.
+          let currentSession = null;
+
+          async function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+            button.textContent = 'STOP AR';
+            sessionInit.domOverlay.root.style.display = '';
+            currentSession = session;
+          }
+
+          function onSessionEnded( /*event*/ ) {
+            currentSession.removeEventListener('end', onSessionEnded);
+            button.textContent = 'START AR';
+            sessionInit.domOverlay.root.style.display = 'none';
+            currentSession = null;
+          }
+
+          button.style.display = '';
+          button.style.cursor = 'pointer';
+          button.style.left = 'calc(50% - 50px)';
+          button.style.width = '100px';
+          button.textContent = 'START AR';
+          button.onmouseenter = function() {
+            button.style.opacity = '1.0';
+          };
+          button.onmouseleave = function() {
+            button.style.opacity = '0.5';
+          };
+          button.onclick = function() {
+            if (currentSession === null) {
+              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+            } else {
+              currentSession.end();
+            }
+          };
+        }
+
+        function disableButton() {
+          button.style.display = '';
+          button.style.cursor = 'auto';
+          button.style.left = 'calc(50% - 75px)';
+          button.style.width = '150px';
+          button.onmouseenter = null;
+          button.onmouseleave = null;
+          button.onclick = null;
+        }
+
+        function showARNotSupported() {
+          disableButton();
+          button.textContent = 'AR NOT SUPPORTED';
+        }
+
+        function stylizeElement(element) {
+          element.style.position = 'absolute';
+          element.style.bottom = '20px';
+          element.style.padding = '12px 6px';
+          element.style.border = '1px solid #fff';
+          element.style.borderRadius = '4px';
+          element.style.background = 'rgba(0,0,0,0.1)';
+          element.style.color = '#fff';
+          element.style.font = 'normal 13px sans-serif';
+          element.style.textAlign = 'center';
+          element.style.opacity = '0.5';
+          element.style.outline = 'none';
+          element.style.zIndex = '999';
+        }
+
+        if ('xr' in navigator) {
+          button.id = 'ARButton';
+          stylizeElement(button);
+          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
+            supported ? showStartAR() : showARNotSupported();
+          }).catch(showARNotSupported);
+          return button;
+        } else {
+          const message = document.createElement('a');
+          if (window.isSecureContext === false) {
+            message.href = document.location.href.replace(/^http:/, 'https:');
+            message.innerHTML = 'WEBXR NEEDS HTTPS';
+          } else {
+            message.href = 'https://immersiveweb.dev/';
+            message.innerHTML = 'WEBXR NOT AVAILABLE';
+          }
+          message.style.left = 'calc(50% - 90px)';
+          message.style.width = '180px';
+          message.style.textDecoration = 'none';
+          stylizeElement(message);
+          return message;
+        }
+      }
+    }
+
+    // --- Main Application Logic ---
+    let camera, scene, renderer;
+    let cube;
+    // Variables for controllers and their visual grips
+    let controller1, controller2;
+    let controllerGrip1, controllerGrip2;
+
+    init();
+    animate();
+
+    function init() {
+      // Create the main scene
+      scene = new THREE.Scene();
+
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true // alpha: true is required for AR passthrough
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      document.body.appendChild(renderer.domElement);
+
+      // Add the AR button to the body. It will handle session start/end.
+      // We pass the renderer and a session configuration object.
+      // 'local' is a good starting point for reference space.
+      document.body.appendChild(ARButton.createButton(renderer, {
+        requiredFeatures: ['local']
+      }));
+
+      // --- Add WebXR Controllers ---
+      // Get the controller objects from the XR manager. These represent the ray from the controller.
+      controller1 = renderer.xr.getController(0);
+      scene.add(controller1); // Add to scene to automatically update its position/rotation
+
+      controller2 = renderer.xr.getController(1);
+      scene.add(controller2);
+
+      // Get the controller "grip" objects. These represent the physical controller's position.
+      // We'll attach our 3D models to these.
+      controllerGrip1 = renderer.xr.getControllerGrip(0);
+      scene.add(controllerGrip1);
+
+      controllerGrip2 = renderer.xr.getControllerGrip(1);
+      scene.add(controllerGrip2);
+
+      // Add a simple visual model (cylinder) to the controller grips
+      const controllerGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8); // Thin cylinder
+      const controllerMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, wireframe: true }); // Grey wireframe
+
+      const mesh1 = new THREE.Mesh(controllerGeometry, controllerMaterial);
+      controllerGrip1.add(mesh1); // Attach mesh to grip
+
+      const mesh2 = new THREE.Mesh(controllerGeometry, controllerMaterial);
+      controllerGrip2.add(mesh2);
+
+      // Add simple laser pointers to the controllers
+      const laserGeometry = new THREE.CylinderGeometry(0.002, 0.002, 5, 4); // Very thin, long cylinder
+      laserGeometry.translate(0, 0, -2.5); // Position it to extend forward from the controller
+      const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color
+
+      const laser1 = new THREE.Mesh(laserGeometry, laserMaterial);
+      laser1.name = 'laser'; // Give it a name to easily reference later
+      laser1.visible = false; // Start invisible, will show when trigger is pressed
+      controller1.add(laser1); // Attach laser to the controller's ray (not the grip)
+
+      const laser2 = new THREE.Mesh(laserGeometry, laserMaterial);
+      laser2.name = 'laser';
+      laser2.visible = false;
+      controller2.add(laser2);
+
+      // --- Add Event Listeners for Controller Input ---
+      // 'selectstart' is typically fired when the primary trigger is pressed
+      controller1.addEventListener('selectstart', onSelectStart);
+      controller1.addEventListener('selectend', onSelectEnd);
+
+      controller2.addEventListener('selectstart', onSelectStart);
+      controller2.addEventListener('selectend', onSelectEnd);
+
+
+      // Create the same multi-colored cube from your original code.
+      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const materials = [
+        new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
+        new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
+        new THREE.MeshBasicMaterial({ color: 0x0000ff }), // top
+        new THREE.MeshBasicMaterial({ color: 0xffff00 }), // bottom
+        new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
+        new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
+      ];
+      cube = new THREE.Mesh(geometry, materials);
+
+      // Position the cube 1 meter in front of the user.
+      cube.position.set(0, 0, -1);
+
+      // Add the cube to the scene.
+      scene.add(cube);
+
+      // Add a light to the scene.
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
+
+      // Add a listener to handle window resizing, which is good practice.
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      // Use the renderer's built-in animation loop, which is XR-aware.
+      // This will call the 'render' function on every frame.
+      renderer.setAnimationLoop(render);
+    }
+
+    // This function is called every frame
+    function render(timestamp, frame) {
+      // Make the cube slowly rotate to make it more interesting.
+      if (cube) {
+        cube.rotation.y += 0.01;
+        cube.rotation.x += 0.005;
+      }
+
+      // Render the scene with the camera.
+      // Three.js's WebXRManager automatically updates controller poses
+      // and renders for each eye in an AR session.
+      renderer.render(scene, camera);
+    }
+
+    // --- Controller Input Handler Functions ---
+    function onSelectStart(event) {
+        const controller = event.target; // 'event.target' here is the controller object itself
+        // Show the laser pointer associated with this controller
+        controller.getObjectByName('laser').visible = true;
+
+        // Example: Make the cube jump slightly when the trigger is pressed
+        // You would typically add more complex interaction logic here (e.g., raycasting)
+        cube.position.y += 0.1;
+    }
+
+    function onSelectEnd(event) {
+        const controller = event.target;
+        // Hide the laser pointer when the trigger is released
+        controller.getObjectByName('laser').visible = false;
+
+        // Example: Return cube to its original y position
+        cube.position.y = 0;
+    }
+
   </script>
 </body>
 </html>
