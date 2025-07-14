@@ -1,407 +1,224 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Project Overdrive: A-Frame Showcase</title>
-  <meta charset="utf-8">
-  <meta name="description" content="A-Frame WebXR showcase synthesizing environmental design, AR/VR modes, and an embedded playable game, based on provided PRPs.">
-  
-  <!-- A-Frame v1.5.0 - The foundation, as per PRP. -->
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  
-  <!-- Community Components - The toolkit, loaded from CDN as required. -->
-  <!-- aframe-environment-component for dynamic worlds. Ref: Environmental Design PRP -->
-  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
-  <!-- aframe-particle-system-component for weather effects. Ref: Environmental Design PRP -->
-  <script src="https://unpkg.com/aframe-particle-system-component@1.1.3/dist/aframe-particle-system-component.min.js"></script>
-  <!-- aframe-extras for movement controls. Ref: A-Frame Baseline PRP -->
-  <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-
-  <!-- 
-    ================================================================
-    INLINED 2D GAME LOGIC (JAVASCRIPT TETRIS)
-    This is a simple, self-contained Tetris clone. It's modified to
-    render to a specific canvas ('game-canvas') and to be controlled
-    programmatically. Ref: Embedded 2D Game PRP.
-    ================================================================
-  -->
-  <script>
-    const TetrisGame = {
-      init(canvasId) {
-        this.canvas = document.getElementById(canvasId);
-        this.ctx = this.canvas.getContext('2d');
-        this.cols = 10;
-        this.rows = 20;
-        this.blockSize = this.canvas.width / this.cols;
-        this.board = Array(this.rows).fill(null).map(() => Array(this.cols).fill(0));
-        this.shapes = [
-          [[1,1,1,1]], // I
-          [[1,1],[1,1]], // O
-          [[0,1,0],[1,1,1]], // T
-          [[1,1,0],[0,1,1]], // S
-          [[0,1,1],[1,1,0]], // Z
-          [[1,0,0],[1,1,1]], // L
-          [[0,0,1],[1,1,1]]  // J
-        ];
-        this.colors = ['#000', '#FF0D72', '#0DC2FF', '#0DFF72', '#F538FF', '#FF8E0D', '#FFE138', '#3877F5'];
-        this.score = 0;
-        this.gameOver = false;
-        this.currentPiece = null;
-        this.spawnNewPiece();
-        this.lastTime = 0;
-        this.dropCounter = 0;
-        this.dropInterval = 1000; // ms
-        this.gameLoop = this.gameLoop.bind(this);
-        this.gameLoop();
-      },
-      spawnNewPiece() {
-        const shape = this.shapes[Math.floor(Math.random() * this.shapes.length)];
-        this.currentPiece = {
-          matrix: shape,
-          x: Math.floor(this.cols / 2) - Math.floor(shape[0].length / 2),
-          y: 0,
-          color: Math.floor(Math.random() * 7) + 1
-        };
-        if (this.checkCollision()) {
-          this.gameOver = true;
-        }
-      },
-      drawMatrix(matrix, offset) {
-        matrix.forEach((row, y) => {
-          row.forEach((value, x) => {
-            if (value !== 0) {
-              this.ctx.fillStyle = this.colors[value];
-              this.ctx.fillRect((offset.x + x) * this.blockSize, (offset.y + y) * this.blockSize, this.blockSize, this.blockSize);
-              this.ctx.strokeStyle = '#000';
-              this.ctx.strokeRect((offset.x + x) * this.blockSize, (offset.y + y) * this.blockSize, this.blockSize, this.blockSize);
-            }
-          });
-        });
-      },
-      draw() {
-        this.ctx.fillStyle = '#111';
-        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-        this.drawMatrix(this.board, {x: 0, y: 0});
-        if (this.currentPiece) {
-            this.drawMatrix(this.currentPiece.matrix, {x: this.currentPiece.x, y: this.currentPiece.y});
-        }
-        this.ctx.fillStyle = '#fff';
-        this.ctx.font = '30px Arial';
-        this.ctx.fillText(`Score: ${this.score}`, 10, 30);
-        if (this.gameOver) {
-          this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-          this.ctx.fillStyle = '#f00';
-          this.ctx.font = '50px Arial';
-          this.ctx.textAlign = 'center';
-          this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2);
-          this.ctx.font = '30px Arial';
-          this.ctx.fillText('Click to Restart', this.canvas.width / 2, this.canvas.height / 2 + 50);
-        }
-      },
-      checkCollision() {
-        const { matrix, x, y } = this.currentPiece;
-        for (let row = 0; row < matrix.length; row++) {
-          for (let col = 0; col < matrix[row].length; col++) {
-            if (matrix[row][col] !== 0 && (this.board[row + y] && this.board[row + y][col + x]) !== 0) {
-              return true;
-            }
-          }
-        }
-        return false;
-      },
-      merge() {
-        const { matrix, x, y, color } = this.currentPiece;
-        matrix.forEach((row, r) => {
-          row.forEach((value, c) => {
-            if (value !== 0) {
-              this.board[r + y][c + x] = color;
-            }
-          });
-        });
-      },
-      clearLines() {
-        outer: for (let y = this.rows - 1; y > 0; --y) {
-          for (let x = 0; x < this.cols; ++x) {
-            if (this.board[y][x] === 0) {
-              continue outer;
-            }
-          }
-          const row = this.board.splice(y, 1)[0].fill(0);
-          this.board.unshift(row);
-          ++y;
-          this.score += 10;
-        }
-      },
-      move(dir) {
-        if (this.gameOver) return;
-        this.currentPiece.x += dir;
-        if (this.checkCollision()) {
-          this.currentPiece.x -= dir;
-        }
-      },
-      rotate() {
-        if (this.gameOver) return;
-        const matrix = this.currentPiece.matrix;
-        const N = matrix.length;
-        const M = matrix[0].length;
-        const newMatrix = Array(M).fill(null).map(() => Array(N).fill(0));
-        for (let i = 0; i < N; i++) {
-          for (let j = 0; j < M; j++) {
-            newMatrix[j][N - 1 - i] = matrix[i][j];
-          }
-        }
-        const oldMatrix = this.currentPiece.matrix;
-        this.currentPiece.matrix = newMatrix;
-        if (this.checkCollision()) {
-          this.currentPiece.matrix = oldMatrix;
-        }
-      },
-      drop() {
-        if (this.gameOver) return;
-        this.currentPiece.y++;
-        if (this.checkCollision()) {
-          this.currentPiece.y--;
-          this.merge();
-          this.spawnNewPiece();
-          this.clearLines();
-        }
-        this.dropCounter = 0;
-      },
-      restart() {
-        this.board.forEach(row => row.fill(0));
-        this.score = 0;
-        this.gameOver = false;
-        this.spawnNewPiece();
-      },
-      gameLoop(time = 0) {
-        if (!this.ctx) return;
-        const deltaTime = time - this.lastTime;
-        this.lastTime = time;
-        this.dropCounter += deltaTime;
-        if (this.dropCounter > this.dropInterval && !this.gameOver) {
-          this.drop();
-        }
-        this.draw();
-        requestAnimationFrame(this.gameLoop);
-      },
-      handleInput(uv) {
-        if (this.gameOver) {
-          this.restart();
-          return;
-        }
-        // Simple input: click left half to move left, right half to move right, top to rotate.
-        if (uv.y > 0.8) {
-          this.rotate();
-        } else if (uv.x < 0.5) {
-          this.move(-1);
-        } else {
-          this.move(1);
-        }
-      }
-    };
-  </script>
-
-  <!-- 
-    ================================================================
-    CUSTOM A-FRAME COMPONENTS
-    This is where the magic happens. These components handle all the
-    custom logic for interaction and dynamic features.
-    ================================================================
-  -->
-  <script>
-    /**
-     * Updates an entity's material with a canvas texture every frame.
-     * Essential for the embedded game.
-     * Ref: Embedded 2D Game PRP, Canvas-to-Texture Method.
-     */
-    AFRAME.registerComponent('canvas-updater', {
-      dependencies: ['geometry', 'material'],
-      schema: {
-        canvasId: {type: 'string', default: 'game-canvas'},
-        throttle: {type: 'int', default: 0} // ms
-      },
-      init: function () {
-        const canvas = document.getElementById(this.data.canvasId);
-        if (!canvas) {
-          console.error('Canvas not found:', this.data.canvasId);
-          return;
-        }
-        this.texture = new THREE.CanvasTexture(canvas);
-        const mesh = this.el.getObject3D('mesh');
-        if (mesh) {
-          // Use an unlit material so the game screen isn't affected by scene lighting.
-          mesh.material = new THREE.MeshBasicMaterial({ map: this.texture });
-        }
-        this.lastUpdateTime = 0;
-      },
-      tick: function (time) {
-        if (!this.texture) return;
-        if (time - this.lastUpdateTime < this.data.throttle) return;
-        
-        this.texture.needsUpdate = true;
-        this.lastUpdateTime = time;
-      }
-    });
-
-    /**
-     * Bridges VR controller input to the 2D game canvas.
-     * Listens for clicks, gets the UV coordinates of the hit, and passes
-     * them to the game's input handler.
-     * Ref: Embedded 2D Game PRP, 3D-to-2D Interaction Bridge.
-     */
-    AFRAME.registerComponent('canvas-input-bridge', {
-      init: function () {
-        this.el.addEventListener('click', (evt) => {
-          if (evt.detail.intersection && evt.detail.intersection.uv) {
-            const uv = evt.detail.intersection.uv;
-            // The game logic handles what to do with the click coordinates.
-            TetrisGame.handleInput(uv);
-          }
-        });
-      }
-    });
-
-    /**
-     * Manages global scene interactions, like weather changes.
-     * Listens for controller button presses to cycle through states.
-     * Ref: Environmental Design PRP, Controller Input for Toggles.
-     */
-    AFRAME.registerComponent('scene-manager', {
-      init: function () {
-        this.weatherStates = ['clear', 'rain', 'snow'];
-        this.currentWeatherIndex = 0;
-        
-        this.rainEmitter = document.querySelector('#rain');
-        this.snowEmitter = document.querySelector('#snow');
-        this.environment = document.querySelector('#environment');
-        this.ambientSound = document.querySelector('#ambient-sound').components.sound;
-        this.rainSound = document.querySelector('#rain-sound').components.sound;
-
-        // Listen for B button press on the right controller.
-        // Ref: A-Frame Baseline PRP, Controller Events.
-        const rightHand = document.querySelector('#rightHand');
-        rightHand.addEventListener('bbuttondown', () => {
-          this.currentWeatherIndex = (this.currentWeatherIndex + 1) % this.weatherStates.length;
-          this.setWeather(this.weatherStates[this.currentWeatherIndex]);
-        });
-      },
-      setWeather: function(state) {
-        console.log(`Changing weather to: ${state}`);
-        switch(state) {
-          case 'rain':
-            this.rainEmitter.setAttribute('particle-system', 'enabled', true);
-            this.snowEmitter.setAttribute('particle-system', 'enabled', false);
-            this.environment.setAttribute('environment', 'preset', 'threetowers'); // Dark, overcast preset
-            this.ambientSound.stopSound();
-            this.rainSound.playSound();
-            break;
-          case 'snow':
-            this.rainEmitter.setAttribute('particle-system', 'enabled', false);
-            this.snowEmitter.setAttribute('particle-system', 'enabled', true);
-            this.environment.setAttribute('environment', 'preset', 'starry'); // Cold, dark preset
-            this.ambientSound.stopSound();
-            this.rainSound.stopSound(); // Snow is quiet
-            break;
-          case 'clear':
-          default:
-            this.rainEmitter.setAttribute('particle-system', 'enabled', false);
-            this.snowEmitter.setAttribute('particle-system', 'enabled', false);
-            this.environment.setAttribute('environment', 'preset', 'dream'); // Back to a nice preset
-            this.rainSound.stopSound();
-            this.ambientSound.playSound();
-            break;
-        }
-      }
-    });
-  </script>
+  <meta charset="UTF-8">
+  <title>AR Tetris (Meta Quest 2/3)</title>
+  <!-- A-Frame 1.7.0 for AR/WebXR -->
+  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body { margin: 0; background: #111; }
+    #gameCanvas { display: none; }
+  </style>
 </head>
 <body>
-  <!-- 
-    The A-Frame scene.
-    Configured for both VR and AR passthrough.
-    Ref: AR (WebXR) Baseline PRP.
-  -->
-  <a-scene 
-    stats 
-    renderer="colorManagement: true; alpha: true;"
-    webxr="optionalFeatures: local-floor, bounded-floor, hand-tracking, hit-test; overlayElement: body;"
-    scene-manager>
-
-    <!-- 
-      Asset Management System. Preloads all critical assets.
-      Ref: A-Frame Baseline PRP.
-    -->
+  <a-scene
+    webxr="requiredFeatures: local-floor; optionalFeatures: hit-test"
+    renderer="colorManagement: true; antialias: true; alpha: true;"
+    xr-mode-ui>
     <a-assets>
-      <canvas id="game-canvas" width="512" height="512" crossorigin="anonymous"></canvas>
-      <audio id="ambient-audio" src="https://cdn.glitch.global/86df3f48-9a8b-433c-b570-55e9d936531c/ambient-sound.mp3?v=1676507899749" preload="auto"></audio>
-      <audio id="rain-audio" src="https://cdn.glitch.global/86df3f48-9a8b-433c-b570-55e9d936531c/rain-sound.mp3?v=1676507905097" preload="auto"></audio>
-      <a-asset-item id="cabinet-model" src="https://cdn.glitch.global/86df3f48-9a8b-433c-b570-55e9d936531c/arcade-cabinet.glb?v=1676508584883"></a-asset-item>
+      <canvas id="gameCanvas" width="512" height="512"></canvas>
     </a-assets>
-
-    <!-- 
-      Dynamic Environment.
-      Includes a day/night cycle via animation.
-      Ref: Environmental Design PRP.
-    -->
-    <a-entity id="environment" environment="preset: dream; ground: hills; shadow: true; fog: 0.7; skyType: atmosphere; sunPosition: 0 1 -1">
-      <a-animation attribute="environment.sunPosition" from="0 1 -1" to="0 -1 -1" dur="120000" dir="alternate" repeat="indefinite" easing="linear"></a-animation>
-    </a-entity>
-
-    <!-- Weather System Emitters. Initially disabled. -->
-    <a-entity id="rain" particle-system="preset: rain; enabled: false; size: 0.1; particleCount: 5000"></a-entity>
-    <a-entity id="snow" particle-system="preset: snow; enabled: false; size: 0.1; particleCount: 5000"></a-entity>
-    
-    <!-- Sound Entities -->
-    <a-entity id="ambient-sound" sound="src: #ambient-audio; autoplay: true; loop: true; volume: 0.3; positional: false;"></a-entity>
-    <a-entity id="rain-sound" sound="src: #rain-audio; autoplay: false; loop: true; volume: 0.5; positional: false;"></a-entity>
-
-    <!-- 
-      Player Rig.
-      Includes camera, movement, and controllers.
-      Ref: A-Frame Baseline PRP.
-    -->
-    <a-entity id="player" position="0 0 5" movement-controls="speed: 0.15;">
-      <a-entity id="head" camera look-controls="pointerLockEnabled: true" position="0 1.6 0"></a-entity>
-      
-      <!-- Left Hand: Teleportation -->
-      <a-entity id="leftHand" meta-touch-controls="hand: left" teleport-controls="cameraRig: #player; teleportOrigin: #head; button: trigger;"></a-entity>
-      
-      <!-- Right Hand: Interaction -->
-      <a-entity id="rightHand" meta-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .clickable; far: 5;"></a-entity>
-    </a-entity>
-
-    <!-- 
-      The Interactive Arcade Cabinet.
-      This is the centerpiece combining multiple PRP concepts.
-    -->
-    <a-entity id="arcade-machine" position="0 0 -2" rotation="0 20 0">
-      <!-- The physical cabinet model -->
-      <a-gltf-model src="#cabinet-model" position="0 0 0" scale="1.2 1.2 1.2"></a-gltf-model>
-      
-      <!-- 
-        The game screen. It's a simple plane positioned to fit the cabinet model.
-        It uses our custom components to display the game and receive input.
-        Marked with class="clickable" for the raycaster.
-      -->
-      <a-plane id="game-screen" class="clickable" 
-        position="0 1.1 -0.45" rotation="10 0 0" 
-        width="0.75" height="0.75"
-        canvas-updater="canvasId: game-canvas;"
-        canvas-input-bridge>
-      </a-plane>
-    </a-entity>
-    
-    <!-- Info Panel -->
-    <a-text value="Right Controller 'B' Button: Change Weather\nLeft Controller Trigger: Teleport" 
-            position="0 2.5 -2" width="3" align="center" color="#FFF"></a-text>
-
+    <!-- AR floating Tetris screen -->
+    <a-plane id="tetrisScreen"
+             class="clickable"
+             position="0 1.2 -2"
+             width="1.0" height="1.2"
+             material="shader: flat; src: #gameCanvas;">
+    </a-plane>
+    <!-- Quest controllers -->
+    <a-entity meta-touch-controls="hand: left" raycaster="objects: .clickable; far: 5"></a-entity>
+    <a-entity meta-touch-controls="hand: right" raycaster="objects: .clickable; far: 5" embedded-game-interactive></a-entity>
   </a-scene>
-  
-  <!-- Initialize the 2D game once the page loads -->
+
+  <!-- Canvas-to-Texture + Controller Bridge -->
   <script>
-    window.onload = () => {
-      TetrisGame.init('game-canvas');
-    };
+  // Keep the A-Frame plane's texture synced with the game canvas
+  AFRAME.registerComponent('canvas-texture', {
+    init: function () {
+      const canvasEl = document.getElementById('gameCanvas');
+      this.texture = new THREE.CanvasTexture(canvasEl);
+      const mesh = this.el.getObject3D('mesh');
+      mesh.material.map = this.texture;
+      mesh.material.needsUpdate = true;
+      mesh.material.flatShading = true;
+    },
+    tick: function () {
+      if (this.texture) this.texture.needsUpdate = true;
+    }
+  });
+  // Attach to tetrisScreen
+  document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('tetrisScreen').setAttribute('canvas-texture', '');
+  });
+
+  // Raycast-controller -> canvas mouse event bridge
+  AFRAME.registerComponent('embedded-game-interactive', {
+    init: function () {
+      this.gameEl = document.querySelector('#tetrisScreen');
+      this.canvasEl = document.getElementById('gameCanvas');
+      this.el.addEventListener('triggerdown', this.onTriggerDown.bind(this));
+      this.el.addEventListener('triggerup', this.onTriggerUp.bind(this));
+    },
+    onTriggerDown: function () {
+      const intersection = this.el.components.raycaster.getIntersection(this.gameEl);
+      if (!intersection) return;
+      const uv = intersection.uv;
+      const cx = uv.x * this.canvasEl.width;
+      const cy = (1 - uv.y) * this.canvasEl.height;
+      const opts = {clientX: cx, clientY: cy, button: 0};
+      this.canvasEl.dispatchEvent(new MouseEvent('mousemove', opts));
+      this.canvasEl.dispatchEvent(new MouseEvent('mousedown', opts));
+    },
+    onTriggerUp: function () {
+      const intersection = this.el.components.raycaster.getIntersection(this.gameEl);
+      if (!intersection) return;
+      const uv = intersection.uv;
+      const cx = uv.x * this.canvasEl.width;
+      const cy = (1 - uv.y) * this.canvasEl.height;
+      const opts = {clientX: cx, clientY: cy, button: 0};
+      this.canvasEl.dispatchEvent(new MouseEvent('mouseup', opts));
+      this.canvasEl.dispatchEvent(new MouseEvent('click', opts));
+    }
+  });
+  </script>
+
+  <!-- Minimal Canvas Tetris (no DOM, just pure Canvas2D) -->
+  <script>
+  // Simple Tetris on Canvas (AR-optimized)
+  const ROWS = 20, COLS = 10, BLOCK = 24;
+  const COLORS = ['#111', '#5cb85c', '#5bc0de', '#f0ad4e', '#d9534f', '#428bca', '#e67e22', '#9b59b6'];
+  const PIECES = [
+    [[1,1,1,1]], // I
+    [[1,1],[1,1]], // O
+    [[0,1,0],[1,1,1]], // T
+    [[0,1,1],[1,1,0]], // S
+    [[1,1,0],[0,1,1]], // Z
+    [[1,0,0],[1,1,1]], // J
+    [[0,0,1],[1,1,1]]  // L
+  ];
+  let board, piece, nextPiece, pos, over = false, score = 0, dropTimer = 0, speed = 600;
+
+  function randomPiece() {
+    const id = Math.floor(Math.random()*PIECES.length);
+    return {shape: PIECES[id], id: id+1, x: 3, y: -1};
+  }
+  function reset() {
+    board = Array.from({length: ROWS},()=>Array(COLS).fill(0));
+    over = false; score = 0; speed = 600; nextPiece = randomPiece(); dropNew();
+  }
+  function dropNew() {
+    piece = nextPiece; nextPiece = randomPiece();
+    pos = {x: piece.x, y: piece.y};
+    if (collide(piece, pos.x, pos.y)) over = true;
+  }
+  function rotate(shape) {
+    return shape[0].map((_,i)=>shape.map(row=>row[i]).reverse());
+  }
+  function collide(p, x, y) {
+    for (let r=0; r<p.shape.length; r++)
+      for (let c=0; c<p.shape[r].length; c++)
+        if (p.shape[r][c]) {
+          let nx = x+c, ny = y+r;
+          if (nx<0||nx>=COLS||ny>=ROWS||(ny>=0&&board[ny][nx])) return true;
+        }
+    return false;
+  }
+  function merge(p, x, y) {
+    for (let r=0; r<p.shape.length; r++)
+      for (let c=0; c<p.shape[r].length; c++)
+        if (p.shape[r][c] && y+r>=0) board[y+r][x+c]=p.id;
+  }
+  function clearRows() {
+    for (let r=ROWS-1; r>=0; r--){
+      if (board[r].every(x=>x)) {
+        board.splice(r,1); board.unshift(Array(COLS).fill(0)); score+=100; speed=Math.max(80,speed-20); r++;
+      }
+    }
+  }
+  function step(ts) {
+    if (over) return;
+    if (!dropTimer) dropTimer = ts;
+    if (ts-dropTimer > speed) {
+      if (!collide(piece, pos.x, pos.y+1)) pos.y++;
+      else { merge(piece, pos.x, pos.y); clearRows(); dropNew(); if (over) setTimeout(reset,1200); }
+      dropTimer = ts;
+    }
+    draw();
+    requestAnimationFrame(step);
+  }
+  function draw() {
+    let ctx = document.getElementById('gameCanvas').getContext('2d');
+    ctx.clearRect(0,0,512,512);
+    // BG & grid
+    ctx.fillStyle='#222'; ctx.fillRect(0,0,512,512);
+    // Board
+    for (let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
+      if (board[r][c]) {
+        ctx.fillStyle = COLORS[board[r][c]];
+        ctx.fillRect(c*BLOCK+80, r*BLOCK+8, BLOCK-2, BLOCK-2);
+      }
+    }
+    // Current piece
+    if (!over)
+      for (let r=0;r<piece.shape.length;r++) for(let c=0;c<piece.shape[r].length;c++)
+        if (piece.shape[r][c]) {
+          ctx.fillStyle = COLORS[piece.id];
+          ctx.fillRect((pos.x+c)*BLOCK+80, (pos.y+r)*BLOCK+8, BLOCK-2, BLOCK-2);
+        }
+    // Next piece preview
+    ctx.fillStyle='#fff'; ctx.font='16px sans-serif'; ctx.fillText('NEXT', 360,38);
+    for (let r=0;r<4;r++) for(let c=0;c<4;c++){
+      ctx.strokeStyle='#555';ctx.strokeRect(360+c*BLOCK,60+r*BLOCK,BLOCK-2,BLOCK-2);
+      if(nextPiece.shape[r]&&nextPiece.shape[r][c]){
+        ctx.fillStyle=COLORS[nextPiece.id];
+        ctx.fillRect(360+c*BLOCK,60+r*BLOCK,BLOCK-2,BLOCK-2);
+      }
+    }
+    // Score
+    ctx.fillStyle='#fff';ctx.fillText('SCORE',360,180);
+    ctx.fillText(score,360,210);
+    // Game Over
+    if (over) {
+      ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(90,210,300,80);
+      ctx.fillStyle='#fff';ctx.font='36px sans-serif';ctx.fillText('GAME OVER',145,260);
+      ctx.font='18px sans-serif';ctx.fillText('Restarting...', 200,290);
+    }
+  }
+  // Mouse/Touch/AR: rotate (center), move left/right, drop (bottom)
+  document.getElementById('gameCanvas').addEventListener('click', e=>{
+    if (over) return;
+    const x = e.clientX, y = e.clientY;
+    if (y > 440) drop();
+    else if (x < 200) move(-1);
+    else if (x > 320) move(1);
+    else rotateCurrent();
+    draw();
+  });
+  function rotateCurrent() {
+    let test = {shape: rotate(piece.shape), id: piece.id};
+    if (!collide(test, pos.x, pos.y)) piece.shape = test.shape;
+  }
+  function move(dx) {
+    if (!collide(piece, pos.x+dx, pos.y)) pos.x += dx;
+  }
+  function drop() {
+    while(!collide(piece, pos.x, pos.y+1)) pos.y++;
+    merge(piece,pos.x,pos.y); clearRows(); dropNew(); draw();
+  }
+  // Keyboard fallback (desktop only)
+  window.addEventListener('keydown',e=>{
+    if (over) return;
+    if (e.key==='ArrowLeft') move(-1);
+    if (e.key==='ArrowRight') move(1);
+    if (e.key==='ArrowUp') rotateCurrent();
+    if (e.key==='ArrowDown') drop();
+    draw();
+  });
+  // Start
+  reset();
+  draw();
+  requestAnimationFrame(step);
   </script>
 </body>
 </html>
