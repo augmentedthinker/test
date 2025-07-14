@@ -2,9 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Gamified Hits (Dynamic Speed & Win Condition)</title>
+  <title>Quest VR: Gamified Hits (Forest Environment)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
 </head>
 <body>
 <a-scene background="color: #ECECEC" game-manager>
@@ -36,10 +37,14 @@
               visible="true"
               player-hit-reaction></a-sphere>
   </a-entity>
-  <a-sky color="#B3E0FF"></a-sky>
-  <a-plane id="ground" color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
-  <a-entity light="type: ambient; color: #FFF; intensity: 0.8"></a-entity>
-  <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="1 3 2"></a-entity>
+
+  <a-entity 
+    environment="preset: forest; 
+                 groundColor: #6B8E23; 
+                 shadow: true; 
+                 shadowSize: 10;
+                 fog: 0.7">
+  </a-entity>
 
   <a-sphere id="colorSphere"
             class="clickable"
@@ -82,13 +87,13 @@
             this.maxHits = this.data.maxHits;
             this.hitCounterEl = document.querySelector('#hitCounter');
             this.gameOverTextEl = document.querySelector('#gameOverText');
-            this.winTextEl = document.querySelector('#winText'); // NEW: Win text element
+            this.winTextEl = document.querySelector('#winText');
             this.clickableSphere = document.querySelector('#colorSphere');
 
             this.isGameOverFlag = false;
-            this.hasWonFlag = false; // NEW: Flag for win state
-            this.gameEnded = false; // NEW: General flag for game conclusion
-            this.gameStartTime = performance.now(); // Record game start time
+            this.hasWonFlag = false;
+            this.gameEnded = false;
+            this.gameStartTime = performance.now();
 
             this.updateDisplay();
         },
@@ -97,19 +102,16 @@
 
             const elapsedTime = time - this.gameStartTime;
 
-            // Check for win condition
             if (elapsedTime >= this.data.winTime && !this.hasWonFlag) {
                 this.winGame();
             }
         },
         isGameOver: function() {
-            return this.isGameOverFlag || this.hasWonFlag; // Game is over if lost or won
+            return this.isGameOverFlag || this.hasWonFlag;
         },
-        getProjectileSpeed: function() { // NEW: Method to get dynamic projectile speed
+        getProjectileSpeed: function() {
             const elapsedTime = performance.now() - this.gameStartTime;
-            // Calculate progress (0 to 1) based on elapsed time vs win time
             const progress = Math.min(elapsedTime / this.data.winTime, 1);
-            // Interpolate speed between initial and max
             return this.data.initialProjectileSpeed +
                    (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
         },
@@ -130,15 +132,15 @@
         },
         gameOver: function() {
             this.isGameOverFlag = true;
-            this.gameEnded = true; // Mark game as ended
+            this.gameEnded = true;
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
             this.disableSphereInteraction();
         },
-        winGame: function() { // NEW: Win game function
+        winGame: function() {
             this.hasWonFlag = true;
-            this.gameEnded = true; // Mark game as ended
+            this.gameEnded = true;
             if (this.winTextEl) {
                 this.winTextEl.setAttribute('visible', true);
             }
@@ -267,7 +269,6 @@
         this.onClickHandler = () => {
             const gameManager = this.el.sceneEl.components['game-manager'];
 
-            // Prevent firing if game is over (lost or won)
             if (gameManager && gameManager.isGameOver()) {
                 return;
             }
@@ -299,11 +300,10 @@
             projectile.setAttribute('color', '#E53935');
             projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
 
-            // NEW: Get dynamic speed from game-manager
-            const currentProjectileSpeed = gameManager ? gameManager.getProjectileSpeed() : 1.5; // Fallback speed
+            const currentProjectileSpeed = gameManager ? gameManager.getProjectileSpeed() : 1.5;
             projectile.setAttribute('projectile-move', {
               direction: `${direction.x} ${direction.y} ${direction.z}`,
-              speed: currentProjectileSpeed // Use dynamic speed
+              speed: currentProjectileSpeed
             });
             scene.appendChild(projectile);
         };
@@ -319,7 +319,7 @@
       init: function () {
         var d = this.data.direction.split(' ').map(Number);
         this.directionVec = new THREE.Vector3(d[0], d[1], d[2]);
-        this.speed = this.data.speed; // Speed is now set on creation
+        this.speed = this.data.speed;
         this.start = null;
         this.hit = false;
       },
@@ -329,7 +329,6 @@
 
         const gameManager = this.el.sceneEl.components['game-manager'];
 
-        // Remove projectile if game has ended
         if (gameManager && gameManager.isGameOver()) {
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
@@ -360,7 +359,7 @@
             return;
           }
         }
-        if (time - this.start > 8000) { // Projectile despawns after 8 seconds if it hasn't hit anything
+        if (time - this.start > 8000) {
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
