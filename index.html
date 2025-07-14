@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gemini's WebXR Cube and Controllers Demo</title>
+  <title>WebXR AR with Controllers</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -21,12 +21,11 @@
       display: block;
       padding: 10px 0;
     }
-    /* AR Button styles are handled by the ARButton script below */
   </style>
 </head>
 <body>
   <div id="info">
-    A WebXR Demo by Christopher & Gemini
+    WebXR AR with Controllers Demo
   </div>
 
   <script type="importmap">
@@ -34,20 +33,18 @@
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       }
-    </script>
+    }
+  </script>
 
   <script type="module">
-    // Import the main Three.js library
     import * as THREE from 'three';
 
-    // --- Inlined ARButton.js from Three.js examples ---
-    // This class creates the "Start AR" button and handles the WebXR session setup.
-    // Inlining it here keeps everything in a single file as requested.
+    // --- Inlined ARButton.js ---
     class ARButton {
       static createButton(renderer, sessionInit = {}) {
         const button = document.createElement('button');
 
-        function showStartAR( /*device*/ ) {
+        function showStartAR() {
           if (sessionInit.domOverlay === undefined) {
             const overlay = document.createElement('div');
             overlay.style.display = 'none';
@@ -87,7 +84,7 @@
             currentSession = session;
           }
 
-          function onSessionEnded( /*event*/ ) {
+          function onSessionEnded() {
             currentSession.removeEventListener('end', onSessionEnded);
             button.textContent = 'START AR';
             sessionInit.domOverlay.root.style.display = 'none';
@@ -172,9 +169,11 @@
     // --- Main Application Logic ---
     let camera, scene, renderer;
     let cube;
-    // Variables for controllers and their visual grips
     let controller1, controller2;
     let controllerGrip1, controllerGrip2;
+    let laserPointer1, laserPointer2;
+    let cubeOriginalPosition = new THREE.Vector3();
+    let cubeJumped = false;
 
     init();
     animate();
@@ -183,76 +182,24 @@
       // Create the main scene
       scene = new THREE.Scene();
 
-      // Create a camera. Its position will be updated by the WebXR device.
+      // Create a camera
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-      // Create the WebGL renderer and configure it for XR.
+      // Create the WebGL renderer and configure it for XR
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: true // alpha: true is required for AR passthrough
+        alpha: true
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      renderer.xr.enabled = true;
       document.body.appendChild(renderer.domElement);
 
-      // Add the AR button to the body. It will handle session start/end.
-      // We pass the renderer and a session configuration object.
-      // 'local' is a good starting point for reference space.
+      // Add the AR button
       document.body.appendChild(ARButton.createButton(renderer, {
         requiredFeatures: ['local']
       }));
 
-      // --- Add WebXR Controllers ---
-      // Get the controller objects from the XR manager. These represent the ray from the controller.
-      controller1 = renderer.xr.getController(0);
-      scene.add(controller1); // Add to scene to automatically update its position/rotation
-
-      controller2 = renderer.xr.getController(1);
-      scene.add(controller2);
-
-      // Get the controller "grip" objects. These represent the physical controller's position.
-      // We'll attach our 3D models to these.
-      controllerGrip1 = renderer.xr.getControllerGrip(0);
-      scene.add(controllerGrip1);
-
-      controllerGrip2 = renderer.xr.getControllerGrip(1);
-      scene.add(controllerGrip2);
-
-      // Add a simple visual model (cylinder) to the controller grips
-      const controllerGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8); // Thin cylinder
-      const controllerMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, wireframe: true }); // Grey wireframe
-
-      const mesh1 = new THREE.Mesh(controllerGeometry, controllerMaterial);
-      controllerGrip1.add(mesh1); // Attach mesh to grip
-
-      const mesh2 = new THREE.Mesh(controllerGeometry, controllerMaterial);
-      controllerGrip2.add(mesh2);
-
-      // Add simple laser pointers to the controllers
-      const laserGeometry = new THREE.CylinderGeometry(0.002, 0.002, 5, 4); // Very thin, long cylinder
-      laserGeometry.translate(0, 0, -2.5); // Position it to extend forward from the controller
-      const laserMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red color
-
-      const laser1 = new THREE.Mesh(laserGeometry, laserMaterial);
-      laser1.name = 'laser'; // Give it a name to easily reference later
-      laser1.visible = false; // Start invisible, will show when trigger is pressed
-      controller1.add(laser1); // Attach laser to the controller's ray (not the grip)
-
-      const laser2 = new THREE.Mesh(laserGeometry, laserMaterial);
-      laser2.name = 'laser';
-      laser2.visible = false;
-      controller2.add(laser2);
-
-      // --- Add Event Listeners for Controller Input ---
-      // 'selectstart' is typically fired when the primary trigger is pressed
-      controller1.addEventListener('selectstart', onSelectStart);
-      controller1.addEventListener('selectend', onSelectEnd);
-
-      controller2.addEventListener('selectstart', onSelectStart);
-      controller2.addEventListener('selectend', onSelectEnd);
-
-
-      // Create the same multi-colored cube from your original code.
+      // Create the multi-colored cube
       const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
       const materials = [
         new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
@@ -263,20 +210,99 @@
         new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
       ];
       cube = new THREE.Mesh(geometry, materials);
-
-      // Position the cube 1 meter in front of the user.
       cube.position.set(0, 0, -1);
-
-      // Add the cube to the scene.
+      cubeOriginalPosition.copy(cube.position);
       scene.add(cube);
 
-      // Add a light to the scene.
+      // Add lighting
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
       scene.add(light);
 
-      // Add a listener to handle window resizing, which is good practice.
+      // Setup controllers
+      setupControllers();
+
+      // Window resize handler
       window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function setupControllers() {
+      // Create controller instances
+      controller1 = renderer.xr.getController(0);
+      controller2 = renderer.xr.getController(1);
+
+      // Create controller grips (visual representation)
+      controllerGrip1 = renderer.xr.getControllerGrip(0);
+      controllerGrip2 = renderer.xr.getControllerGrip(1);
+
+      // Create simple controller representations
+      const controllerModelGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.15);
+      const controllerModelMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+      
+      const controllerMesh1 = new THREE.Mesh(controllerModelGeometry, controllerModelMaterial);
+      const controllerMesh2 = new THREE.Mesh(controllerModelGeometry, controllerModelMaterial);
+      
+      controllerGrip1.add(controllerMesh1);
+      controllerGrip2.add(controllerMesh2);
+
+      // Create laser pointers
+      const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -1)
+      ]);
+      const laserMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+      
+      laserPointer1 = new THREE.Line(laserGeometry, laserMaterial);
+      laserPointer2 = new THREE.Line(laserGeometry, laserMaterial);
+      
+      // Initially hide laser pointers
+      laserPointer1.visible = false;
+      laserPointer2.visible = false;
+      
+      controller1.add(laserPointer1);
+      controller2.add(laserPointer2);
+
+      // Add event listeners for controller interactions
+      controller1.addEventListener('selectstart', onSelectStart);
+      controller1.addEventListener('selectend', onSelectEnd);
+      controller2.addEventListener('selectstart', onSelectStart);
+      controller2.addEventListener('selectend', onSelectEnd);
+
+      // Add controllers to scene
+      scene.add(controller1);
+      scene.add(controller2);
+      scene.add(controllerGrip1);
+      scene.add(controllerGrip2);
+    }
+
+    function onSelectStart(event) {
+      // Show laser pointer when trigger is pressed
+      if (event.target === controller1) {
+        laserPointer1.visible = true;
+      } else if (event.target === controller2) {
+        laserPointer2.visible = true;
+      }
+      
+      // Make cube jump
+      if (!cubeJumped) {
+        cube.position.y = cubeOriginalPosition.y + 0.1;
+        cubeJumped = true;
+      }
+    }
+
+    function onSelectEnd(event) {
+      // Hide laser pointer when trigger is released
+      if (event.target === controller1) {
+        laserPointer1.visible = false;
+      } else if (event.target === controller2) {
+        laserPointer2.visible = false;
+      }
+      
+      // Return cube to original position
+      if (cubeJumped) {
+        cube.position.copy(cubeOriginalPosition);
+        cubeJumped = false;
+      }
     }
 
     function onWindowResize() {
@@ -286,45 +312,19 @@
     }
 
     function animate() {
-      // Use the renderer's built-in animation loop, which is XR-aware.
-      // This will call the 'render' function on every frame.
       renderer.setAnimationLoop(render);
     }
 
-    // This function is called every frame
     function render(timestamp, frame) {
-      // Make the cube slowly rotate to make it more interesting.
+      // Rotate the cube
       if (cube) {
         cube.rotation.y += 0.01;
         cube.rotation.x += 0.005;
       }
 
-      // Render the scene with the camera.
-      // Three.js's WebXRManager automatically updates controller poses
-      // and renders for each eye in an AR session.
+      // Render the scene
       renderer.render(scene, camera);
     }
-
-    // --- Controller Input Handler Functions ---
-    function onSelectStart(event) {
-        const controller = event.target; // 'event.target' here is the controller object itself
-        // Show the laser pointer associated with this controller
-        controller.getObjectByName('laser').visible = true;
-
-        // Example: Make the cube jump slightly when the trigger is pressed
-        // You would typically add more complex interaction logic here (e.g., raycasting)
-        cube.position.y += 0.1;
-    }
-
-    function onSelectEnd(event) {
-        const controller = event.target;
-        // Hide the laser pointer when the trigger is released
-        controller.getObjectByName('laser').visible = false;
-
-        // Example: Return cube to its original y position
-        cube.position.y = 0;
-    }
-
   </script>
 </body>
 </html>
