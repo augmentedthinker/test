@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Complete VR Experience</title>
+    <title>Complete VR Experience - Projectiles Target Body (with Hit Reaction)</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -52,7 +52,7 @@
             scale="0.5 0.5 0.5"
             class="clickable"
             event-set__click="material.color: green"
-            fire-sphere="targetCamera: #camera; speed: 2;"
+            fire-sphere="targetEntity: #playerBody; speed: 2;"
         ></a-box>
 
         <a-sphere
@@ -61,7 +61,7 @@
             radius="0.5"
             class="clickable"
             event-set__click="material.color: blue"
-            fire-sphere="targetCamera: #camera; speed: 2;"
+            fire-sphere="targetEntity: #playerBody; speed: 2;"
         ></a-sphere>
 
         <a-sphere
@@ -120,7 +120,8 @@
         // Custom A-Frame component for objects that fire spheres
         AFRAME.registerComponent('fire-sphere', {
             schema: {
-                targetCamera: {type: 'selector', default: '#camera'}, // The camera to target
+                // Changed from targetCamera to targetEntity
+                targetEntity: {type: 'selector'}, // The entity to target (e.g., #playerBody)
                 speed: {type: 'number', default: 1.5}, // Speed of the fired sphere
                 sphereRadius: {type: 'number', default: 0.1}, // Radius of the fired sphere
                 sphereColor: {type: 'color', default: 'white'}, // Color of the fired sphere
@@ -131,9 +132,10 @@
                 const el = this.el; // The entity this component is attached to (the clickable box/sphere)
                 const data = this.data; // The schema data for this component
 
-                this.targetCameraEl = data.targetCamera;
-                if (!this.targetCameraEl) {
-                    console.error("fire-sphere: Target camera not found!");
+                // Get the target entity instead of the camera
+                this.targetEl = data.targetEntity;
+                if (!this.targetEl) {
+                    console.error("fire-sphere: Target entity not found! Ensure targetEntity is correctly set.");
                     return;
                 }
 
@@ -152,9 +154,9 @@
                     el.object3D.getWorldPosition(originPos);
                     sphere.setAttribute('position', `${originPos.x} ${originPos.y} ${originPos.z}`);
 
-                    // Get the world position of the camera (the target)
+                    // Get the world position of the target entity (playerBody)
                     const targetPos = new AFRAME.THREE.Vector3();
-                    this.targetCameraEl.object3D.getWorldPosition(targetPos);
+                    this.targetEl.object3D.getWorldPosition(targetPos); // Now using this.targetEl
 
                     // Calculate the direction vector from the origin to the target
                     const direction = new AFRAME.THREE.Vector3();
