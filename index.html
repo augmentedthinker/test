@@ -1,457 +1,68 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <title>A-Frame AR Rotating Cube</title>
   <meta charset="utf-8">
-  <title>Quest VR: Gamified Hits (Forest Environment)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
+  
+  <style>
+    /* Simple styling for the body */
+    body {
+      margin: 0;
+      overflow: hidden; /* Hide scrollbars, common for fullscreen VR/AR experiences */
+    }
+    /* Styles for the custom AR button, which A-Frame will make visible */
+    #arButton {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 999;
+      background: #4A7D9C; /* Your chosen accent color for the button */
+      color: white;
+      padding: 15px 30px;
+      border-radius: 8px; /* Slightly rounded corners */
+      cursor: pointer;
+      font-family: sans-serif;
+      font-size: 1.2em;
+      border: none;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+      display: none; /* A-Frame will make this visible when AR is ready */
+      transition: background-color 0.3s ease, transform 0.1s ease;
+    }
+    #arButton:hover {
+      background-color: #3F6E8F; /* Slightly darker on hover */
+      transform: translateX(-50%) translateY(-2px);
+    }
+  </style>
 </head>
 <body>
-<a-scene background="color: #ECECEC" game-manager>
-  <a-assets>
-    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
-    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
-  </a-assets>
+  <a-scene webxr="requiredFeatures: [local-floor];" vr-mode-ui="enterARButton: #arButton">
+    
+    <a-box
+      position="0 1 -1"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 5000; easing: linear;"
+      color="#4CC3D9"
+      shadow="cast: true"
+      scale="0.3 0.3 0.3"
+    ></a-box>
 
-  <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
-    <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
-      <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="white" width="3"></a-text>
-      <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
-      <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
-    </a-entity>
-    <a-entity id="leftHand"
-              oculus-touch-controls="hand: left; model: true"
-              laser-controls="hand: left"
-              raycaster="objects: .clickable; far: 100"
-              line="color: blue; opacity: 0.9"></a-entity>
-    <a-entity id="rightHand"
-              oculus-touch-controls="hand: right; model: true"
-              laser-controls="hand: right"
-              raycaster="objects: .clickable; far: 100"
-              line="color: red; opacity: 0.9"></a-entity>
-    <a-sphere id="playerSphere"
-              color="#2196F3"
-              opacity="0.3"
-              radius="0.4"
-              visible="true"
-              player-hit-reaction></a-sphere>
-  </a-entity>
+    <a-entity light="type: ambient; color: #BBB; intensity: 0.7"></a-entity>
+    <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="-1 1 1"></a-entity>
 
-  <a-entity
-    environment="preset: forest;
-                 groundColor: #6B8E23;
-                 shadow: true;
-                 shadowSize: 10;
-                 fog: 0.7">
-  </a-entity>
+    <a-entity camera position="0 1.6 0"></a-entity>
 
-  <a-sphere id="colorSphere"
-            class="clickable"
-            position="0 2 0"
-            radius="0.4"
-            color="#FFC300"
-            shadow="cast: true"
-            toggle-color-on-click
-            shoot-on-click></a-sphere>
+  </a-scene>
+
+  <button id="arButton">Enter AR Mode</button>
 
   <script>
-    const laserAudio = document.querySelector('#laser-sfx');
-    const explosionAudio = document.querySelector('#explosion-sfx');
-
-    let audioUnlocked = false;
-    function unlockAudio() {
-      [laserAudio, explosionAudio].forEach(audio => {
-        if (!audio) return;
-        try {
-          audio.muted = false;
-          audio.play().catch(()=>{});
-          audio.pause();
-          audio.currentTime = 0;
-        } catch (e) {}
-      });
-      audioUnlocked = true;
-    }
-    window.addEventListener('click', unlockAudio, {once:true});
-    window.addEventListener('touchstart', unlockAudio, {once:true});
-
-    AFRAME.registerComponent('game-manager', {
-        schema: {
-            maxHits: {type: 'number', default: 3},
-            winTime: {type: 'number', default: 60000}, // 1 minute in milliseconds
-            initialProjectileSpeed: {type: 'number', default: 0.5}, // Super slow
-            maxProjectileSpeed: {type: 'number', default: 15.0} // Almost instantaneous
-        },
-        init: function () {
-            this.hits = 0;
-            this.maxHits = this.data.maxHits;
-            this.hitCounterEl = document.querySelector('#hitCounter');
-            this.gameOverTextEl = document.querySelector('#gameOverText');
-            this.winTextEl = document.querySelector('#winText');
-            this.clickableSphere = document.querySelector('#colorSphere');
-
-            this.isGameOverFlag = false;
-            this.hasWonFlag = false;
-            this.gameEnded = false;
-            this.gameStartTime = performance.now();
-
-            this.updateDisplay();
-        },
-        tick: function(time, deltaTime) {
-            if (this.gameEnded) return;
-
-            const elapsedTime = time - this.gameStartTime;
-
-            if (elapsedTime >= this.data.winTime && !this.hasWonFlag) {
-                this.winGame();
-            }
-        },
-        isGameOver: function() {
-            return this.isGameOverFlag || this.hasWonFlag;
-        },
-        getProjectileSpeed: function() {
-            const elapsedTime = performance.now() - this.gameStartTime;
-            const progress = Math.min(elapsedTime / this.data.winTime, 1);
-            return this.data.initialProjectileSpeed +
-                   (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
-        },
-        updateDisplay: function() {
-            if (this.hitCounterEl) {
-                this.hitCounterEl.setAttribute('value', `Hits: ${this.hits}/${this.maxHits}`);
-            }
-        },
-        registerHit: function() {
-            if (this.isGameOverFlag || this.hasWonFlag) return;
-
-            this.hits++;
-            this.updateDisplay();
-
-            if (this.hits >= this.maxHits) {
-                this.gameOver();
-            }
-        },
-        gameOver: function() {
-            this.isGameOverFlag = true;
-            this.gameEnded = true;
-            if (this.gameOverTextEl) {
-                this.gameOverTextEl.setAttribute('visible', true);
-            }
-            this.disableSphereInteraction();
-        },
-        winGame: function() {
-            this.hasWonFlag = true;
-            this.gameEnded = true;
-            if (this.winTextEl) {
-                this.winTextEl.setAttribute('visible', true);
-            }
-            this.disableSphereInteraction();
-        },
-        disableSphereInteraction: function() {
-            if (this.clickableSphere) {
-                this.clickableSphere.removeAttribute('shoot-on-click');
-                this.clickableSphere.removeAttribute('toggle-color-on-click');
-                this.clickableSphere.setAttribute('color', '#888');
-                this.clickableSphere.setAttribute('class', 'non-clickable');
-            }
-        }
-    });
-
-    AFRAME.registerComponent('toggle-color-on-click', {
-      schema: {
-        colors: {type: 'array', default: ['#FFC300', '#32CD32', '#1976D2', '#E53935']}
-      },
-      init: function () {
-        this.colorIndex = 0;
-        this.el.addEventListener('click', () => {
-          this.colorIndex = (this.colorIndex + 1) % this.data.colors.length;
-          this.el.setAttribute('color', this.data.colors[this.colorIndex]);
-        });
-      }
-    });
-
-    AFRAME.registerComponent('player-hit-reaction', {
-      init: function () {
-        this.isReacting = false;
-        this.originalScale = this.el.object3D.scale.clone();
-        this.originalColor = this.el.getAttribute('color');
-        this.originalOpacity = this.el.getAttribute('opacity');
-        this.playerCam = document.querySelector('#playerCam');
-      },
-      reactToHit: function () {
-        const gameManager = this.el.sceneEl.components['game-manager'];
-        if (!gameManager || gameManager.isGameOver()) return;
-
-        if (this.isReacting) return;
-
-        gameManager.registerHit();
-
-        this.isReacting = true;
-        let el = this.el;
-
-        try {
-          if (explosionAudio && audioUnlocked) {
-            explosionAudio.currentTime = 0;
-            explosionAudio.volume = 1;
-            explosionAudio.play();
-          }
-        } catch (e) { /* Error handling removed */ }
-
-        vibrateControllers(0.4, 1.0);
-
-        el.setAttribute('color', '#FF0000');
-        el.setAttribute('opacity', 0.8);
-
-        el.setAttribute('animation__grow', {
-          property: 'scale',
-          to: '0.6 0.6 0.6',
-          dur: 100,
-          easing: 'easeOutCubic'
-        });
-        el.setAttribute('animation__shrink', {
-          property: 'scale',
-          to: `${this.originalScale.x} ${this.originalScale.y} ${this.originalScale.z}`,
-          dur: 200,
-          delay: 100,
-          easing: 'easeInCubic'
-        });
-        el.setAttribute('animation__color', {
-          property: 'color',
-          to: this.originalColor,
-          dur: 200,
-          delay: 100,
-          easing: 'easeInCubic'
-        });
-        el.setAttribute('animation__opacity', {
-            property: 'opacity',
-            to: this.originalOpacity,
-            dur: 200,
-            delay: 100,
-            easing: 'easeInCubic'
-        });
-
-        const playerWorldPos = new THREE.Vector3();
-        this.el.object3D.getWorldPosition(playerWorldPos);
-        spawnParticles(playerWorldPos, 30);
-
-        if (this.playerCam) {
-            this.playerCam.setAttribute('animation__shakeX', {
-                property: 'position.x',
-                from: this.playerCam.object3D.position.x - 0.05,
-                to: this.playerCam.object3D.position.x + 0.05,
-                dir: 'alternate',
-                dur: 50,
-                repeat: 2
-            });
-             this.playerCam.setAttribute('animation__shakeY', {
-                property: 'position.y',
-                from: this.playerCam.object3D.position.y - 0.05,
-                to: this.playerCam.object3D.position.y + 0.05,
-                dir: 'alternate',
-                dur: 50,
-                repeat: 2
-            });
-        }
-
-        setTimeout(() => {
-          this.isReacting = false;
-          el.setAttribute('scale', this.originalScale.clone());
-          el.setAttribute('color', this.originalColor);
-          el.setAttribute('opacity', this.originalOpacity);
-        }, 350);
-      }
-    });
-
-    AFRAME.registerComponent('shoot-on-click', {
-      schema: {
-        // Speed schema is no longer directly used here as it's dynamic from game-manager
-      },
-      init: function () {
-        this.onClickHandler = () => {
-            const gameManager = this.el.sceneEl.components['game-manager'];
-
-            if (gameManager && gameManager.isGameOver()) {
-                return;
-            }
-
-            try {
-                if (laserAudio && audioUnlocked) {
-                    laserAudio.currentTime = 0;
-                    laserAudio.volume = 1;
-                    laserAudio.play();
-                }
-            } catch (e) { /* Error handling removed */ }
-
-            var leftObj = document.querySelector('#leftHand').object3D;
-            var rightObj = document.querySelector('#rightHand').object3D;
-            var leftPos = new THREE.Vector3();
-            var rightPos = new THREE.Vector3();
-            leftObj.getWorldPosition(leftPos);
-            rightObj.getWorldPosition(rightPos);
-            var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
-
-            var origin = new THREE.Vector3();
-            this.el.object3D.getWorldPosition(origin);
-
-            var direction = mid.clone().sub(origin).normalize();
-
-            var scene = this.el.sceneEl;
-            var projectile = document.createElement('a-sphere');
-            projectile.setAttribute('radius', 0.12);
-            projectile.setAttribute('color', '#E53935');
-            projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
-
-            const currentProjectileSpeed = gameManager ? gameManager.getProjectileSpeed() : 1.5;
-            projectile.setAttribute('projectile-move', {
-              direction: `${direction.x} ${direction.y} ${direction.z}`,
-              speed: currentProjectileSpeed
-            });
-            scene.appendChild(projectile);
-        };
-        this.el.addEventListener('click', this.onClickHandler);
-      }
-    });
-
-    AFRAME.registerComponent('projectile-move', {
-      schema: {
-        direction: {type: 'string', default: '0 0 0'},
-        speed: {type: 'number', default: 1.5}
-      },
-      init: function () {
-        var d = this.data.direction.split(' ').map(Number);
-        this.directionVec = new THREE.Vector3(d[0], d[1], d[2]);
-        this.speed = this.data.speed;
-        this.start = null;
-        this.hit = false;
-      },
-      tick: function (time, deltaTime) {
-        if (this.hit) return;
-        if (!this.el.parentNode) return;
-
-        const gameManager = this.el.sceneEl.components['game-manager'];
-
-        if (gameManager && gameManager.isGameOver()) {
-            if (this.el.parentNode) {
-                this.el.parentNode.removeChild(this.el);
-            }
-            return;
-        }
-
-        if (!this.start) this.start = time;
-        var move = this.directionVec.clone().multiplyScalar(this.speed * deltaTime / 1000);
-        this.el.object3D.position.add(move);
-
-        var playerSphereEl = document.querySelector('#playerSphere');
-        if (playerSphereEl && playerSphereEl.components['player-hit-reaction']) {
-          var projectilePos = new THREE.Vector3();
-          this.el.object3D.getWorldPosition(projectilePos);
-          var playerPos = new THREE.Vector3();
-          playerSphereEl.object3D.getWorldPosition(playerPos);
-
-          var dist = projectilePos.distanceTo(playerPos);
-          var combinedRadius = 0.12 + 0.4;
-
-          if (dist < combinedRadius) {
-            this.hit = true;
-            playerSphereEl.components['player-hit-reaction'].reactToHit();
-            if (this.el.parentNode) {
-                this.el.parentNode.removeChild(this.el);
-            }
-            return;
-          }
-        }
-        if (time - this.start > 8000) {
-            if (this.el.parentNode) {
-                this.el.parentNode.removeChild(this.el);
-            }
-        }
-      }
-    });
-
-    AFRAME.registerComponent('player-follow-hands', {
-      tick: function () {
-        var leftHand = document.querySelector('#leftHand');
-        var rightHand = document.querySelector('#rightHand');
-        var playerSphere = document.querySelector('#playerSphere');
-        if (leftHand && rightHand && playerSphere) {
-          var leftObj = leftHand.object3D;
-          var rightObj = rightHand.object3D;
-          var leftPos = new THREE.Vector3();
-          var rightPos = new THREE.Vector3();
-          leftObj.getWorldPosition(leftPos);
-          rightObj.getWorldPosition(rightPos);
-          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
-          playerSphere.object3D.parent.worldToLocal(mid);
-          playerSphere.object3D.position.copy(mid);
-        }
-      }
-    });
-
-    document.addEventListener('DOMContentLoaded', function () {
-      document.querySelector('#cameraRig').setAttribute('player-follow-hands', '');
-    });
-
-    function vibrateControllers(duration = 0.4, intensity = 1.0) {
-      const hands = ['leftHand', 'rightHand'];
-      hands.forEach(handId => {
-        const hand = document.getElementById(handId);
-        if (!hand) return;
-        const gamepad = hand.components['oculus-touch-controls'] &&
-                        hand.components['oculus-touch-controls'].controller &&
-                        hand.components['oculus-touch-controls'].controller.gamepad;
-        if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
-          try {
-            gamepad.hapticActuators[0].pulse(intensity, duration * 1000);
-          } catch (e) { /* Error handling removed */ }
-        }
-      });
-    }
-
-    function spawnParticles(origin, count) {
-      const scene = document.querySelector('a-scene');
-      for (let i = 0; i < count; i++) {
-        const p = document.createElement('a-sphere');
-        p.setAttribute('radius', 0.01 + Math.random() * 0.03);
-        p.setAttribute('color', '#FFD600');
-        const theta = Math.random() * 2 * Math.PI;
-        const phi = Math.acos(2 * Math.random() - 1);
-        const dir = new THREE.Vector3(
-          Math.sin(phi) * Math.cos(theta),
-          Math.sin(phi) * Math.sin(theta),
-          Math.cos(phi)
-        ).multiplyScalar(0.5 + Math.random() * 1.5);
-
-        p.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
-        p.setAttribute('particle-move-fade', {vx: dir.x, vy: dir.y, vz: dir.z});
-        scene.appendChild(p);
-      }
-    }
-
-    AFRAME.registerComponent('particle-move-fade', {
-      schema: {
-        vx: {type: 'number', default: 0},
-        vy: {type: 'number', default: 0},
-        vz: {type: 'number', default: 0}
-      },
-      init: function () {
-        this.life = 0;
-      },
-      tick: function (time, dt) {
-        this.life += dt;
-        this.el.object3D.position.x += this.data.vx * dt / 1000;
-        this.el.object3D.position.y += this.data.vy * dt / 1000;
-        this.el.object3D.position.z += this.data.vz * dt / 1000;
-
-        this.el.object3D.position.y -= 0.5 * dt / 1000;
-
-        if (this.life > 100) {
-          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 100) / 700, 0));
-        }
-        if (this.life > 800) {
-          this.el.parentNode && this.el.parentNode.removeChild(this.el);
-        }
-      }
-    });
+    // A-Frame handles most of the AR setup automatically.
+    // The <a-scene> tag with the 'webxr' and 'vr-mode-ui' components
+    // does the heavy lifting. This script is just to confirm.
+    // The #arButton will automatically appear when WebXR AR is available.
   </script>
-</a-scene>
 </body>
 </html>
