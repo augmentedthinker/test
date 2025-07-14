@@ -1,370 +1,215 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>Tetris Game</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>
-        body {
-            background: linear-gradient(135deg, #232526, #414345);
-            font-family: 'Segoe UI', Arial, sans-serif;
-            color: #fff;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            margin: 0;
-        }
-        h1 {
-            margin-top: 30px;
-            font-size: 2.5em;
-            letter-spacing: 2px;
-            color: #00ffc3;
-            text-shadow: 2px 2px 8px #222;
-        }
-        #tetris-container {
-            display: flex;
-            gap: 40px;
-            margin-top: 30px;
-        }
-        #tetris {
-            background: #222;
-            border-radius: 10px;
-            box-shadow: 0 8px 32px 0 rgba(0,0,0,0.37);
-            border: 4px solid #00ffc3;
-        }
-        #sidebar {
-            display: flex;
-            flex-direction: column;
-            gap: 30px;
-            align-items: center;
-        }
-        #score, #level, #lines {
-            font-size: 1.3em;
-            background: rgba(0,255,195,0.12);
-            padding: 10px 25px;
-            border-radius: 8px;
-            min-width: 120px;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,255,195,0.10);
-        }
-        #next {
-            background: #333;
-            border: 2px solid #00ffc3;
-            border-radius: 8px;
-            width: 100px;
-            height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        #controls {
-            margin-top: 40px;
-            background: rgba(0,255,195,0.06);
-            border-radius: 8px;
-            padding: 14px 20px;
-            font-size: 1.1em;
-            color: #b2fff4;
-            box-shadow: 0 2px 8px rgba(0,255,195,0.08);
-        }
-        .btn {
-            margin-top: 10px;
-            padding: 8px 20px;
-            background: #00ffc3;
-            color: #222;
-            border: none;
-            border-radius: 6px;
-            font-size: 1em;
-            cursor: pointer;
-            transition: background 0.2s;
-        }
-        .btn:hover {
-            background: #00cfa6;
-        }
-    </style>
+    <title>Complete VR Experience</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
-    <h1>Tetris</h1>
-    <div id="tetris-container">
-        <canvas id="tetris" width="240" height="480"></canvas>
-        <div id="sidebar">
-            <div id="score">Score: 0</div>
-            <div id="level">Level: 1</div>
-            <div id="lines">Lines: 0</div>
-            <div>
-                <div style="margin-bottom:8px;">Next:</div>
-                <canvas id="next" width="80" height="80"></canvas>
-            </div>
-            <button class="btn" onclick="restartGame()">Restart</button>
-        </div>
-    </div>
-    <div id="controls">
-        <strong>Controls:</strong><br>
-        ← → : Move left/right<br>
-        ↑ : Rotate<br>
-        ↓ : Soft drop<br>
-        Space: Hard drop<br>
-        R: Restart
-    </div>
+    <a-scene>
+        <a-plane
+            position="0 0 -4"
+            rotation="-90 0 0"
+            width="10"
+            height="10"
+            color="#7BC8A4"
+        ></a-plane>
+
+        <a-sky
+            color="#87CEEB"
+        ></a-sky>
+
+        <a-entity
+            id="player-rig"
+            movement-controls="speed: 0.1;"
+            position="0 0 0"
+        >
+            <a-entity
+                id="camera"
+                camera
+                look-controls
+                position="0 1.6 0"
+            ></a-entity>
+
+            <a-entity
+                id="leftHand"
+                oculus-touch-controls="hand: left"
+                raycaster="objects: .clickable; far: 10;"
+                cursor="rayOrigin: cursor;"
+            ></a-entity>
+
+            <a-entity
+                id="rightHand"
+                oculus-touch-controls="hand: right"
+                raycaster="objects: .clickable; far: 10;"
+                cursor="rayOrigin: cursor;"
+            ></a-entity>
+        </a-entity>
+
+        <a-box
+            position="-2 1 -5"
+            color="red"
+            scale="0.5 0.5 0.5"
+            class="clickable"
+            event-set__click="material.color: green"
+            fire-sphere="targetCamera: #camera; speed: 2;"
+        ></a-box>
+
+        <a-sphere
+            position="2 1 -5"
+            color="yellow"
+            radius="0.5"
+            class="clickable"
+            event-set__click="material.color: blue"
+            fire-sphere="targetCamera: #camera; speed: 2;"
+        ></a-sphere>
+
+        <a-sphere
+            id="playerBody"
+            radius="0.3"
+            color="#ADD8E6"
+            opacity="0.7"
+            body-tracker="leftHand: #leftHand; rightHand: #rightHand"
+            sphere-collider="objects: .projectile;"
+            event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100"
+        ></a-sphere>
+
+    </a-scene>
+
     <script>
-        // --- Tetris Game Logic ---
-        const canvas = document.getElementById('tetris');
-        const context = canvas.getContext('2d');
-        context.scale(24, 24);
+        // Custom A-Frame component to track the midpoint between two entities (Player Body Tracker)
+        AFRAME.registerComponent('body-tracker', {
+            schema: {
+                leftHand: {type: 'selector'}, // Selector for the left hand entity
+                rightHand: {type: 'selector'} // Selector for the right hand entity
+            },
 
-        const nextCanvas = document.getElementById('next');
-        const nextCtx = nextCanvas.getContext('2d');
-        nextCtx.scale(20, 20);
+            init: function () {
+                this.leftHandEl = this.data.leftHand;
+                this.rightHandEl = this.data.rightHand;
 
-        const ROWS = 20;
-        const COLS = 10;
-
-        const colors = [
-            null,
-            '#00f0f0', // I
-            '#0000f0', // J
-            '#f0a000', // L
-            '#f0f000', // O
-            '#00f000', // S
-            '#a000f0', // T
-            '#f00000', // Z
-        ];
-
-        const tetrominoes = [
-            [],
-            [[0,1],[1,1],[2,1],[3,1]], // I
-            [[0,0],[0,1],[1,1],[2,1]], // J
-            [[2,0],[0,1],[1,1],[2,1]], // L
-            [[1,0],[2,0],[1,1],[2,1]], // O
-            [[1,0],[2,0],[0,1],[1,1]], // S
-            [[1,0],[0,1],[1,1],[2,1]], // T
-            [[0,0],[1,0],[1,1],[2,1]], // Z
-        ];
-
-        function createMatrix(w, h) {
-            const matrix = [];
-            while (h--) matrix.push(new Array(w).fill(0));
-            return matrix;
-        }
-
-        function drawMatrix(matrix, offset, ctx = context) {
-            matrix.forEach((row, y) => {
-                row.forEach((value, x) => {
-                    if (value) {
-                        ctx.fillStyle = colors[value];
-                        ctx.fillRect(x + offset.x, y + offset.y, 1, 1);
-                        ctx.strokeStyle = '#333';
-                        ctx.strokeRect(x + offset.x, y + offset.y, 1, 1);
-                    }
-                });
-            });
-        }
-
-        function merge(arena, player) {
-            player.matrix.forEach((row, y) => {
-                row.forEach((value, x) => {
-                    if (value) {
-                        arena[y + player.pos.y][x + player.pos.x] = value;
-                    }
-                });
-            });
-        }
-
-        function collide(arena, player) {
-            const m = player.matrix;
-            const o = player.pos;
-            for (let y = 0; y < m.length; ++y) {
-                for (let x = 0; x < m[y].length; ++x) {
-                    if (m[y][x] &&
-                        (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
-                        return true;
-                    }
-                }
-            }
-            return false;
-        }
-
-        function rotate(matrix, dir) {
-            for (let y = 0; y < matrix.length; ++y) {
-                for (let x = 0; x < y; ++x) {
-                    [matrix[x][y], matrix[y][x]] = [matrix[y][x], matrix[x][y]];
-                }
-            }
-            if (dir > 0) {
-                matrix.forEach(row => row.reverse());
-            } else {
-                matrix.reverse();
-            }
-        }
-
-        function createPiece(type) {
-            const shape = tetrominoes[type];
-            const matrix = createMatrix(4, 4);
-            shape.forEach(([x, y]) => matrix[y][x] = type);
-            return matrix;
-        }
-
-        function playerDrop() {
-            player.pos.y++;
-            if (collide(arena, player)) {
-                player.pos.y--;
-                merge(arena, player);
-                playerReset();
-                arenaSweep();
-                updateScore();
-            }
-            dropCounter = 0;
-        }
-
-        function playerMove(dir) {
-            player.pos.x += dir;
-            if (collide(arena, player)) {
-                player.pos.x -= dir;
-            }
-        }
-
-        function playerRotate(dir) {
-            const pos = player.pos.x;
-            let offset = 1;
-            rotate(player.matrix, dir);
-            while (collide(arena, player)) {
-                player.pos.x += offset;
-                offset = -(offset + (offset > 0 ? 1 : -1));
-                if (offset > player.matrix[0].length) {
-                    rotate(player.matrix, -dir);
-                    player.pos.x = pos;
+                if (!this.leftHandEl || !this.rightHandEl) {
+                    console.warn("body-tracker: Could not find one or both hand entities.");
                     return;
                 }
-            }
-        }
 
-        function arenaSweep() {
-            let rowCount = 1;
-            outer: for (let y = arena.length - 1; y >= 0; --y) {
-                for (let x = 0; x < arena[y].length; ++x) {
-                    if (!arena[y][x]) continue outer;
+                this.leftHandPosition = new AFRAME.THREE.Vector3();
+                this.rightHandPosition = new AFRAME.THREE.Vector3();
+                this.midpoint = new AFRAME.THREE.Vector3();
+            },
+
+            tick: function () {
+                // Ensure hands are still valid elements
+                if (!this.leftHandEl.object3D || !this.rightHandEl.object3D) {
+                    return;
                 }
-                const row = arena.splice(y, 1)[0].fill(0);
-                arena.unshift(row);
-                y++;
-                player.score += rowCount * 100;
-                player.lines++;
-                if (player.lines % 10 === 0) player.level++;
-                rowCount *= 2;
-            }
-        }
 
-        function playerReset() {
-            player.matrix = nextPiece.matrix;
-            player.type = nextPiece.type;
-            player.pos.y = 0;
-            player.pos.x = Math.floor(COLS / 2) - 2;
-            nextPiece.type = Math.floor(Math.random() * 7) + 1;
-            nextPiece.matrix = createPiece(nextPiece.type);
-            if (collide(arena, player)) {
-                arena.forEach(row => row.fill(0));
-                player.score = 0;
-                player.level = 1;
-                player.lines = 0;
-                updateScore();
-            }
-            drawNext();
-        }
+                // Get world positions of the hands
+                this.leftHandEl.object3D.getWorldPosition(this.leftHandPosition);
+                this.rightHandEl.object3D.getWorldPosition(this.rightHandPosition);
 
-        function drawNext() {
-            nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-            drawMatrix(nextPiece.matrix, {x: 0, y: 0}, nextCtx);
-        }
+                // Calculate midpoint
+                this.midpoint.copy(this.leftHandPosition).lerp(this.rightHandPosition, 0.5);
 
-        function updateScore() {
-            document.getElementById('score').textContent = 'Score: ' + player.score;
-            document.getElementById('level').textContent = 'Level: ' + player.level;
-            document.getElementById('lines').textContent = 'Lines: ' + player.lines;
-        }
-
-        function draw() {
-            context.fillStyle = '#222';
-            context.fillRect(0, 0, COLS, ROWS);
-            drawMatrix(arena, {x:0, y:0});
-            drawMatrix(player.matrix, player.pos);
-        }
-
-        let dropCounter = 0;
-        let dropInterval = 1000;
-
-        let lastTime = 0;
-
-        function update(time = 0) {
-            dropInterval = Math.max(100, 1000 - (player.level - 1) * 100);
-            const deltaTime = time - lastTime;
-            lastTime = time;
-            dropCounter += deltaTime;
-            if (dropCounter > dropInterval) {
-                playerDrop();
-            }
-            draw();
-            requestAnimationFrame(update);
-        }
-
-        function hardDrop() {
-            while (!collide(arena, player)) {
-                player.pos.y++;
-            }
-            player.pos.y--;
-            merge(arena, player);
-            playerReset();
-            arenaSweep();
-            updateScore();
-            dropCounter = 0;
-        }
-
-        function restartGame() {
-            arena.forEach(row => row.fill(0));
-            player.score = 0;
-            player.level = 1;
-            player.lines = 0;
-            playerReset();
-            updateScore();
-        }
-
-        document.addEventListener('keydown', event => {
-            if (event.code === 'ArrowLeft') {
-                playerMove(-1);
-            } else if (event.code === 'ArrowRight') {
-                playerMove(1);
-            } else if (event.code === 'ArrowDown') {
-                playerDrop();
-            } else if (event.code === 'ArrowUp') {
-                playerRotate(1);
-            } else if (event.code === 'Space') {
-                hardDrop();
-            } else if (event.code === 'KeyR') {
-                restartGame();
+                // Set the sphere's position to the midpoint
+                this.el.object3D.position.copy(this.midpoint);
+                this.el.object3D.position.y -= 0.5; // Adjust Y to be lower than the hand midpoint
             }
         });
 
-        // --- Initialization ---
-        const arena = createMatrix(COLS, ROWS);
-        const player = {
-            pos: {x: 0, y: 0},
-            matrix: null,
-            score: 0,
-            level: 1,
-            lines: 0,
-            type: 0
-        };
-        const nextPiece = {
-            type: Math.floor(Math.random() * 7) + 1,
-            matrix: null
-        };
-        nextPiece.matrix = createPiece(nextPiece.type);
+        // Custom A-Frame component for objects that fire spheres
+        AFRAME.registerComponent('fire-sphere', {
+            schema: {
+                targetCamera: {type: 'selector', default: '#camera'}, // The camera to target
+                speed: {type: 'number', default: 1.5}, // Speed of the fired sphere
+                sphereRadius: {type: 'number', default: 0.1}, // Radius of the fired sphere
+                sphereColor: {type: 'color', default: 'white'}, // Color of the fired sphere
+                lifeTime: {type: 'number', default: 5000} // How long sphere exists in ms
+            },
 
-        playerReset();
-        updateScore();
-        update();
+            init: function () {
+                const el = this.el; // The entity this component is attached to (the clickable box/sphere)
+                const data = this.data; // The schema data for this component
 
-        // Expose restart for button
-        window.restartGame = restartGame;
+                this.targetCameraEl = data.targetCamera;
+                if (!this.targetCameraEl) {
+                    console.error("fire-sphere: Target camera not found!");
+                    return;
+                }
+
+                // Add an event listener for the click event on the attached entity
+                el.addEventListener('click', () => {
+                    // Create a new sphere element
+                    const sphere = document.createElement('a-sphere');
+
+                    // Set its properties based on component schema
+                    sphere.setAttribute('radius', data.sphereRadius);
+                    sphere.setAttribute('color', data.sphereColor);
+                    sphere.setAttribute('class', 'projectile'); // Add a class for collision detection!
+
+                    // Get the world position of the clickable object (where the sphere originates)
+                    const originPos = new AFRAME.THREE.Vector3();
+                    el.object3D.getWorldPosition(originPos);
+                    sphere.setAttribute('position', `${originPos.x} ${originPos.y} ${originPos.z}`);
+
+                    // Get the world position of the camera (the target)
+                    const targetPos = new AFRAME.THREE.Vector3();
+                    this.targetCameraEl.object3D.getWorldPosition(targetPos);
+
+                    // Calculate the direction vector from the origin to the target
+                    const direction = new AFRAME.THREE.Vector3();
+                    direction.subVectors(targetPos, originPos).normalize(); // Normalize to get a unit vector
+
+                    // Store the velocity for the tick function
+                    this.sphereVelocity = direction.multiplyScalar(data.speed);
+
+                    // Attach a custom component to make the sphere move
+                    sphere.setAttribute('projectile-motion', `velocity: ${this.sphereVelocity.x} ${this.sphereVelocity.y} ${this.sphereVelocity.z}; lifeTime: ${data.lifeTime}`);
+
+                    // Append the sphere to the scene
+                    el.sceneEl.appendChild(sphere);
+                });
+            }
+        });
+
+        // Custom A-Frame component for moving fired spheres (Projectiles)
+        AFRAME.registerComponent('projectile-motion', {
+            schema: {
+                velocity: {type: 'vec3'}, // Initial velocity vector
+                lifeTime: {type: 'number', default: 5000} // How long sphere exists in ms
+            },
+
+            init: function () {
+                this.velocity = new AFRAME.THREE.Vector3(this.data.velocity.x, this.data.velocity.y, this.data.velocity.z);
+                this.lifeTimer = this.data.lifeTime;
+                this.creationTime = performance.now(); // Get current time for lifetime tracking
+
+                // Listen for a 'hit' event. This will be triggered by sphere-collider on the body.
+                this.el.addEventListener('hit', (evt) => {
+                    // Only remove if the hit target is the playerBody
+                    if (evt.detail.el.id === 'playerBody') {
+                        this.el.remove(); // Remove the projectile itself on impact
+                    }
+                });
+            },
+
+            tick: function (time, deltaTime) {
+                // If the sphere has already been removed, stop ticking
+                if (!this.el.parentNode) {
+                    return;
+                }
+
+                // Update position based on velocity and deltaTime (time elapsed since last frame)
+                // Convert deltaTime from milliseconds to seconds for consistent units
+                const deltaSeconds = deltaTime / 1000;
+                this.el.object3D.position.addScaledVector(this.velocity, deltaSeconds);
+
+                // Check if the sphere's lifetime has expired
+                if (time - this.creationTime > this.lifeTimer) {
+                    this.el.remove(); // Remove the sphere from the scene
+                }
+            }
+        });
     </script>
 </body>
 </html>
