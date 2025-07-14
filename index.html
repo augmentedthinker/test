@@ -34,15 +34,15 @@
             <a-entity
                 id="leftHand"
                 oculus-touch-controls="hand: left"
-                raycaster="objects: .clickable; far: 10;"
-                cursor="rayOrigin: cursor;"
+                raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #FF00FF; lineOpacity: 0.5;"
+                cursor="rayOrigin: entity"
             ></a-entity>
 
             <a-entity
                 id="rightHand"
                 oculus-touch-controls="hand: right"
-                raycaster="objects: .clickable; far: 10;"
-                cursor="rayOrigin: cursor;"
+                raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #00FFFF; lineOpacity: 0.5;"
+                cursor="rayOrigin: entity"
             ></a-entity>
         </a-entity>
 
