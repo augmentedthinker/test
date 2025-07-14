@@ -2,223 +2,245 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AR Tetris (Meta Quest 2/3)</title>
-  <!-- A-Frame 1.7.0 for AR/WebXR -->
-  <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+  <title>Tetris - Game Boy Retro</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Orbitron font for retro LCD look -->
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&display=swap" rel="stylesheet">
   <style>
-    body { margin: 0; background: #111; }
-    #gameCanvas { display: none; }
+    body {
+      background: linear-gradient(135deg, #8b956d, #c4cfa1);
+      min-height: 100vh; margin: 0; display: flex; align-items: center; justify-content: center;
+      font-family: 'Orbitron', monospace;
+    }
+    .gameboy {
+      background: #aab674;
+      border-radius: 24px;
+      box-shadow: 8px 8px 24px #3a4220, inset 0 8px 28px #fff8;
+      padding: 36px 32px 32px 32px;
+      width: 430px;
+      border: 4px solid #545b2f;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .screen-container {
+      background: #323825;
+      border-radius: 14px;
+      padding: 18px;
+      margin-bottom: 18px;
+      width: 100%;
+      box-shadow: inset 2px 2px 12px #0009;
+      display: flex; flex-direction: row;
+    }
+    .game-area {
+      background: #7b9b3a;
+      border-radius: 8px;
+      box-shadow: inset 1px 2px 7px #404819;
+      width: 212px;
+      height: 426px;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+      margin-right: 18px;
+    }
+    .game-board {
+      display: grid;
+      grid-template-columns: repeat(10, 20px);
+      grid-template-rows: repeat(20, 20px);
+      gap: 1px;
+      width: 202px; height: 402px;
+      background: #b8c27a;
+      border: 2px solid #555c2f;
+    }
+    .cell { width: 20px; height: 20px; background: #b2ba7e; }
+    .cell.filled { background: #4d6526; }
+    .cell.active { background: #30531c; }
+    .side-panel {
+      flex: 1; display: flex; flex-direction: column; gap: 14px;
+    }
+    .info-box {
+      background: #b2ba7e;
+      border: 2px solid #6b7353;
+      border-radius: 7px;
+      padding: 9px 0 7px 0;
+      text-align: center;
+      font-size: 14px;
+      box-shadow: inset 1px 1px 3px #fff3;
+    }
+    .next-piece {
+      display: grid;
+      grid-template-columns: repeat(4, 14px);
+      grid-template-rows: repeat(4, 14px);
+      gap: 1px;
+      margin: 5px auto;
+      justify-content: center;
+    }
+    .next-cell { width: 14px; height: 14px; background: #b2ba7e; }
+    .next-cell.filled { background: #4d6526; }
+    .controls {
+      font-size: 11px; color: #334216; margin-top: 13px; text-align: center;
+      letter-spacing: 1px;
+    }
+    .game-over {
+      position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%);
+      background: rgba(30,33,36,0.94); color: #b8c27a;
+      border-radius: 10px; text-align: center;
+      font-size: 23px; padding: 20px 40px; z-index: 3;
+      border: 2px solid #6b7353; box-shadow: 0 0 6px #223;
+      display: none;
+    }
+    button {
+      margin-top: 8px; font-family: inherit; font-size: 15px;
+      background: #6b7353; color: #f6fbe9; border: none; border-radius: 6px;
+      padding: 7px 20px; cursor: pointer; font-weight: 700; box-shadow: 2px 2px 4px #5556;
+    }
+    button:active { background: #4d6526; }
+    @media (max-width: 520px) {
+      .gameboy { width: 98vw; padding: 4vw; }
+      .screen-container { flex-direction: column; }
+      .side-panel { flex-direction: row; gap: 10px; }
+    }
   </style>
 </head>
 <body>
-  <a-scene
-    webxr="requiredFeatures: local-floor; optionalFeatures: hit-test"
-    renderer="colorManagement: true; antialias: true; alpha: true;"
-    xr-mode-ui>
-    <a-assets>
-      <canvas id="gameCanvas" width="512" height="512"></canvas>
-    </a-assets>
-    <!-- AR floating Tetris screen -->
-    <a-plane id="tetrisScreen"
-             class="clickable"
-             position="0 1.2 -2"
-             width="1.0" height="1.2"
-             material="shader: flat; src: #gameCanvas;">
-    </a-plane>
-    <!-- Quest controllers -->
-    <a-entity meta-touch-controls="hand: left" raycaster="objects: .clickable; far: 5"></a-entity>
-    <a-entity meta-touch-controls="hand: right" raycaster="objects: .clickable; far: 5" embedded-game-interactive></a-entity>
-  </a-scene>
-
-  <!-- Canvas-to-Texture + Controller Bridge -->
+  <div class="gameboy">
+    <div class="screen-container">
+      <div class="game-area">
+        <div class="game-board" id="gameBoard"></div>
+        <div class="game-over" id="gameOver">
+          <div>GAME OVER</div>
+          <div style="font-size:15px; margin-top:10px;">Press Enter/Space or Tap</div>
+          <button onclick="resetGame()">Restart</button>
+        </div>
+      </div>
+      <div class="side-panel">
+        <div class="info-box">
+          <div>SCORE</div>
+          <div id="score" style="font-size:22px;">0</div>
+        </div>
+        <div class="info-box">
+          <div>LINES</div>
+          <div id="lines" style="font-size:19px;">0</div>
+        </div>
+        <div class="info-box">
+          <div>NEXT</div>
+          <div class="next-piece" id="nextPiece"></div>
+        </div>
+      </div>
+    </div>
+    <div class="controls">
+      ⬅️➡️ Move &nbsp; ⬆️ Rotate &nbsp; ⬇️ Drop <br>
+      Space/Enter = Start/Hard Drop<br>
+      Touch or Click board = play!
+    </div>
+  </div>
   <script>
-  // Keep the A-Frame plane's texture synced with the game canvas
-  AFRAME.registerComponent('canvas-texture', {
-    init: function () {
-      const canvasEl = document.getElementById('gameCanvas');
-      this.texture = new THREE.CanvasTexture(canvasEl);
-      const mesh = this.el.getObject3D('mesh');
-      mesh.material.map = this.texture;
-      mesh.material.needsUpdate = true;
-      mesh.material.flatShading = true;
-    },
-    tick: function () {
-      if (this.texture) this.texture.needsUpdate = true;
+    // ---- Tetris Logic ----
+    const BOARD_W=10, BOARD_H=20, COLORS=['','#4d6526'], SHAPES=[
+      [[1,1,1,1]], [[1,1],[1,1]], [[0,1,0],[1,1,1]], [[1,1,0],[0,1,1]], [[0,1,1],[1,1,0]], [[1,0,0],[1,1,1]], [[0,0,1],[1,1,1]]
+    ];
+    let board, falling, fx, fy, frot, next, score=0, lines=0, run=false, over=false, dropTimer, fallRate=500;
+    const boardDiv = document.getElementById('gameBoard'), overDiv = document.getElementById('gameOver');
+    // DOM cell cache
+    let cellDivs = [];
+
+    function resetGame() {
+      board = Array.from({length:BOARD_H},()=>Array(BOARD_W).fill(0));
+      falling=randShape(); fx=3; fy=0; frot=0; next=randShape(); score=0; lines=0; fallRate=500; run=true; over=false;
+      overDiv.style.display="none"; update(); loop();
     }
-  });
-  // Attach to tetrisScreen
-  document.addEventListener('DOMContentLoaded', function () {
-    document.getElementById('tetrisScreen').setAttribute('canvas-texture', '');
-  });
-
-  // Raycast-controller -> canvas mouse event bridge
-  AFRAME.registerComponent('embedded-game-interactive', {
-    init: function () {
-      this.gameEl = document.querySelector('#tetrisScreen');
-      this.canvasEl = document.getElementById('gameCanvas');
-      this.el.addEventListener('triggerdown', this.onTriggerDown.bind(this));
-      this.el.addEventListener('triggerup', this.onTriggerUp.bind(this));
-    },
-    onTriggerDown: function () {
-      const intersection = this.el.components.raycaster.getIntersection(this.gameEl);
-      if (!intersection) return;
-      const uv = intersection.uv;
-      const cx = uv.x * this.canvasEl.width;
-      const cy = (1 - uv.y) * this.canvasEl.height;
-      const opts = {clientX: cx, clientY: cy, button: 0};
-      this.canvasEl.dispatchEvent(new MouseEvent('mousemove', opts));
-      this.canvasEl.dispatchEvent(new MouseEvent('mousedown', opts));
-    },
-    onTriggerUp: function () {
-      const intersection = this.el.components.raycaster.getIntersection(this.gameEl);
-      if (!intersection) return;
-      const uv = intersection.uv;
-      const cx = uv.x * this.canvasEl.width;
-      const cy = (1 - uv.y) * this.canvasEl.height;
-      const opts = {clientX: cx, clientY: cy, button: 0};
-      this.canvasEl.dispatchEvent(new MouseEvent('mouseup', opts));
-      this.canvasEl.dispatchEvent(new MouseEvent('click', opts));
+    function randShape() {
+      const i = Math.floor(Math.random()*SHAPES.length);
+      return {shape: SHAPES[i], id:1, type:i};
     }
-  });
-  </script>
-
-  <!-- Minimal Canvas Tetris (no DOM, just pure Canvas2D) -->
-  <script>
-  // Simple Tetris on Canvas (AR-optimized)
-  const ROWS = 20, COLS = 10, BLOCK = 24;
-  const COLORS = ['#111', '#5cb85c', '#5bc0de', '#f0ad4e', '#d9534f', '#428bca', '#e67e22', '#9b59b6'];
-  const PIECES = [
-    [[1,1,1,1]], // I
-    [[1,1],[1,1]], // O
-    [[0,1,0],[1,1,1]], // T
-    [[0,1,1],[1,1,0]], // S
-    [[1,1,0],[0,1,1]], // Z
-    [[1,0,0],[1,1,1]], // J
-    [[0,0,1],[1,1,1]]  // L
-  ];
-  let board, piece, nextPiece, pos, over = false, score = 0, dropTimer = 0, speed = 600;
-
-  function randomPiece() {
-    const id = Math.floor(Math.random()*PIECES.length);
-    return {shape: PIECES[id], id: id+1, x: 3, y: -1};
-  }
-  function reset() {
-    board = Array.from({length: ROWS},()=>Array(COLS).fill(0));
-    over = false; score = 0; speed = 600; nextPiece = randomPiece(); dropNew();
-  }
-  function dropNew() {
-    piece = nextPiece; nextPiece = randomPiece();
-    pos = {x: piece.x, y: piece.y};
-    if (collide(piece, pos.x, pos.y)) over = true;
-  }
-  function rotate(shape) {
-    return shape[0].map((_,i)=>shape.map(row=>row[i]).reverse());
-  }
-  function collide(p, x, y) {
-    for (let r=0; r<p.shape.length; r++)
-      for (let c=0; c<p.shape[r].length; c++)
-        if (p.shape[r][c]) {
-          let nx = x+c, ny = y+r;
-          if (nx<0||nx>=COLS||ny>=ROWS||(ny>=0&&board[ny][nx])) return true;
+    function rotate(shape) {
+      return shape[0].map((_,i)=>shape.map(r=>r[i]).reverse());
+    }
+    function canMove(s,x,y,rot) {
+      const sh = rot?rotate(s.shape):s.shape;
+      for (let r=0;r<sh.length;r++)
+        for(let c=0;c<sh[r].length;c++)
+          if(sh[r][c]&&(y+r<0||x+c<0||x+c>=BOARD_W||y+r>=BOARD_H||board[y+r][x+c]))return false;
+      return true;
+    }
+    function fix() {
+      let sh = frot?rotate(falling):falling.shape;
+      for(let r=0;r<sh.length;r++)
+        for(let c=0;c<sh[r].length;c++)
+          if(sh[r][c]&&fy+r>=0)board[fy+r][fx+c]=falling.id;
+      clear();
+      falling=next; next=randShape(); fx=3; fy=0; frot=0;
+      if(!canMove(falling,fx,fy,frot)){run=false;over=true;overDiv.style.display="block";}
+    }
+    function clear() {
+      for(let r=BOARD_H-1;r>=0;r--) {
+        if(board[r].every(v=>v)){board.splice(r,1);board.unshift(Array(BOARD_W).fill(0));score+=100;lines++;}
+      }
+      fallRate=Math.max(80,500-~~(lines/5)*35);
+    }
+    function loop() {
+      if(!run)return;
+      if(canMove(falling,fx,fy+1,frot)){fy++;}
+      else{fix();}
+      update();
+      dropTimer=setTimeout(loop,fallRate);
+    }
+    function hardDrop(){
+      while(canMove(falling,fx,fy+1,frot))fy++;
+      fix();update();
+    }
+    function move(dx){
+      if(canMove(falling,fx+dx,fy,frot)){fx+=dx;update();}
+    }
+    function rotateF(){
+      if(canMove(falling,fx,fy,(frot+1)%4)){frot=(frot+1)%4;update();}
+    }
+    function softDrop(){
+      if(canMove(falling,fx,fy+1,frot)){fy++;update();}
+    }
+    function update(){
+      // Render board
+      if (!cellDivs.length) {
+        boardDiv.innerHTML = '';
+        for(let r=0;r<BOARD_H;r++)for(let c=0;c<BOARD_W;c++){
+          let d=document.createElement('div');d.className='cell';boardDiv.appendChild(d);cellDivs.push(d);
         }
-    return false;
-  }
-  function merge(p, x, y) {
-    for (let r=0; r<p.shape.length; r++)
-      for (let c=0; c<p.shape[r].length; c++)
-        if (p.shape[r][c] && y+r>=0) board[y+r][x+c]=p.id;
-  }
-  function clearRows() {
-    for (let r=ROWS-1; r>=0; r--){
-      if (board[r].every(x=>x)) {
-        board.splice(r,1); board.unshift(Array(COLS).fill(0)); score+=100; speed=Math.max(80,speed-20); r++;
+      }
+      // Draw board
+      for(let r=0;r<BOARD_H;r++)for(let c=0;c<BOARD_W;c++)
+        cellDivs[r*BOARD_W+c].className='cell'+(board[r][c]?' filled':'');
+      // Draw falling
+      let sh = frot?rotate(falling):falling.shape;
+      for(let r=0;r<sh.length;r++)
+        for(let c=0;c<sh[r].length;c++)
+          if(sh[r][c]&&fy+r>=0&&fy+r<BOARD_H&&fx+c>=0&&fx+c<BOARD_W)
+            cellDivs[(fy+r)*BOARD_W+fx+c].className='cell active';
+      // Score/lines
+      document.getElementById('score').textContent=score;
+      document.getElementById('lines').textContent=lines;
+      // Next piece
+      let nextBox=document.getElementById('nextPiece');nextBox.innerHTML='';
+      for(let r=0;r<4;r++)for(let c=0;c<4;c++){
+        let d=document.createElement('div');d.className='next-cell';
+        if(next.shape[r]&&next.shape[r][c])d.classList.add('filled');
+        nextBox.appendChild(d);
       }
     }
-  }
-  function step(ts) {
-    if (over) return;
-    if (!dropTimer) dropTimer = ts;
-    if (ts-dropTimer > speed) {
-      if (!collide(piece, pos.x, pos.y+1)) pos.y++;
-      else { merge(piece, pos.x, pos.y); clearRows(); dropNew(); if (over) setTimeout(reset,1200); }
-      dropTimer = ts;
-    }
-    draw();
-    requestAnimationFrame(step);
-  }
-  function draw() {
-    let ctx = document.getElementById('gameCanvas').getContext('2d');
-    ctx.clearRect(0,0,512,512);
-    // BG & grid
-    ctx.fillStyle='#222'; ctx.fillRect(0,0,512,512);
-    // Board
-    for (let r=0;r<ROWS;r++) for(let c=0;c<COLS;c++) {
-      if (board[r][c]) {
-        ctx.fillStyle = COLORS[board[r][c]];
-        ctx.fillRect(c*BLOCK+80, r*BLOCK+8, BLOCK-2, BLOCK-2);
-      }
-    }
-    // Current piece
-    if (!over)
-      for (let r=0;r<piece.shape.length;r++) for(let c=0;c<piece.shape[r].length;c++)
-        if (piece.shape[r][c]) {
-          ctx.fillStyle = COLORS[piece.id];
-          ctx.fillRect((pos.x+c)*BLOCK+80, (pos.y+r)*BLOCK+8, BLOCK-2, BLOCK-2);
-        }
-    // Next piece preview
-    ctx.fillStyle='#fff'; ctx.font='16px sans-serif'; ctx.fillText('NEXT', 360,38);
-    for (let r=0;r<4;r++) for(let c=0;c<4;c++){
-      ctx.strokeStyle='#555';ctx.strokeRect(360+c*BLOCK,60+r*BLOCK,BLOCK-2,BLOCK-2);
-      if(nextPiece.shape[r]&&nextPiece.shape[r][c]){
-        ctx.fillStyle=COLORS[nextPiece.id];
-        ctx.fillRect(360+c*BLOCK,60+r*BLOCK,BLOCK-2,BLOCK-2);
-      }
-    }
-    // Score
-    ctx.fillStyle='#fff';ctx.fillText('SCORE',360,180);
-    ctx.fillText(score,360,210);
-    // Game Over
-    if (over) {
-      ctx.fillStyle='rgba(0,0,0,0.8)';ctx.fillRect(90,210,300,80);
-      ctx.fillStyle='#fff';ctx.font='36px sans-serif';ctx.fillText('GAME OVER',145,260);
-      ctx.font='18px sans-serif';ctx.fillText('Restarting...', 200,290);
-    }
-  }
-  // Mouse/Touch/AR: rotate (center), move left/right, drop (bottom)
-  document.getElementById('gameCanvas').addEventListener('click', e=>{
-    if (over) return;
-    const x = e.clientX, y = e.clientY;
-    if (y > 440) drop();
-    else if (x < 200) move(-1);
-    else if (x > 320) move(1);
-    else rotateCurrent();
-    draw();
-  });
-  function rotateCurrent() {
-    let test = {shape: rotate(piece.shape), id: piece.id};
-    if (!collide(test, pos.x, pos.y)) piece.shape = test.shape;
-  }
-  function move(dx) {
-    if (!collide(piece, pos.x+dx, pos.y)) pos.x += dx;
-  }
-  function drop() {
-    while(!collide(piece, pos.x, pos.y+1)) pos.y++;
-    merge(piece,pos.x,pos.y); clearRows(); dropNew(); draw();
-  }
-  // Keyboard fallback (desktop only)
-  window.addEventListener('keydown',e=>{
-    if (over) return;
-    if (e.key==='ArrowLeft') move(-1);
-    if (e.key==='ArrowRight') move(1);
-    if (e.key==='ArrowUp') rotateCurrent();
-    if (e.key==='ArrowDown') drop();
-    draw();
-  });
-  // Start
-  reset();
-  draw();
-  requestAnimationFrame(step);
+    // Keyboard/touch
+    window.addEventListener('keydown',e=>{
+      if(over&&(e.key===' '||e.key==='Enter')){resetGame();return;}
+      if(!run)return;
+      if(e.key==='ArrowLeft')move(-1);
+      if(e.key==='ArrowRight')move(1);
+      if(e.key==='ArrowDown')softDrop();
+      if(e.key==='ArrowUp')rotateF();
+      if(e.key===' '||e.key==='Enter')hardDrop();
+    });
+    boardDiv.addEventListener('click',()=>{ if(over){resetGame();return;} hardDrop(); });
+    // Init
+    resetGame();
   </script>
 </body>
 </html>
