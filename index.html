@@ -1,330 +1,96 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebXR AR with Controllers</title>
+  <title>A-Frame WebXR Cube and Controllers (AR)</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: sans-serif;
-      background-color: #111;
-      color: #fff;
-    }
-    #info {
-      position: absolute;
-      top: 10px;
-      width: 100%;
-      text-align: center;
-      z-index: 100;
-      display: block;
-      padding: 10px 0;
-    }
-  </style>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe-extras@6.2.0/dist/aframe-extras.min.js"></script>
 </head>
 <body>
-  <div id="info">
-    WebXR AR with Controllers Demo
-  </div>
+  <a-scene
+    vr-mode-ui="enabled: false"
+    ar-mode-ui="enabled: true"
+    webxr="requiredFeatures: local; optionalFeatures: hit-test, dom-overlay;">
 
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
-      }
-    }
-  </script>
+    <a-box
+      id="arCube"
+      color="#0077CC"
+      position="0 0 -1"
+      scale="0.2 0.2 0.2"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear;">
+    </a-box>
 
-  <script type="module">
-    import * as THREE from 'three';
+    <a-entity
+      id="leftHand"
+      oculus-touch-controls="hand: left"
+      laser-controls="hand: left"
+      raycaster="objects: #arCube; far: 5; showLine: false;">
+    </a-entity>
 
-    // --- Inlined ARButton.js ---
-    class ARButton {
-      static createButton(renderer, sessionInit = {}) {
-        const button = document.createElement('button');
+    <a-entity
+      id="rightHand"
+      oculus-touch-controls="hand: right"
+      laser-controls="hand: right"
+      raycaster="objects: #arCube; far: 5; showLine: false;">
+    </a-entity>
 
-        function showStartAR() {
-          if (sessionInit.domOverlay === undefined) {
-            const overlay = document.createElement('div');
-            overlay.style.display = 'none';
-            document.body.appendChild(overlay);
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', 38);
-            svg.setAttribute('height', 38);
-            svg.style.position = 'absolute';
-            svg.style.right = '20px';
-            svg.style.top = '20px';
-            svg.addEventListener('click', function() {
-              currentSession.end();
-            });
-            overlay.appendChild(svg);
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
-            path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', 2);
-            svg.appendChild(path);
-            if (sessionInit.optionalFeatures === undefined) {
-              sessionInit.optionalFeatures = [];
-            }
-            sessionInit.optionalFeatures.push('dom-overlay');
-            sessionInit.domOverlay = {
-              root: overlay
-            };
-          }
+    <a-entity camera look-controls></a-entity>
 
-          let currentSession = null;
+    <script>
+      // Get references to our cube and hands
+      const arCube = document.getElementById('arCube');
+      const leftHand = document.getElementById('leftHand');
+      const rightHand = document.getElementById('rightHand');
 
-          async function onSessionStarted(session) {
-            session.addEventListener('end', onSessionEnded);
-            renderer.xr.setReferenceSpaceType('local');
-            await renderer.xr.setSession(session);
-            button.textContent = 'STOP AR';
-            sessionInit.domOverlay.root.style.display = '';
-            currentSession = session;
-          }
+      // Store the initial Y position of the cube for resetting
+      let initialCubeYPosition = arCube.object3D.position.y;
+      const jumpAmount = 0.1; // How much the cube jumps
 
-          function onSessionEnded() {
-            currentSession.removeEventListener('end', onSessionEnded);
-            button.textContent = 'START AR';
-            sessionInit.domOverlay.root.style.display = 'none';
-            currentSession = null;
-          }
+      // Function to handle trigger press
+      function handleTriggerDown(event) {
+        // 'event.target' is the controller entity (leftHand or rightHand)
+        const controller = event.target;
 
-          button.style.display = '';
-          button.style.cursor = 'pointer';
-          button.style.left = 'calc(50% - 50px)';
-          button.style.width = '100px';
-          button.textContent = 'START AR';
-          button.onmouseenter = function() {
-            button.style.opacity = '1.0';
-          };
-          button.onmouseleave = function() {
-            button.style.opacity = '0.5';
-          };
-          button.onclick = function() {
-            if (currentSession === null) {
-              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-            } else {
-              currentSession.end();
-            }
-          };
+        // Make the laser visible
+        if (controller.components['laser-controls']) {
+          controller.components['laser-controls'].laser.visible = true;
         }
 
-        function disableButton() {
-          button.style.display = '';
-          button.style.cursor = 'auto';
-          button.style.left = 'calc(50% - 75px)';
-          button.style.width = '150px';
-          button.onmouseenter = null;
-          button.onmouseleave = null;
-          button.onclick = null;
-        }
-
-        function showARNotSupported() {
-          disableButton();
-          button.textContent = 'AR NOT SUPPORTED';
-        }
-
-        function stylizeElement(element) {
-          element.style.position = 'absolute';
-          element.style.bottom = '20px';
-          element.style.padding = '12px 6px';
-          element.style.border = '1px solid #fff';
-          element.style.borderRadius = '4px';
-          element.style.background = 'rgba(0,0,0,0.1)';
-          element.style.color = '#fff';
-          element.style.font = 'normal 13px sans-serif';
-          element.style.textAlign = 'center';
-          element.style.opacity = '0.5';
-          element.style.outline = 'none';
-          element.style.zIndex = '999';
-        }
-
-        if ('xr' in navigator) {
-          button.id = 'ARButton';
-          stylizeElement(button);
-          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
-            supported ? showStartAR() : showARNotSupported();
-          }).catch(showARNotSupported);
-          return button;
-        } else {
-          const message = document.createElement('a');
-          if (window.isSecureContext === false) {
-            message.href = document.location.href.replace(/^http:/, 'https:');
-            message.innerHTML = 'WEBXR NEEDS HTTPS';
-          } else {
-            message.href = 'https://immersiveweb.dev/';
-            message.innerHTML = 'WEBXR NOT AVAILABLE';
-          }
-          message.style.left = 'calc(50% - 90px)';
-          message.style.width = '180px';
-          message.style.textDecoration = 'none';
-          stylizeElement(message);
-          return message;
+        // Make the cube jump up
+        if (arCube) {
+          arCube.object3D.position.y = initialCubeYPosition + jumpAmount;
         }
       }
-    }
 
-    // --- Main Application Logic ---
-    let camera, scene, renderer;
-    let cube;
-    let controller1, controller2;
-    let controllerGrip1, controllerGrip2;
-    let laserPointer1, laserPointer2;
-    let cubeOriginalPosition = new THREE.Vector3();
-    let cubeJumped = false;
+      // Function to handle trigger release
+      function handleTriggerUp(event) {
+        const controller = event.target;
 
-    init();
-    animate();
+        // Hide the laser
+        if (controller.components['laser-controls']) {
+          controller.components['laser-controls'].laser.visible = false;
+        }
 
-    function init() {
-      // Create the main scene
-      scene = new THREE.Scene();
+        // Return the cube to its original position
+        if (arCube) {
+          arCube.object3D.position.y = initialCubeYPosition;
+        }
+      }
 
-      // Create a camera
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-      // Create the WebGL renderer and configure it for XR
-      renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true
+      // Add event listeners once the scene is loaded
+      document.querySelector('a-scene').addEventListener('loaded', function () {
+        // Ensure controllers are loaded before adding listeners
+        leftHand.addEventListener('model-loaded', () => {
+          leftHand.addEventListener('triggerdown', handleTriggerDown);
+          leftHand.addEventListener('triggerup', handleTriggerUp);
+        });
+        rightHand.addEventListener('model-loaded', () => {
+          rightHand.addEventListener('triggerdown', handleTriggerDown);
+          rightHand.addEventListener('triggerup', handleTriggerUp);
+        });
       });
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
-      document.body.appendChild(renderer.domElement);
-
-      // Add the AR button
-      document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['local']
-      }));
-
-      // Create the multi-colored cube
-      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const materials = [
-        new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
-        new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
-        new THREE.MeshBasicMaterial({ color: 0x0000ff }), // top
-        new THREE.MeshBasicMaterial({ color: 0xffff00 }), // bottom
-        new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
-        new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
-      ];
-      cube = new THREE.Mesh(geometry, materials);
-      cube.position.set(0, 0, -1);
-      cubeOriginalPosition.copy(cube.position);
-      scene.add(cube);
-
-      // Add lighting
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-      light.position.set(0.5, 1, 0.25);
-      scene.add(light);
-
-      // Setup controllers
-      setupControllers();
-
-      // Window resize handler
-      window.addEventListener('resize', onWindowResize, false);
-    }
-
-    function setupControllers() {
-      // Create controller instances
-      controller1 = renderer.xr.getController(0);
-      controller2 = renderer.xr.getController(1);
-
-      // Create controller grips (visual representation)
-      controllerGrip1 = renderer.xr.getControllerGrip(0);
-      controllerGrip2 = renderer.xr.getControllerGrip(1);
-
-      // Create simple controller representations
-      const controllerModelGeometry = new THREE.BoxGeometry(0.05, 0.05, 0.15);
-      const controllerModelMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
-      
-      const controllerMesh1 = new THREE.Mesh(controllerModelGeometry, controllerModelMaterial);
-      const controllerMesh2 = new THREE.Mesh(controllerModelGeometry, controllerModelMaterial);
-      
-      controllerGrip1.add(controllerMesh1);
-      controllerGrip2.add(controllerMesh2);
-
-      // Create laser pointers
-      const laserGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -1)
-      ]);
-      const laserMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-      
-      laserPointer1 = new THREE.Line(laserGeometry, laserMaterial);
-      laserPointer2 = new THREE.Line(laserGeometry, laserMaterial);
-      
-      // Initially hide laser pointers
-      laserPointer1.visible = false;
-      laserPointer2.visible = false;
-      
-      controller1.add(laserPointer1);
-      controller2.add(laserPointer2);
-
-      // Add event listeners for controller interactions
-      controller1.addEventListener('selectstart', onSelectStart);
-      controller1.addEventListener('selectend', onSelectEnd);
-      controller2.addEventListener('selectstart', onSelectStart);
-      controller2.addEventListener('selectend', onSelectEnd);
-
-      // Add controllers to scene
-      scene.add(controller1);
-      scene.add(controller2);
-      scene.add(controllerGrip1);
-      scene.add(controllerGrip2);
-    }
-
-    function onSelectStart(event) {
-      // Show laser pointer when trigger is pressed
-      if (event.target === controller1) {
-        laserPointer1.visible = true;
-      } else if (event.target === controller2) {
-        laserPointer2.visible = true;
-      }
-      
-      // Make cube jump
-      if (!cubeJumped) {
-        cube.position.y = cubeOriginalPosition.y + 0.1;
-        cubeJumped = true;
-      }
-    }
-
-    function onSelectEnd(event) {
-      // Hide laser pointer when trigger is released
-      if (event.target === controller1) {
-        laserPointer1.visible = false;
-      } else if (event.target === controller2) {
-        laserPointer2.visible = false;
-      }
-      
-      // Return cube to original position
-      if (cubeJumped) {
-        cube.position.copy(cubeOriginalPosition);
-        cubeJumped = false;
-      }
-    }
-
-    function onWindowResize() {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-
-    function animate() {
-      renderer.setAnimationLoop(render);
-    }
-
-    function render(timestamp, frame) {
-      // Rotate the cube
-      if (cube) {
-        cube.rotation.y += 0.01;
-        cube.rotation.x += 0.005;
-      }
-
-      // Render the scene
-      renderer.render(scene, camera);
-    }
-  </script>
+    </script>
+  </a-scene>
 </body>
 </html>
