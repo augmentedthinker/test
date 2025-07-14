@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Quest VR: Gamified Hits (Firing Fixed)</title>
+  <title>Quest VR: Gamified Hits (Dynamic Speed & Win Condition)</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 </head>
@@ -17,6 +17,7 @@
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
       <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="white" width="3"></a-text>
       <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
+      <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
     </a-entity>
     <a-entity id="leftHand"
               oculus-touch-controls="hand: left; model: true"
@@ -71,21 +72,46 @@
 
     AFRAME.registerComponent('game-manager', {
         schema: {
-            maxHits: {type: 'number', default: 3}
+            maxHits: {type: 'number', default: 3},
+            winTime: {type: 'number', default: 60000}, // 1 minute in milliseconds
+            initialProjectileSpeed: {type: 'number', default: 0.5}, // Super slow
+            maxProjectileSpeed: {type: 'number', default: 15.0} // Almost instantaneous
         },
         init: function () {
             this.hits = 0;
             this.maxHits = this.data.maxHits;
             this.hitCounterEl = document.querySelector('#hitCounter');
             this.gameOverTextEl = document.querySelector('#gameOverText');
+            this.winTextEl = document.querySelector('#winText'); // NEW: Win text element
             this.clickableSphere = document.querySelector('#colorSphere');
-            this.isGameOverFlag = false; // NEW: Flag to track game over state
+
+            this.isGameOverFlag = false;
+            this.hasWonFlag = false; // NEW: Flag for win state
+            this.gameEnded = false; // NEW: General flag for game conclusion
+            this.gameStartTime = performance.now(); // Record game start time
 
             this.updateDisplay();
         },
-        // NEW: Method to check if game is over
+        tick: function(time, deltaTime) {
+            if (this.gameEnded) return;
+
+            const elapsedTime = time - this.gameStartTime;
+
+            // Check for win condition
+            if (elapsedTime >= this.data.winTime && !this.hasWonFlag) {
+                this.winGame();
+            }
+        },
         isGameOver: function() {
-            return this.isGameOverFlag;
+            return this.isGameOverFlag || this.hasWonFlag; // Game is over if lost or won
+        },
+        getProjectileSpeed: function() { // NEW: Method to get dynamic projectile speed
+            const elapsedTime = performance.now() - this.gameStartTime;
+            // Calculate progress (0 to 1) based on elapsed time vs win time
+            const progress = Math.min(elapsedTime / this.data.winTime, 1);
+            // Interpolate speed between initial and max
+            return this.data.initialProjectileSpeed +
+                   (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
         },
         updateDisplay: function() {
             if (this.hitCounterEl) {
@@ -93,7 +119,7 @@
             }
         },
         registerHit: function() {
-            if (this.isGameOverFlag) return; // Prevent hits after game over
+            if (this.isGameOverFlag || this.hasWonFlag) return;
 
             this.hits++;
             this.updateDisplay();
@@ -103,12 +129,23 @@
             }
         },
         gameOver: function() {
-            this.isGameOverFlag = true; // Set game over flag
+            this.isGameOverFlag = true;
+            this.gameEnded = true; // Mark game as ended
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
+            this.disableSphereInteraction();
+        },
+        winGame: function() { // NEW: Win game function
+            this.hasWonFlag = true;
+            this.gameEnded = true; // Mark game as ended
+            if (this.winTextEl) {
+                this.winTextEl.setAttribute('visible', true);
+            }
+            this.disableSphereInteraction();
+        },
+        disableSphereInteraction: function() {
             if (this.clickableSphere) {
-                // Simplified: No need to remove specific listener, just remove components
                 this.clickableSphere.removeAttribute('shoot-on-click');
                 this.clickableSphere.removeAttribute('toggle-color-on-click');
                 this.clickableSphere.setAttribute('color', '#888');
@@ -140,11 +177,11 @@
       },
       reactToHit: function () {
         const gameManager = this.el.sceneEl.components['game-manager'];
-        if (!gameManager || gameManager.isGameOver()) return; // Check if game is over before reacting
+        if (!gameManager || gameManager.isGameOver()) return;
 
-        if (this.isReacting) return; // Prevent multiple reactions from a single hit
+        if (this.isReacting) return;
 
-        gameManager.registerHit(); // Register hit with the game manager
+        gameManager.registerHit();
 
         this.isReacting = true;
         let el = this.el;
@@ -224,19 +261,15 @@
 
     AFRAME.registerComponent('shoot-on-click', {
       schema: {
-        speed: {type: 'number', default: 1.5}
+        // Speed schema is no longer directly used here as it's dynamic from game-manager
       },
       init: function () {
-        // No longer storing gameManager in init due to potential timing issues.
-        // Access it directly when needed.
-
         this.onClickHandler = () => {
-            // Get gameManager fresh on each click
             const gameManager = this.el.sceneEl.components['game-manager'];
 
-            // NEW: Check if game is over using the new isGameOver method
+            // Prevent firing if game is over (lost or won)
             if (gameManager && gameManager.isGameOver()) {
-                return; // Do not fire if game is over
+                return;
             }
 
             try {
@@ -265,9 +298,12 @@
             projectile.setAttribute('radius', 0.12);
             projectile.setAttribute('color', '#E53935');
             projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+
+            // NEW: Get dynamic speed from game-manager
+            const currentProjectileSpeed = gameManager ? gameManager.getProjectileSpeed() : 1.5; // Fallback speed
             projectile.setAttribute('projectile-move', {
               direction: `${direction.x} ${direction.y} ${direction.z}`,
-              speed: this.data.speed
+              speed: currentProjectileSpeed // Use dynamic speed
             });
             scene.appendChild(projectile);
         };
@@ -283,7 +319,7 @@
       init: function () {
         var d = this.data.direction.split(' ').map(Number);
         this.directionVec = new THREE.Vector3(d[0], d[1], d[2]);
-        this.speed = this.data.speed;
+        this.speed = this.data.speed; // Speed is now set on creation
         this.start = null;
         this.hit = false;
       },
@@ -291,11 +327,10 @@
         if (this.hit) return;
         if (!this.el.parentNode) return;
 
-        // Get gameManager fresh on each tick (for game over check)
         const gameManager = this.el.sceneEl.components['game-manager'];
 
-        // If game is over, just remove projectile without triggering a hit reaction
-        if (gameManager && gameManager.isGameOver()) { // NEW: Check using isGameOver()
+        // Remove projectile if game has ended
+        if (gameManager && gameManager.isGameOver()) {
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
@@ -325,7 +360,7 @@
             return;
           }
         }
-        if (time - this.start > 8000) {
+        if (time - this.start > 8000) { // Projectile despawns after 8 seconds if it hasn't hit anything
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
