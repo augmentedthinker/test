@@ -79,6 +79,7 @@
             this.hitCounterEl = document.querySelector('#hitCounter');
             this.gameOverTextEl = document.querySelector('#gameOverText');
             this.clickableSphere = document.querySelector('#colorSphere');
+            this.gameOver = false;
 
             this.updateDisplay();
         },
@@ -94,23 +95,21 @@
             this.updateDisplay();
 
             if (this.hits >= this.maxHits) {
-                this.gameOver();
+                this.endGame();
             }
         },
-        gameOver: function() {
+        endGame: function() {
+            this.gameOver = true;
+            
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
             if (this.clickableSphere) {
-                const shootOnClickComp = this.clickableSphere.components['shoot-on-click'];
-                if (shootOnClickComp && shootOnClickComp.onClickHandler) {
-                    this.clickableSphere.removeEventListener('click', shootOnClickComp.onClickHandler);
-                }
-                this.clickableSphere.removeAttribute('shoot-on-click');
-                this.clickableSphere.removeAttribute('toggle-color-on-click');
                 this.clickableSphere.setAttribute('color', '#888');
-                this.clickableSphere.setAttribute('class', 'non-clickable');
             }
+        },
+        isGameOver: function() {
+            return this.gameOver;
         }
     });
 
@@ -121,8 +120,12 @@
       init: function () {
         this.colorIndex = 0;
         this.el.addEventListener('click', () => {
-          this.colorIndex = (this.colorIndex + 1) % this.data.colors.length;
-          this.el.setAttribute('color', this.data.colors[this.colorIndex]);
+          // Only change color if game is not over
+          const gameManager = this.el.sceneEl.components['game-manager'];
+          if (!gameManager || !gameManager.isGameOver()) {
+            this.colorIndex = (this.colorIndex + 1) % this.data.colors.length;
+            this.el.setAttribute('color', this.data.colors[this.colorIndex]);
+          }
         });
       }
     });
@@ -134,20 +137,14 @@
         this.originalColor = this.el.getAttribute('color');
         this.originalOpacity = this.el.getAttribute('opacity');
         this.playerCam = document.querySelector('#playerCam');
-        this.gameManager = null; // Will be set on first use
       },
       reactToHit: function () {
-        // Ensure game manager is available and game is not over
-        if (!this.gameManager) {
-            this.gameManager = this.el.sceneEl.querySelector('[game-manager]').components['game-manager'];
-            if (!this.gameManager) {
-                return;
-            }
-        }
+        const gameManager = this.el.sceneEl.components['game-manager'];
+        if (!gameManager) return;
 
-        if (this.isReacting || this.gameManager.hits >= this.gameManager.maxHits) return;
+        if (this.isReacting || gameManager.isGameOver()) return;
 
-        this.gameManager.registerHit();
+        gameManager.registerHit();
 
         this.isReacting = true;
         let el = this.el;
@@ -158,7 +155,7 @@
             explosionAudio.volume = 1;
             explosionAudio.play();
           }
-        } catch (e) { /* Error handling (e.g., console.error) removed for simplicity, as per user's request not to deal with console */ }
+        } catch (e) {}
 
         vibrateControllers(0.4, 1.0);
 
@@ -230,13 +227,10 @@
         speed: {type: 'number', default: 1.5}
       },
       init: function () {
-        // Get a reference to the game manager when this component initializes
-        this.gameManager = this.el.sceneEl.querySelector('[game-manager]').components['game-manager'];
-
-        // Store a reference to the handler so we can remove it later
         this.onClickHandler = () => {
-            // Check if game is over using the stored gameManager reference
-            if (this.gameManager && this.gameManager.hits >= this.gameManager.maxHits) {
+            // Check if game is over by accessing the game manager
+            const gameManager = this.el.sceneEl.components['game-manager'];
+            if (gameManager && gameManager.isGameOver()) {
                 return; // Do not fire if game is over
             }
 
@@ -246,7 +240,7 @@
                     laserAudio.volume = 1;
                     laserAudio.play();
                 }
-            } catch (e) { /* Error handling removed */ }
+            } catch (e) {}
 
             var leftObj = document.querySelector('#leftHand').object3D;
             var rightObj = document.querySelector('#rightHand').object3D;
@@ -287,15 +281,14 @@
         this.speed = this.data.speed;
         this.start = null;
         this.hit = false;
-        // Get a reference to the game manager when this component initializes
-        this.gameManager = this.el.sceneEl.querySelector('[game-manager]').components['game-manager'];
       },
       tick: function (time, deltaTime) {
         if (this.hit) return;
         if (!this.el.parentNode) return;
 
         // If game is over, just remove projectile without triggering a hit reaction
-        if (this.gameManager && this.gameManager.hits >= this.gameManager.maxHits) {
+        const gameManager = this.el.sceneEl.components['game-manager'];
+        if (gameManager && gameManager.isGameOver()) {
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
@@ -367,7 +360,7 @@
         if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
           try {
             gamepad.hapticActuators[0].pulse(intensity, duration * 1000);
-          } catch (e) { /* Error handling removed */ }
+          } catch (e) {}
         }
       });
     }
