@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Complete VR Experience - Advanced Collision & Effects</title>
+    <title>VR Experience - Sounds & Collision Reworked (Corrected URLs)</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-    <script src="https://unpkg.com/aframe-particle-system-component@1.1.3/dist/aframe-particle-system-component.min.js"></script>
 </head>
 <body>
-
-    <a-assets>
-        <audio id="hitSound" src="https://cdn.glitch.global/05b141c2-6113-46fe-9c60-1510a5015332/pop.mp3?v=1690913886477" preload="auto"></audio>
-    </a-assets>
-
     <a-scene>
+        <a-assets>
+            <audio id="fireSound" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
+            <audio id="hitSound" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
+        </a-assets>
+
         <a-plane
             position="0 0 -4"
             rotation="-90 0 0"
@@ -35,19 +34,20 @@
                 camera
                 look-controls
                 position="0 1.6 0"
-                animation="property: position; to: 0 1.58 0; dur: 150; easing: easeInOutQuad; loop: 2; dir: alternate; startEvents: shake-camera;"
             ></a-entity>
 
             <a-entity
                 id="leftHand"
                 oculus-touch-controls="hand: left"
                 raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #FF00FF; lineOpacity: 0.5;"
+                cursor="rayOrigin: entity"
             ></a-entity>
 
             <a-entity
                 id="rightHand"
                 oculus-touch-controls="hand: right"
                 raycaster="objects: .clickable; far: 10; showLine: true; lineColor: #00FFFF; lineOpacity: 0.5;"
+                cursor="rayOrigin: entity"
             ></a-entity>
         </a-entity>
 
@@ -57,7 +57,7 @@
             scale="0.5 0.5 0.5"
             class="clickable"
             event-set__click="material.color: green"
-            fire-sphere="targetEntity: #playerBody; speed: 3;"
+            fire-sphere="targetEntity: #playerBody; speed: 2; fireSound: #fireSound;"
         ></a-box>
 
         <a-sphere
@@ -66,162 +66,146 @@
             radius="0.5"
             class="clickable"
             event-set__click="material.color: blue"
-            fire-sphere="targetEntity: #playerBody; speed: 3;"
+            fire-sphere="targetEntity: #playerBody; speed: 2; fireSound: #fireSound;"
         ></a-sphere>
 
         <a-sphere
             id="playerBody"
             radius="0.3"
             color="#ADD8E6"
+            opacity="0.7"
             body-tracker="leftHand: #leftHand; rightHand: #rightHand"
             sphere-collider="objects: .projectile;"
-            player-hit-handler
-            particle-system="preset: dust; enabled: false; color: #FFF, #FF0, #F00; particleCount: 50; size: 0.1; maxAge: 0.5; velocityValue: '0 0.5 0'; velocitySpread: '0.2 0.2 0.2'; blending: additive"
-            sound="src: #hitSound; on: play-hit-sound;"
-        >
-        </a-sphere>
+            event-set__hit="scale: 0.5 0.5 0.5, color: orange; _dur: 100; _delay: 0, scale: 0.3 0.3 0.3, color: #ADD8E6; _dur: 200; _delay: 100"
+            sound="on: hit; src: #hitSound; poolSize: 5;"
+        ></a-sphere>
 
     </a-scene>
 
     <script>
         // Custom A-Frame component to track the midpoint between two entities (Player Body Tracker)
-        // This component is unchanged.
         AFRAME.registerComponent('body-tracker', {
             schema: {
                 leftHand: {type: 'selector'},
                 rightHand: {type: 'selector'}
             },
+
             init: function () {
                 this.leftHandEl = this.data.leftHand;
                 this.rightHandEl = this.data.rightHand;
-                if (!this.leftHandEl || !this.rightHandEl) { return; }
+
+                if (!this.leftHandEl || !this.rightHandEl) {
+                    console.warn("body-tracker: Could not find one or both hand entities.");
+                    return;
+                }
+
                 this.leftHandPosition = new AFRAME.THREE.Vector3();
                 this.rightHandPosition = new AFRAME.THREE.Vector3();
                 this.midpoint = new AFRAME.THREE.Vector3();
             },
+
             tick: function () {
-                if (!this.leftHandEl.object3D || !this.rightHandEl.object3D) { return; }
+                if (!this.leftHandEl.object3D || !this.rightHandEl.object3D) {
+                    return;
+                }
+
                 this.leftHandEl.object3D.getWorldPosition(this.leftHandPosition);
                 this.rightHandEl.object3D.getWorldPosition(this.rightHandPosition);
+
                 this.midpoint.copy(this.leftHandPosition).lerp(this.rightHandPosition, 0.5);
+
                 this.el.object3D.position.copy(this.midpoint);
-                this.el.object3D.position.y -= 0.5; // Adjust vertical position to be more chest-level
+                this.el.object3D.position.y -= 0.5;
             }
         });
 
         // Custom A-Frame component for objects that fire spheres
-        // This component is unchanged.
         AFRAME.registerComponent('fire-sphere', {
             schema: {
                 targetEntity: {type: 'selector'},
                 speed: {type: 'number', default: 1.5},
                 sphereRadius: {type: 'number', default: 0.1},
                 sphereColor: {type: 'color', default: 'white'},
-                lifeTime: {type: 'number', default: 5000}
+                lifeTime: {type: 'number', default: 5000},
+                fireSound: {type: 'selector'}
             },
+
             init: function () {
                 const el = this.el;
                 const data = this.data;
+
                 this.targetEl = data.targetEntity;
-                if (!this.targetEl) { return; }
+                if (!this.targetEl) {
+                    console.error("fire-sphere: Target entity not found! Ensure targetEntity is correctly set.");
+                    return;
+                }
+
                 el.addEventListener('click', () => {
+                    // Play fire sound
+                    if (data.fireSound && data.fireSound.components.sound) {
+                        data.fireSound.components.sound.playSound();
+                    } else if (data.fireSound) {
+                        console.warn("Fire sound asset loaded but sound component not ready yet.");
+                    }
+
+
                     const sphere = document.createElement('a-sphere');
                     sphere.setAttribute('radius', data.sphereRadius);
                     sphere.setAttribute('color', data.sphereColor);
                     sphere.setAttribute('class', 'projectile');
+
                     const originPos = new AFRAME.THREE.Vector3();
                     el.object3D.getWorldPosition(originPos);
-                    sphere.setAttribute('position', originPos);
+                    sphere.setAttribute('position', `${originPos.x} ${originPos.y} ${originPos.z}`);
+
                     const targetPos = new AFRAME.THREE.Vector3();
                     this.targetEl.object3D.getWorldPosition(targetPos);
+
                     const direction = new AFRAME.THREE.Vector3();
                     direction.subVectors(targetPos, originPos).normalize();
-                    const sphereVelocity = direction.multiplyScalar(data.speed);
-                    sphere.setAttribute('projectile-motion', {velocity: sphereVelocity, lifeTime: data.lifeTime});
+
+                    this.sphereVelocity = direction.multiplyScalar(data.speed);
+
+                    sphere.setAttribute('projectile-motion', `velocity: ${this.sphereVelocity.x} ${this.sphereVelocity.y} ${this.sphereVelocity.z}; lifeTime: ${data.lifeTime}`);
+
                     el.sceneEl.appendChild(sphere);
                 });
             }
         });
 
         // Custom A-Frame component for moving fired spheres (Projectiles)
-        // KEY CHANGE: Removed the 'hit' event listener. Responsibility is now on the player.
         AFRAME.registerComponent('projectile-motion', {
             schema: {
                 velocity: {type: 'vec3'},
                 lifeTime: {type: 'number', default: 5000}
             },
+
             init: function () {
                 this.velocity = new AFRAME.THREE.Vector3(this.data.velocity.x, this.data.velocity.y, this.data.velocity.z);
+                this.lifeTimer = this.data.lifeTime;
                 this.creationTime = performance.now();
+
+                this.el.addEventListener('hit', (evt) => {
+                    if (evt.detail.el && evt.detail.el.id === 'playerBody') {
+                        console.log('PROJECTILE HIT PLAYER BODY! Removing projectile. (Debug Log)');
+                        this.el.remove();
+                    }
+                });
             },
+
             tick: function (time, deltaTime) {
-                if (!this.el.parentNode) { return; }
+                if (!this.el.parentNode) {
+                    return;
+                }
+
                 const deltaSeconds = deltaTime / 1000;
                 this.el.object3D.position.addScaledVector(this.velocity, deltaSeconds);
-                if (time - this.creationTime > this.data.lifeTime) {
+
+                if (time - this.creationTime > this.lifeTimer) {
                     this.el.remove();
                 }
             }
         });
-
-        // =================================================================
-        // == NEW & IMPROVED: Centralized handler for player hit reactions ==
-        // =================================================================
-        AFRAME.registerComponent('player-hit-handler', {
-            init: function() {
-                // Cache a reference to the camera for the shake effect.
-                this.cameraEl = document.querySelector('#camera');
-
-                // Bind the 'this' context for the event listener.
-                this.onHit = this.onHit.bind(this);
-                this.el.addEventListener('hit', this.onHit);
-                console.log("Player hit handler initialized and listening for 'hit' events.");
-            },
-
-            // This function runs when the sphere-collider detects a collision.
-            onHit: function(evt) {
-                // Get the entity that hit the player (the projectile).
-                const projectile = evt.detail.el;
-
-                // Make sure the object is valid and is actually a projectile.
-                if (!projectile || !projectile.matches('.projectile')) {
-                    return;
-                }
-
-                console.log("Collision detected with a projectile!");
-
-                // --- 1. SOLVED: Remove the projectile upon impact ---
-                projectile.remove();
-
-                // --- 2. SOLVED: Visual feedback for the player body ---
-                this.el.setAttribute('material', 'color', 'white'); // Flash white
-                setTimeout(() => {
-                    this.el.setAttribute('material', 'color', '#ADD8E6'); // Revert color
-                }, 150);
-
-                // --- 3. "BLOW ME AWAY": Trigger particle burst ---
-                const particleSystem = this.el.components['particle-system'];
-                if (particleSystem) {
-                    // Start emitting particles. They will live for their configured maxAge.
-                    particleSystem.startParticles();
-                }
-
-                // --- 4. "BLOW ME AWAY": Play sound effect ---
-                // We emit an event to play the sound, handled by the sound component.
-                this.el.emit('play-hit-sound');
-
-                // --- 5. "BLOW ME AWAY": Trigger camera shake ---
-                if (this.cameraEl) {
-                    this.cameraEl.emit('shake-camera');
-                }
-            },
-
-            remove: function() {
-                // Clean up the event listener when the component is detached.
-                this.el.removeEventListener('hit', this.onHit);
-            }
-        });
-
     </script>
 </body>
 </html>
