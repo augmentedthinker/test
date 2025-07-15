@@ -1,40 +1,125 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>Green AR Floor</title>
+<head>
+    <title>Quest 2 AR - Green Floor</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
-  </head>
-  <body>
-    <a-scene
-      vr-mode-ui="enabled: false"
-      ar-mode-ui="enabled: true"
-      webxr="requiredFeatures: ['hit-test', 'dom-overlay', 'plane-detection']; optionalFeatures: ['cpu-features', 'depth-sensing', 'hand-tracking']"
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>Quest 2 AR Test</div>
+        <div id="status">Loading...</div>
+    </div>
+
+    <a-scene 
+        background="color: transparent"
+        vr-mode-ui="enabled: false"
+        webxr="requiredFeatures: hit-test,local-floor; optionalFeatures: unbounded"
+        renderer="alpha: true"
     >
-      <a-entity
-        id="reticle"
-        cursor="rayOrigin: mouse"
-        raycaster="objects: [raycaster-target]; far: 10; interval: 1000"
-        position="0 0 -5"
-        visible="false"
-      >
-        <a-ring
-          radius-outer="0.1"
-          radius-inner="0.07"
-          color="white"
-          opacity="0.8"
-        ></a-ring>
-      </a-entity>
+        <!-- Green floor plane at ground level -->
+        <a-plane 
+            id="floor"
+            position="0 0 0" 
+            rotation="-90 0 0" 
+            width="10" 
+            height="10"
+            color="#00FF00" 
+            opacity="0.3"
+            material="transparent: true; side: double"
+        ></a-plane>
 
-      <a-entity
-        ar-hit-test="doNotHitTest: true"
-        ar-plane="visible: true; color: #00FF00; opacity: 0.7; debug: true"
-        raycaster-target
-      ></a-entity>
+        <!-- Reference cube to show scale -->
+        <a-box 
+            position="0 0.5 -2" 
+            color="#FF0000" 
+            opacity="0.7"
+            material="transparent: true"
+        ></a-box>
 
-      <a-camera position="0 1.6 0"></a-camera>
+        <!-- Simple lighting -->
+        <a-light type="ambient" color="#404040"></a-light>
+        <a-light type="directional" position="0 5 0" color="#FFFFFF"></a-light>
 
-      <div id="dom-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></div>
+        <!-- Camera -->
+        <a-camera 
+            position="0 1.6 3"
+            look-controls="enabled: true"
+            wasd-controls="enabled: true"
+        ></a-camera>
+
+        <!-- AR Button -->
+        <a-entity 
+            id="ar-button"
+            position="0 2 -3"
+            geometry="primitive: plane; width: 2; height: 0.5"
+            material="color: #4CC3D9; opacity: 0.8"
+            text="value: ENTER AR; align: center; width: 8; color: white"
+            cursor-listener
+        ></a-entity>
     </a-scene>
-  </body>
+
+    <script>
+        // Status updates
+        const statusDiv = document.getElementById('status');
+        
+        // Check WebXR support
+        if (navigator.xr) {
+            navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+                if (supported) {
+                    statusDiv.textContent = 'AR Supported - Click Enter AR';
+                } else {
+                    statusDiv.textContent = 'AR Not Supported';
+                }
+            }).catch(() => {
+                statusDiv.textContent = 'AR Check Failed';
+            });
+        } else {
+            statusDiv.textContent = 'WebXR Not Available';
+        }
+
+        // AR button click handler
+        AFRAME.registerComponent('cursor-listener', {
+            init: function () {
+                this.el.addEventListener('click', () => {
+                    const scene = document.querySelector('a-scene');
+                    if (scene.is('ar-mode')) {
+                        scene.exitAR();
+                        statusDiv.textContent = 'Exited AR';
+                    } else {
+                        scene.enterAR().then(() => {
+                            statusDiv.textContent = 'AR Active';
+                        }).catch((error) => {
+                            statusDiv.textContent = 'AR Failed: ' + error.message;
+                        });
+                    }
+                });
+            }
+        });
+
+        // Scene event listeners
+        document.querySelector('a-scene').addEventListener('enter-vr', () => {
+            statusDiv.textContent = 'AR Mode Active';
+        });
+
+        document.querySelector('a-scene').addEventListener('exit-vr', () => {
+            statusDiv.textContent = 'AR Mode Exited';
+        });
+    </script>
+</body>
 </html>
