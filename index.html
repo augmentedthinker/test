@@ -1,96 +1,40 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <title>A-Frame WebXR Cube and Controllers (AR)</title>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe-extras@6.2.0/dist/aframe-extras.min.js"></script>
-</head>
-<body>
-  <a-scene
-    vr-mode-ui="enabled: false"
-    ar-mode-ui="enabled: true"
-    webxr="requiredFeatures: local; optionalFeatures: hit-test, dom-overlay;">
+  <head>
+    <title>Green AR Floor</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  </head>
+  <body>
+    <a-scene
+      vr-mode-ui="enabled: false"
+      ar-mode-ui="enabled: true"
+      webxr="requiredFeatures: ['hit-test', 'dom-overlay', 'plane-detection']; optionalFeatures: ['cpu-features', 'depth-sensing', 'hand-tracking']"
+    >
+      <a-entity
+        id="reticle"
+        cursor="rayOrigin: mouse"
+        raycaster="objects: [raycaster-target]; far: 10; interval: 1000"
+        position="0 0 -5"
+        visible="false"
+      >
+        <a-ring
+          radius-outer="0.1"
+          radius-inner="0.07"
+          color="white"
+          opacity="0.8"
+        ></a-ring>
+      </a-entity>
 
-    <a-box
-      id="arCube"
-      color="#0077CC"
-      position="0 0 -1"
-      scale="0.2 0.2 0.2"
-      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear;">
-    </a-box>
+      <a-entity
+        ar-hit-test="doNotHitTest: true"
+        ar-plane="visible: true; color: #00FF00; opacity: 0.7; debug: true"
+        raycaster-target
+      ></a-entity>
 
-    <a-entity
-      id="leftHand"
-      oculus-touch-controls="hand: left"
-      laser-controls="hand: left"
-      raycaster="objects: #arCube; far: 5; showLine: false;">
-    </a-entity>
+      <a-camera position="0 1.6 0"></a-camera>
 
-    <a-entity
-      id="rightHand"
-      oculus-touch-controls="hand: right"
-      laser-controls="hand: right"
-      raycaster="objects: #arCube; far: 5; showLine: false;">
-    </a-entity>
-
-    <a-entity camera look-controls></a-entity>
-
-    <script>
-      // Get references to our cube and hands
-      const arCube = document.getElementById('arCube');
-      const leftHand = document.getElementById('leftHand');
-      const rightHand = document.getElementById('rightHand');
-
-      // Store the initial Y position of the cube for resetting
-      let initialCubeYPosition = arCube.object3D.position.y;
-      const jumpAmount = 0.1; // How much the cube jumps
-
-      // Function to handle trigger press
-      function handleTriggerDown(event) {
-        // 'event.target' is the controller entity (leftHand or rightHand)
-        const controller = event.target;
-
-        // Make the laser visible
-        if (controller.components['laser-controls']) {
-          controller.components['laser-controls'].laser.visible = true;
-        }
-
-        // Make the cube jump up
-        if (arCube) {
-          arCube.object3D.position.y = initialCubeYPosition + jumpAmount;
-        }
-      }
-
-      // Function to handle trigger release
-      function handleTriggerUp(event) {
-        const controller = event.target;
-
-        // Hide the laser
-        if (controller.components['laser-controls']) {
-          controller.components['laser-controls'].laser.visible = false;
-        }
-
-        // Return the cube to its original position
-        if (arCube) {
-          arCube.object3D.position.y = initialCubeYPosition;
-        }
-      }
-
-      // Add event listeners once the scene is loaded
-      document.querySelector('a-scene').addEventListener('loaded', function () {
-        // Ensure controllers are loaded before adding listeners
-        leftHand.addEventListener('model-loaded', () => {
-          leftHand.addEventListener('triggerdown', handleTriggerDown);
-          leftHand.addEventListener('triggerup', handleTriggerUp);
-        });
-        rightHand.addEventListener('model-loaded', () => {
-          rightHand.addEventListener('triggerdown', handleTriggerDown);
-          rightHand.addEventListener('triggerup', handleTriggerUp);
-        });
-      });
-    </script>
-  </a-scene>
-</body>
+      <div id="dom-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></div>
+    </a-scene>
+  </body>
 </html>
