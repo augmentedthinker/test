@@ -34,7 +34,7 @@
     <a-scene
       vr-mode-ui="enabled: false"
       ar-mode-ui="enabled: true"
-      webxr="requiredFeatures: ['hit-test', 'dom-overlay']; optionalFeatures: ['plane-detection', 'depth-sensing']"
+      webxr="requiredFeatures: ['hit-test', 'dom-overlay']; optionalFeatures: ['plane-detection', 'depth-sensing']; arModes: ['immersive-ar']; qol: true;"
       renderer="alpha: true"
     >
       <a-camera position="0 1.6 0"></a-camera>
@@ -64,10 +64,11 @@
       scene.addEventListener('enter-vr', function () {
         if (scene.is('ar-mode')) {
           statusDiv.textContent = 'Entered AR Mode! Look for the red cube.';
+        } else if (scene.is('vr-mode')) {
+          // This should ideally not happen if arModes is set to 'immersive-ar' only
+          statusDiv.textContent = 'Entered VR Mode (AR session not initiated).';
         } else {
-          // This case should ideally not happen if vr-mode-ui is disabled,
-          // but good for robustness.
-          statusDiv.textContent = 'Entered VR Mode (AR not available/selected).';
+             statusDiv.textContent = 'Entered an unknown immersive mode.';
         }
       });
 
