@@ -1,74 +1,96 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My First Magic AR Window (Three.js)</title>
+    <title>My Magic AR Window with a Spinning Ball</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
       #arButton {
         position: absolute;
-        bottom: 30px; /* Keeps it 30px from the bottom, the button will grow upwards */
+        bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        
-        /* --- SIZE CHANGES (Roughly 3x larger) --- */
-        padding: 75px 150px; /* MUCH bigger padding to expand the button */
-        font-size: 90px; /* HUGE text size! */
-
-        /* --- COLOR CHANGES --- */
-        background-color: #000080; /* A deep, dark blue */
-        color: white; /* Keep the text bright white */
-        border: 10px solid #000050; /* A slightly darker blue border */
-        border-radius: 25px; /* Keeps it nicely rounded, not too squarish */
-        
-        /* --- POP EFFECTS --- */
+        padding: 75px 150px;
+        font-size: 90px;
+        background-color: #000080; /* Dark blue */
+        color: white;
+        border: 10px solid #000050;
+        border-radius: 25px;
         font-weight: bold;
-        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7); /* A more pronounced shadow for the text */
-        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8); /* A strong blue glow around the button */
-        
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8);
         cursor: pointer;
         z-index: 1000;
-        transition: all 0.2s ease-in-out; /* Makes all changes smooth and quick */
+        transition: all 0.2s ease-in-out;
       }
-      
       #arButton:hover {
-        background-color: #FF0000; /* FIERY RED when you hover over it! */
-        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9); /* A bigger, brighter red glow */
-        transform: translateX(-50%) scale(1.03); /* Pops out a tiny bit more */
+        background-color: #FF0000; /* Fiery red on hover */
+        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9);
+        transform: translateX(-50%) scale(1.03);
       }
-
-      #arButton:active { /* This makes it react when you actually click/press it */
-        background-color: #CC0000; /* A slightly darker red when pressed */
-        transform: translateX(-50%) scale(0.98); /* Makes it look like it's pressing in */
-        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9); /* A slightly reduced glow when pressed */
+      #arButton:active {
+        background-color: #CC0000; /* Darker red when pressed */
+        transform: translateX(-50%) scale(0.98);
+        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9);
       }
     </style>
   </head>
   <body>
     <script type="module">
+      // We need to get the Three.js library and its AR button helper.
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
-      let camera, scene, renderer;
+      let camera, scene, renderer, sphere; // Now we have a 'sphere' variable!
 
       init();
 
       function init() {
+        // This is still our empty stage for the magic.
         scene = new THREE.Scene();
+
+        // And our camera (your eyes).
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
+        // Our artist who draws everything.
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
+        renderer.xr.enabled = true; // Still telling the artist to get ready for AR magic.
         document.body.appendChild(renderer.domElement);
 
-        // This is where we create our special button that knows how to start AR.
+        // Here's our super awesome AR button!
         const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
-        // We make sure our custom ID is applied to the button so our styles work.
-        arButton.id = 'arButton';
+        arButton.id = 'arButton'; // Giving our button its special name for styling.
         document.body.appendChild(arButton);
 
+        // --- NEW MAGIC FOR OUR BOUNCY BALL! ---
+
+        // First, we need some light! Just like in your room, magic objects need light to be seen.
+        // This is a soft light that brightens everything a little.
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        // This is a stronger light, like a sunny window, to make our ball look solid.
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 5, 5); // We place it above and slightly in front.
+        scene.add(directionalLight);
+
+        // Now, let's create our bouncy ball!
+        const geometry = new THREE.SphereGeometry(0.5, 32, 32); // This is the ball's shape (0.5 meters big).
+        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // This makes it green and able to catch light.
+        sphere = new THREE.Mesh(geometry, material); // We combine the shape and color to make our ball.
+
+        // We place the ball. Imagine (0,0,0) is where you started the AR experience on the floor.
+        // We put it 1.5 meters up (like eye level) and 3 meters in front of you.
+        sphere.position.set(0, 1.5, -3);
+        scene.add(sphere); // Add the ball to our magic world!
+
+        // This is a super important part! It tells our artist (renderer) to keep drawing our scene
+        // over and over again, many times a second. This is how we make things move.
+        renderer.setAnimationLoop(render);
+
+        // When the window size changes, we want our scene to adjust
         window.addEventListener('resize', onWindowResize);
       }
 
@@ -76,6 +98,16 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      // This function is called over and over, super fast!
+      function render() {
+        // We tell our ball to spin a tiny bit each time this function is called.
+        // This makes it look like it's continuously rotating.
+        sphere.rotation.y += 0.01; // Spin around its middle (y-axis)
+
+        // Tell the artist to draw everything in our magic world for this moment.
+        renderer.render(scene, camera);
       }
     </script>
   </body>
