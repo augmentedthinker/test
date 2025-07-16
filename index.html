@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers and a Floor</title>
+    <title>My Magic AR Window with Pulsing Lasers and a Lowered Floor</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -44,7 +44,7 @@
       let pivotGroup1, pivotGroup2;
       let controller1, controller2;
       let laser1, laser2;
-      let floor; // NEW: Our variable for the floor object
+      let floor;
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -126,22 +126,20 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
-        // --- NEW: Create our virtual floor! ---
-        const floorGeometry = new THREE.PlaneGeometry(20, 20); // A large 20x20 meter plane
+        const floorGeometry = new THREE.PlaneGeometry(20, 20);
         const floorMaterial = new THREE.MeshStandardMaterial({
-          color: 0x505050, // Dark gray color
-          roughness: 0.6, // Makes it look a bit matte
-          metalness: 0.1  // A little bit of metalness
+          color: 0x505050,
+          roughness: 0.6,
+          metalness: 0.1
         });
         floor = new THREE.Mesh(floorGeometry, floorMaterial);
 
-        // Rotate the plane so it lays flat on the XZ plane (like a floor)
-        floor.rotation.x = -Math.PI / 2; // This rotates it -90 degrees around the X-axis
+        floor.rotation.x = -Math.PI / 2;
 
-        // Position the floor at y=0, which should be roughly your starting floor level in AR
-        floor.position.y = 0;
+        // --- NEW: Lowering the floor! ---
+        floor.position.y = -1.5; // Moved down by 1.5 meters (about 5 feet) from its current 0 position
 
-        scene.add(floor); // Add the floor to our scene!
+        scene.add(floor);
 
         renderer.setAnimationLoop(render);
 
