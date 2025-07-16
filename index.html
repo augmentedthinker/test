@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Lasers</title>
+    <title>My Magic AR Window with Pulsing Lasers</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -42,9 +42,17 @@
 
       let camera, scene, renderer, sphere1, sphere2;
       let pivotGroup1, pivotGroup2;
-      // NEW: Variables for our controllers and their lasers!
-      let controller1, controller2; // These will be our "controller holders"
-      let laser1, laser2;         // These will be our laser lines
+      let controller1, controller2;
+      let laser1, laser2;
+
+      const laserColors = [
+        0xff0000, // Red (initial default)
+        0x00ff00, // Green
+        0x0000ff, // Blue
+        0xffff00  // Yellow
+      ];
+      let currentColorIndex1 = 0;
+      let currentColorIndex2 = 0;
 
       init();
 
@@ -62,14 +70,12 @@
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // Add lights so we can see our spheres
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // --- Our two circling bouncy balls (Green and Blue) ---
         pivotGroup1 = new THREE.Group();
         scene.add(pivotGroup1);
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
@@ -86,37 +92,41 @@
         sphere2.position.set(0, 1.0, 2);
         pivotGroup2.add(sphere2);
 
-        // --- NEW MAGIC FOR CONTROLLER LASERS! ---
-
-        // 1. Get the "holder" for the first controller (usually your right hand)
         controller1 = renderer.xr.getController(0);
-        scene.add(controller1); // Add this holder to the scene so it updates its position automatically
+        scene.add(controller1);
 
-        // 2. Get the "holder" for the second controller (usually your left hand)
         controller2 = renderer.xr.getController(1);
-        scene.add(controller2); // Add this holder to the scene too
+        scene.add(controller2);
 
-        // 3. Create the shape of our laser line.
-        // It's just a simple line that goes from 0,0,0 (the controller's tip)
-        // to 5 units straight forward (which is negative Z in Three.js).
         const laserGeometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, 0, 0), // Start point of the laser
-          new THREE.Vector3(0, 0, -5) // End point of the laser (5 meters long)
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, -5)
         ]);
 
-        // 4. Create the look of our laser. We'll make it bright red.
-        // (Note: 'linewidth' sometimes doesn't show up thick on all devices, but we can try!)
-        const laserMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+        // NEW: We need to tell the material it can be transparent!
+        const laserMaterial1 = new THREE.LineBasicMaterial({
+          color: laserColors[currentColorIndex1],
+          linewidth: 3,
+          transparent: true, // IMPORTANT: Allows us to change opacity
+          opacity: 1 // Start fully opaque
+        });
+        const laserMaterial2 = new THREE.LineBasicMaterial({
+          color: laserColors[currentColorIndex2],
+          linewidth: 3,
+          transparent: true, // IMPORTANT: Allows us to change opacity
+          opacity: 1 // Start fully opaque
+        });
 
-        // 5. Create the actual laser lines and attach them to their controllers!
-        laser1 = new THREE.Line(laserGeometry, laserMaterial);
-        controller1.add(laser1); // Now this laser will move with your first controller!
+        laser1 = new THREE.Line(laserGeometry, laserMaterial1);
+        controller1.add(laser1);
 
-        laser2 = new THREE.Line(laserGeometry, laserMaterial);
-        controller2.add(laser2); // And this one with your second controller!
+        laser2 = new THREE.Line(laserGeometry, laserMaterial2);
+        controller2.add(laser2);
 
+        controller1.addEventListener('selectend', onSelectEnd1);
+        controller2.addEventListener('selectend', onSelectEnd2);
 
-        // Set the animation loop to keep everything moving.
+        // The render function will now receive a timestamp from WebXR
         renderer.setAnimationLoop(render);
 
         window.addEventListener('resize', onWindowResize);
@@ -128,13 +138,46 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      function render() {
+      function onSelectEnd1() {
+        currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
+        laser1.material.color.setHex(laserColors[currentColorIndex1]);
+        // When changing color, reset pulse to full visibility for a moment
+        laser1.material.opacity = 1;
+        laser1.scale.z = 1;
+      }
+
+      function onSelectEnd2() {
+        currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
+        laser2.material.color.setHex(laserColors[currentColorIndex2]);
+        // When changing color, reset pulse to full visibility for a moment
+        laser2.material.opacity = 1;
+        laser2.scale.z = 1;
+      }
+
+      // NEW: The render function now takes 'timestamp' which is milliseconds since the page loaded
+      function render(timestamp) {
         // Our bouncy balls keep circling!
         pivotGroup1.rotation.y += 0.005;
         pivotGroup2.rotation.y -= 0.005;
 
-        // The lasers automatically follow the controllers because they are attached to them.
-        // No extra code needed here for them to move!
+        // --- NEW: Laser Pulsing Logic! ---
+        // We use Math.sin() because it gives us a smooth wave that goes from -1 to 1.
+        // By adding and multiplying, we can control the range of the pulse.
+
+        // `timestamp / 200` controls the speed of the opacity pulse (smaller number = faster)
+        // `* 0.4 + 0.6` means it will oscillate between 0.2 (0.6 - 0.4) and 1.0 (0.6 + 0.4) opacity.
+        const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
+
+        // `timestamp / 150` controls the speed of the length pulse (slightly different speed for variety)
+        // `* 0.05 + 1.0` means it will oscillate between 0.95 (1.0 - 0.05) and 1.05 (1.0 + 0.05) of its original length.
+        const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
+
+        // Apply these pulse values to both lasers
+        laser1.material.opacity = opacityPulse;
+        laser1.scale.z = lengthPulse;
+
+        laser2.material.opacity = opacityPulse;
+        laser2.scale.z = lengthPulse;
 
         renderer.render(scene, camera); // Draw everything!
       }
