@@ -1,18 +1,70 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My First Magic AR Window</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script>
-      // We're using A-Frame version 1.5.0, which is great for WebXR on Meta Quest.
-      // This time, we're giving the Quest very precise instructions for AR.
-    </script>
+    <title>My First Magic AR Window (Three.js)</title>
+    <style>
+      body { margin: 0; overflow: hidden; } /* Makes the page full screen */
+      canvas { display: block; } /* Removes extra space below the canvas */
+      #arButton {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        background-color: #007bff;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+        z-index: 1000; /* Makes sure the button is on top */
+      }
+    </style>
   </head>
   <body>
-    <a-scene
-      webxr="requiredFeatures: local-floor, hit-test, dom-overlay; optionalFeatures: unbounded; referenceSpaceType: local-floor;"
-      renderer="colorManagement: true"
-    >
-      </a-scene>
+    <script type="module">
+      // 1. We need to get the Three.js library.
+      // We'll grab the core part for our scene.
+      import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
+      // And a special helper to create the AR button easily.
+      import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
+
+      let camera, scene, renderer;
+
+      init();
+      // No animate() function called directly here; ARButton will handle the loop.
+
+      function init() {
+        // This is like setting up our empty stage for the magic.
+
+        scene = new THREE.Scene(); // Our empty world
+
+        // Our camera is like your eyes in the magic world.
+        // We set it up to see things clearly, but its position will be updated by the headset.
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+        // This is the artist who draws everything for us.
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // 'alpha: true' is important for transparency in AR
+        renderer.setPixelRatio(window.devicePixelRatio); // Makes sure things look sharp on high-res screens
+        renderer.setSize(window.innerWidth, window.innerHeight); // Makes the drawing area fill the screen
+        renderer.xr.enabled = true; // VERY important! This tells the artist to get ready for AR/VR magic.
+        document.body.appendChild(renderer.domElement); // Add the drawing area to our webpage
+
+        // We need a special button to start the AR magic!
+        // ARButton helps us create a button that knows how to ask the headset to start AR.
+        // We tell it to request 'immersive-ar' session.
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
+        document.body.appendChild(arButton);
+
+        // When the window size changes, we want our scene to adjust
+        window.addEventListener('resize', onWindowResize);
+      }
+
+      function onWindowResize() {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+    </script>
   </body>
 </html>
