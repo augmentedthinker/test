@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with a Spinning Ball</title>
+    <title>My Magic AR Window with a Circling Ball</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -37,60 +37,57 @@
   </head>
   <body>
     <script type="module">
-      // We need to get the Three.js library and its AR button helper.
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
-      let camera, scene, renderer, sphere; // Now we have a 'sphere' variable!
+      let camera, scene, renderer, sphere;
+      let pivotGroup; // This is our new invisible "merry-go-round" holder!
 
       init();
 
       function init() {
-        // This is still our empty stage for the magic.
         scene = new THREE.Scene();
-
-        // And our camera (your eyes).
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-        // Our artist who draws everything.
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true; // Still telling the artist to get ready for AR magic.
+        renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // Here's our super awesome AR button!
         const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
-        arButton.id = 'arButton'; // Giving our button its special name for styling.
+        arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // --- NEW MAGIC FOR OUR BOUNCY BALL! ---
-
-        // First, we need some light! Just like in your room, magic objects need light to be seen.
-        // This is a soft light that brightens everything a little.
+        // Add lights so we can see our sphere
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
-
-        // This is a stronger light, like a sunny window, to make our ball look solid.
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(0, 5, 5); // We place it above and slightly in front.
+        directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // Now, let's create our bouncy ball!
-        const geometry = new THREE.SphereGeometry(0.5, 32, 32); // This is the ball's shape (0.5 meters big).
-        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // This makes it green and able to catch light.
-        sphere = new THREE.Mesh(geometry, material); // We combine the shape and color to make our ball.
+        // --- NEW MAGIC FOR CIRCLING THE SPHERE! ---
 
-        // We place the ball. Imagine (0,0,0) is where you started the AR experience on the floor.
-        // We put it 1.5 meters up (like eye level) and 3 meters in front of you.
-        sphere.position.set(0, 1.5, -3);
-        scene.add(sphere); // Add the ball to our magic world!
+        // 1. Create our invisible "merry-go-round" holder.
+        // This group will sit where you start the AR experience (on the floor).
+        pivotGroup = new THREE.Group();
+        scene.add(pivotGroup); // Add this holder to our magic world
 
-        // This is a super important part! It tells our artist (renderer) to keep drawing our scene
-        // over and over again, many times a second. This is how we make things move.
+        // 2. Create our bouncy ball (sphere)
+        const geometry = new THREE.SphereGeometry(0.5, 32, 32); // Still 0.5 meters big
+        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Still green
+        sphere = new THREE.Mesh(geometry, material);
+
+        // 3. Position the ball RELATIVE to its merry-go-round.
+        // It's 1.2 meters high (your eye level) and 2 meters (about 6 feet) in front of the center of the merry-go-round.
+        sphere.position.set(0, 1.2, -2);
+
+        // 4. Attach the bouncy ball to our invisible merry-go-round.
+        pivotGroup.add(sphere); // Now the ball is part of the spinning group!
+
+        // Set the animation loop to keep everything moving.
         renderer.setAnimationLoop(render);
 
-        // When the window size changes, we want our scene to adjust
         window.addEventListener('resize', onWindowResize);
       }
 
@@ -100,14 +97,13 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      // This function is called over and over, super fast!
       function render() {
-        // We tell our ball to spin a tiny bit each time this function is called.
-        // This makes it look like it's continuously rotating.
-        sphere.rotation.y += 0.01; // Spin around its middle (y-axis)
+        // --- NEW SPINNING MAGIC! ---
+        // Instead of the ball spinning itself, we spin the invisible merry-go-round!
+        // This makes the ball orbit around you slowly.
+        pivotGroup.rotation.y += 0.005; // Make it spin slower for a gentle circle
 
-        // Tell the artist to draw everything in our magic world for this moment.
-        renderer.render(scene, camera);
+        renderer.render(scene, camera); // Draw everything!
       }
     </script>
   </body>
