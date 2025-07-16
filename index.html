@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Hit-Test</title>
+    <title>My Magic AR Window with Pulsing Lasers and a Floor</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -41,13 +41,10 @@
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
       let camera, scene, renderer, sphere1, sphere2;
-      let pivotGroup2; // Only pivotGroup2 remains for the blue sphere
+      let pivotGroup1, pivotGroup2;
       let controller1, controller2;
       let laser1, laser2;
-
-      // NEW: Variables for hit-testing
-      let hitTestSource = null; // This will hold our hit-test "tool"
-      let localReferenceSpace = null; // This tells us how positions are measured in the AR world
+      let floor; // NEW: Our variable for the floor object
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -80,27 +77,26 @@
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // --- Our green bouncy ball (now for hit-testing) ---
+        pivotGroup1 = new THREE.Group();
+        scene.add(pivotGroup1);
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
         const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere1 = new THREE.Mesh(geometry1, material1);
-        scene.add(sphere1); // Add sphere1 directly to the scene
-        sphere1.visible = false; // Initially hide it until we find a hit!
+        sphere1.position.set(0, 1.0, -2);
+        pivotGroup1.add(sphere1);
 
-        // --- Our blue bouncy ball (still circling) ---
         pivotGroup2 = new THREE.Group();
         scene.add(pivotGroup2);
         const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
         const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff });
         sphere2 = new THREE.Mesh(geometry2, material2);
-        sphere2.position.set(0, 1.0, 2); // Still at eye level, 2m behind
+        sphere2.position.set(0, 1.0, 2);
         pivotGroup2.add(sphere2);
 
-        // --- Controllers and Lasers ---
-        controller1 = renderer.xr.getController(0); // Right controller
+        controller1 = renderer.xr.getController(0);
         scene.add(controller1);
 
-        controller2 = renderer.xr.getController(1); // Left controller
+        controller2 = renderer.xr.getController(1);
         scene.add(controller2);
 
         const laserGeometry = new THREE.BufferGeometry().setFromPoints([
@@ -130,38 +126,22 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
-        // --- NEW: WebXR Session Event Listeners for Hit-Testing ---
-        renderer.xr.addEventListener('sessionstart', function (event) {
-          const session = renderer.xr.getSession();
-
-          // Request a hit test source that uses the 'viewer' (your head) as the origin for rays
-          // This will allow us to cast rays into the environment.
-          session.requestReferenceSpace('viewer').then(function (viewerSpace) {
-            session.requestHitTestSource({ space: viewerSpace }).then(function (source) {
-              hitTestSource = source;
-            });
-          });
-
-          // Request the 'local-floor' reference space. This is how we'll get the
-          // hit test results in a way that matches your real-world floor.
-          session.requestReferenceSpace('local-floor').then(function (space) {
-            localReferenceSpace = space;
-          });
-
-          // Hide the green sphere until a hit is found
-          sphere1.visible = false;
+        // --- NEW: Create our virtual floor! ---
+        const floorGeometry = new THREE.PlaneGeometry(20, 20); // A large 20x20 meter plane
+        const floorMaterial = new THREE.MeshStandardMaterial({
+          color: 0x505050, // Dark gray color
+          roughness: 0.6, // Makes it look a bit matte
+          metalness: 0.1  // A little bit of metalness
         });
+        floor = new THREE.Mesh(floorGeometry, floorMaterial);
 
-        renderer.xr.addEventListener('sessionend', function (event) {
-          // Clean up the hit test source when the AR session ends
-          if (hitTestSource) {
-            hitTestSource.cancel();
-            hitTestSource = null;
-          }
-          localReferenceSpace = null;
-          // Show the green sphere again, or hide it if you prefer it only in AR.
-          sphere1.visible = false; // Hide it when leaving AR
-        });
+        // Rotate the plane so it lays flat on the XZ plane (like a floor)
+        floor.rotation.x = -Math.PI / 2; // This rotates it -90 degrees around the X-axis
+
+        // Position the floor at y=0, which should be roughly your starting floor level in AR
+        floor.position.y = 0;
+
+        scene.add(floor); // Add the floor to our scene!
 
         renderer.setAnimationLoop(render);
 
@@ -188,54 +168,20 @@
         laser2.scale.z = 1;
       }
 
-      // The render function now takes 'timestamp' and 'frame' (important for hit-testing)
-      function render(timestamp, frame) {
-        // The blue bouncy ball keeps circling!
+      function render(timestamp) {
+        pivotGroup1.rotation.y += 0.005;
         pivotGroup2.rotation.y -= 0.005;
 
-        // Lasers still pulse
         const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
         const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
+
         laser1.material.opacity = opacityPulse;
         laser1.scale.z = lengthPulse;
+
         laser2.material.opacity = opacityPulse;
         laser2.scale.z = lengthPulse;
 
-        // --- NEW: Hit-Testing Logic for Green Sphere ---
-        // We only perform hit-testing if we have an active AR session,
-        // our hit test source, and a reference space to place objects in.
-        if (frame && hitTestSource && localReferenceSpace) {
-          // Get the hit test results for the current frame.
-          // This tells us if any of our 'transient-pointer' rays hit a surface.
-          const hitTestResults = frame.getHitTestResults(hitTestSource);
-
-          if (hitTestResults.length > 0) {
-            // If we found a hit, get the very first one.
-            const hit = hitTestResults[0];
-
-            // Get the 3D position and orientation of where the hit occurred in our AR world.
-            // We use 'localReferenceSpace' so the position is relative to your starting floor.
-            const hitPose = hit.getPose(localReferenceSpace);
-
-            // Move the green sphere to the exact hit position.
-            sphere1.position.copy(hitPose.transform.position);
-
-            // Make the sphere sit nicely on the surface (adjust by its radius)
-            // Since our sphere has a radius of 0.5, we add 0.5 to its Y position.
-            sphere1.position.y += 0.5;
-
-            // Make the sphere visible now that it has a place to be!
-            sphere1.visible = true;
-          } else {
-            // If no hit is detected by the laser, hide the green sphere.
-            sphere1.visible = false;
-          }
-        } else {
-          // If we are not in an AR session, or hit-testing isn't ready, ensure sphere1 is hidden.
-          sphere1.visible = false;
-        }
-
-        renderer.render(scene, camera); // Draw everything!
+        renderer.render(scene, camera);
       }
     </script>
   </body>
