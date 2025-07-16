@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Circling Balls</title>
+    <title>My Magic AR Window with Lasers</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -40,8 +40,11 @@
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
-      let camera, scene, renderer, sphere1, sphere2; // Now we have two spheres!
-      let pivotGroup1, pivotGroup2; // And two merry-go-round holders!
+      let camera, scene, renderer, sphere1, sphere2;
+      let pivotGroup1, pivotGroup2;
+      // NEW: Variables for our controllers and their lasers!
+      let controller1, controller2; // These will be our "controller holders"
+      let laser1, laser2;         // These will be our laser lines
 
       init();
 
@@ -66,35 +69,52 @@
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // --- FIRST BOUNCY BALL (Green) ---
-        // 1. Create its invisible "merry-go-round" holder.
+        // --- Our two circling bouncy balls (Green and Blue) ---
         pivotGroup1 = new THREE.Group();
-        scene.add(pivotGroup1); // Add this holder to our magic world
-
-        // 2. Create the first bouncy ball (green)
-        const geometry1 = new THREE.SphereGeometry(0.5, 32, 32); // Still 0.5 meters big
-        const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Green color
+        scene.add(pivotGroup1);
+        const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
+        const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere1 = new THREE.Mesh(geometry1, material1);
-
-        // 3. Position the green ball relative to its merry-go-round.
-        // It's 1.0 meters high (lower than before, should be around eye level) and 2 meters in front.
         sphere1.position.set(0, 1.0, -2);
-        pivotGroup1.add(sphere1); // Attach the green ball to its merry-go-round
+        pivotGroup1.add(sphere1);
 
-        // --- SECOND BOUNCY BALL (Blue) ---
-        // 1. Create a *second* invisible "merry-go-round" holder for the blue ball.
         pivotGroup2 = new THREE.Group();
-        scene.add(pivotGroup2); // Add this new holder to our magic world
-
-        // 2. Create the second bouncy ball (blue)
-        const geometry2 = new THREE.SphereGeometry(0.5, 32, 32); // Same size
-        const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff }); // A nice blue color
+        scene.add(pivotGroup2);
+        const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
+        const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff });
         sphere2 = new THREE.Mesh(geometry2, material2);
+        sphere2.position.set(0, 1.0, 2);
+        pivotGroup2.add(sphere2);
 
-        // 3. Position the blue ball relative to its merry-go-round.
-        // It's also 1.0 meters high, but 2 meters *behind* the center, making it opposite the green one.
-        sphere2.position.set(0, 1.0, 2); // Notice the positive 'z' value
-        pivotGroup2.add(sphere2); // Attach the blue ball to its merry-go-round
+        // --- NEW MAGIC FOR CONTROLLER LASERS! ---
+
+        // 1. Get the "holder" for the first controller (usually your right hand)
+        controller1 = renderer.xr.getController(0);
+        scene.add(controller1); // Add this holder to the scene so it updates its position automatically
+
+        // 2. Get the "holder" for the second controller (usually your left hand)
+        controller2 = renderer.xr.getController(1);
+        scene.add(controller2); // Add this holder to the scene too
+
+        // 3. Create the shape of our laser line.
+        // It's just a simple line that goes from 0,0,0 (the controller's tip)
+        // to 5 units straight forward (which is negative Z in Three.js).
+        const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0), // Start point of the laser
+          new THREE.Vector3(0, 0, -5) // End point of the laser (5 meters long)
+        ]);
+
+        // 4. Create the look of our laser. We'll make it bright red.
+        // (Note: 'linewidth' sometimes doesn't show up thick on all devices, but we can try!)
+        const laserMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, linewidth: 3 });
+
+        // 5. Create the actual laser lines and attach them to their controllers!
+        laser1 = new THREE.Line(laserGeometry, laserMaterial);
+        controller1.add(laser1); // Now this laser will move with your first controller!
+
+        laser2 = new THREE.Line(laserGeometry, laserMaterial);
+        controller2.add(laser2); // And this one with your second controller!
+
 
         // Set the animation loop to keep everything moving.
         renderer.setAnimationLoop(render);
@@ -109,11 +129,12 @@
       }
 
       function render() {
-        // Make the first merry-go-round (with the green ball) spin one way
+        // Our bouncy balls keep circling!
         pivotGroup1.rotation.y += 0.005;
+        pivotGroup2.rotation.y -= 0.005;
 
-        // Make the second merry-go-round (with the blue ball) spin the OTHER way!
-        pivotGroup2.rotation.y -= 0.005; // Notice the '-=' to make it go opposite
+        // The lasers automatically follow the controllers because they are attached to them.
+        // No extra code needed here for them to move!
 
         renderer.render(scene, camera); // Draw everything!
       }
