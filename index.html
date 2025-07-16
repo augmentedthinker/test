@@ -7,26 +7,40 @@
       canvas { display: block; }
       #arButton {
         position: absolute;
-        bottom: 30px; /* Moved slightly up from the bottom */
+        bottom: 30px; /* Keeps it 30px from the bottom, the button will grow upwards */
         left: 50%;
         transform: translateX(-50%);
-        padding: 25px 50px; /* Made it much bigger! */
-        background-image: linear-gradient(to right, #FF5733, #FFC300); /* Bright orange to yellow gradient */
-        color: white; /* White text for contrast */
-        border: 5px solid #4CAF50; /* A vibrant green border */
-        border-radius: 15px; /* Slightly rounded corners */
-        font-size: 30px; /* Much larger text */
-        font-weight: bold; /* Make the text bold */
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* A subtle shadow for the text to make it stand out */
+        
+        /* --- SIZE CHANGES (Roughly 3x larger) --- */
+        padding: 75px 150px; /* MUCH bigger padding to expand the button */
+        font-size: 90px; /* HUGE text size! */
+
+        /* --- COLOR CHANGES --- */
+        background-color: #000080; /* A deep, dark blue */
+        color: white; /* Keep the text bright white */
+        border: 10px solid #000050; /* A slightly darker blue border */
+        border-radius: 25px; /* Keeps it nicely rounded, not too squarish */
+        
+        /* --- POP EFFECTS --- */
+        font-weight: bold;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7); /* A more pronounced shadow for the text */
+        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8); /* A strong blue glow around the button */
+        
         cursor: pointer;
         z-index: 1000;
-        box-shadow: 0 0 30px rgba(255, 200, 0, 0.7), 0 0 60px rgba(255, 87, 51, 0.5); /* Big, colorful glow around the button */
-        transition: all 0.3s ease; /* Makes hover effects smooth */
+        transition: all 0.2s ease-in-out; /* Makes all changes smooth and quick */
       }
+      
       #arButton:hover {
-        background-image: linear-gradient(to right, #FFC300, #FF5733); /* Reverse colors on hover */
-        box-shadow: 0 0 40px rgba(255, 200, 0, 1), 0 0 80px rgba(255, 87, 51, 0.8); /* Even bigger glow on hover! */
-        transform: translateX(-50%) scale(1.08); /* Makes it pop out a bit when you point at it */
+        background-color: #FF0000; /* FIERY RED when you hover over it! */
+        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9); /* A bigger, brighter red glow */
+        transform: translateX(-50%) scale(1.03); /* Pops out a tiny bit more */
+      }
+
+      #arButton:active { /* This makes it react when you actually click/press it */
+        background-color: #CC0000; /* A slightly darker red when pressed */
+        transform: translateX(-50%) scale(0.98); /* Makes it look like it's pressing in */
+        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9); /* A slightly reduced glow when pressed */
       }
     </style>
   </head>
