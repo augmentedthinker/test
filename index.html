@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with a Circling Ball</title>
+    <title>My Magic AR Window with a Circling Ball and Controllers</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -37,11 +37,18 @@
   </head>
   <body>
     <script type="module">
+      // Still need Three.js and the AR button.
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
+      // --- NEW: This special helper loads the 3D models of the controllers! ---
+      import { XRControllerModelFactory } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/XRControllerModelFactory.js';
 
       let camera, scene, renderer, sphere;
-      let pivotGroup; // This is our new invisible "merry-go-round" holder!
+      let pivotGroup;
+      // --- NEW: Variables for our controllers! ---
+      let controller1, controller2;
+      let controllerGrip1, controllerGrip2;
+      let controllerModelFactory; // This will help us get the controller look just right.
 
       init();
 
@@ -59,33 +66,47 @@
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // Add lights so we can see our sphere
+        // Add lights so we can see our sphere (and now controllers!)
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // --- NEW MAGIC FOR CIRCLING THE SPHERE! ---
-
-        // 1. Create our invisible "merry-go-round" holder.
-        // This group will sit where you start the AR experience (on the floor).
+        // Our invisible "merry-go-round" holder for the sphere.
         pivotGroup = new THREE.Group();
-        scene.add(pivotGroup); // Add this holder to our magic world
+        scene.add(pivotGroup);
 
-        // 2. Create our bouncy ball (sphere)
-        const geometry = new THREE.SphereGeometry(0.5, 32, 32); // Still 0.5 meters big
-        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Still green
+        const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere = new THREE.Mesh(geometry, material);
+        sphere.position.set(0, 1.2, -2); // Still 1.2m high, 2m out from the center
+        pivotGroup.add(sphere);
 
-        // 3. Position the ball RELATIVE to its merry-go-round.
-        // It's 1.2 meters high (your eye level) and 2 meters (about 6 feet) in front of the center of the merry-go-round.
-        sphere.position.set(0, 1.2, -2);
+        // --- NEW MAGIC FOR CONTROLLERS! ---
 
-        // 4. Attach the bouncy ball to our invisible merry-go-round.
-        pivotGroup.add(sphere); // Now the ball is part of the spinning group!
+        // 1. We get the "brains" of the controllers. These track their position and rotation.
+        controller1 = renderer.xr.getController(0); // This is usually your left controller
+        scene.add(controller1); // Add its tracking to our world
+        
+        controller2 = renderer.xr.getController(1); // This is usually your right controller
+        scene.add(controller2);
 
-        // Set the animation loop to keep everything moving.
+        // 2. We get the "grip" parts. This is where the actual 3D model of the controller attaches.
+        controllerGrip1 = renderer.xr.getControllerGrip(0);
+        scene.add(controllerGrip1); // Add its tracking to our world
+
+        controllerGrip2 = renderer.xr.getControllerGrip(1);
+        scene.add(controllerGrip2);
+
+        // 3. We use our special helper to create the correct 3D models for your Quest controllers.
+        controllerModelFactory = new XRControllerModelFactory();
+
+        // 4. We attach the pretty 3D models to their tracking grips!
+        controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+        controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+
+        // Set the animation loop to keep everything moving and updated.
         renderer.setAnimationLoop(render);
 
         window.addEventListener('resize', onWindowResize);
@@ -98,10 +119,8 @@
       }
 
       function render() {
-        // --- NEW SPINNING MAGIC! ---
-        // Instead of the ball spinning itself, we spin the invisible merry-go-round!
-        // This makes the ball orbit around you slowly.
-        pivotGroup.rotation.y += 0.005; // Make it spin slower for a gentle circle
+        // Keep our bouncy ball circling!
+        pivotGroup.rotation.y += 0.005;
 
         renderer.render(scene, camera); // Draw everything!
       }
