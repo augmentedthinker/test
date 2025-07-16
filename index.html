@@ -4,13 +4,13 @@
     <title>My First Magic AR Window</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script>
-      // Just a little note: The previous code let A-Frame guess if you wanted AR or VR.
-      // This new code is like telling A-Frame directly: "Hey, we REALLY want AR!"
+      // We're using A-Frame version 1.5.0, which is great for WebXR on Meta Quest.
+      // This time, we're giving the Quest very precise instructions for AR.
     </script>
   </head>
   <body>
     <a-scene
-      webxr="sessionMode: immersive-ar; requiredFeatures: local-floor, hit-test;"
+      webxr="requiredFeatures: local-floor, hit-test, dom-overlay; optionalFeatures: unbounded; referenceSpaceType: local-floor;"
       renderer="colorManagement: true"
     >
       </a-scene>
