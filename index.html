@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers and a Lowered Floor</title>
+    <title>My Magic AR Window with Fixed World Anchor</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -45,6 +45,7 @@
       let controller1, controller2;
       let laser1, laser2;
       let floor;
+      let referenceSpace; // NEW: Variable to hold our desired reference space
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -64,9 +65,35 @@
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
+        renderer.xr.enabled = true; // Enable WebXR on the renderer
         document.body.appendChild(renderer.domElement);
 
+        // NEW: Listen for when the XR session actually starts
+        renderer.xr.addEventListener('sessionstart', (event) => {
+          // Once the session starts, request the 'local-floor' reference space.
+          // This tells WebXR: "Anchor my virtual world to the physical floor."
+          event.session.requestReferenceSpace('local-floor').then((space) => {
+            referenceSpace = space;
+            renderer.xr.setReferenceSpace(referenceSpace); // Tell the renderer to use this space
+            console.log("Using 'local-floor' reference space for scene anchoring.");
+          }).catch((error) => {
+            console.error("Failed to get 'local-floor' reference space:", error);
+            // Fallback to 'local' if 'local-floor' isn't available
+            event.session.requestReferenceSpace('local').then((space) => {
+              referenceSpace = space;
+              renderer.xr.setReferenceSpace(referenceSpace);
+              console.log("Fallback to 'local' reference space.");
+            });
+          });
+        });
+
+        // Optional: Listen for when the XR session ends (for cleanup or resetting if needed)
+        renderer.xr.addEventListener('sessionend', () => {
+          referenceSpace = null;
+          console.log("XR session ended.");
+        });
+
+        // The ARButton helps us enter the immersive AR session
         const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
@@ -82,7 +109,8 @@
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
         const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere1 = new THREE.Mesh(geometry1, material1);
-        sphere1.position.set(0, 1.0, -2);
+        // Adjusted sphere height: Now that y=0 should be the floor, 1.2m is a good floating height.
+        sphere1.position.set(0, 1.2, -2);
         pivotGroup1.add(sphere1);
 
         pivotGroup2 = new THREE.Group();
@@ -90,7 +118,8 @@
         const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
         const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff });
         sphere2 = new THREE.Mesh(geometry2, material2);
-        sphere2.position.set(0, 1.0, 2);
+        // Adjusted sphere height
+        sphere2.position.set(0, 1.2, 2);
         pivotGroup2.add(sphere2);
 
         controller1 = renderer.xr.getController(0);
@@ -136,8 +165,8 @@
 
         floor.rotation.x = -Math.PI / 2;
 
-        // --- NEW: Lowering the floor! ---
-        floor.position.y = -1.5; // Moved down by 1.5 meters (about 5 feet) from its current 0 position
+        // NEW: Floor position is now correctly at y=0, which should be your physical floor!
+        floor.position.y = 0;
 
         scene.add(floor);
 
