@@ -3,60 +3,58 @@
   <head>
     <title>My First Magic AR Window (Three.js)</title>
     <style>
-      body { margin: 0; overflow: hidden; } /* Makes the page full screen */
-      canvas { display: block; } /* Removes extra space below the canvas */
+      body { margin: 0; overflow: hidden; }
+      canvas { display: block; }
       #arButton {
         position: absolute;
-        bottom: 20px;
+        bottom: 30px; /* Moved slightly up from the bottom */
         left: 50%;
         transform: translateX(-50%);
-        padding: 10px 20px;
-        background-color: #007bff;
-        color: white;
-        border: none;
-        border-radius: 5px;
-        font-size: 16px;
+        padding: 25px 50px; /* Made it much bigger! */
+        background-image: linear-gradient(to right, #FF5733, #FFC300); /* Bright orange to yellow gradient */
+        color: white; /* White text for contrast */
+        border: 5px solid #4CAF50; /* A vibrant green border */
+        border-radius: 15px; /* Slightly rounded corners */
+        font-size: 30px; /* Much larger text */
+        font-weight: bold; /* Make the text bold */
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5); /* A subtle shadow for the text to make it stand out */
         cursor: pointer;
-        z-index: 1000; /* Makes sure the button is on top */
+        z-index: 1000;
+        box-shadow: 0 0 30px rgba(255, 200, 0, 0.7), 0 0 60px rgba(255, 87, 51, 0.5); /* Big, colorful glow around the button */
+        transition: all 0.3s ease; /* Makes hover effects smooth */
+      }
+      #arButton:hover {
+        background-image: linear-gradient(to right, #FFC300, #FF5733); /* Reverse colors on hover */
+        box-shadow: 0 0 40px rgba(255, 200, 0, 1), 0 0 80px rgba(255, 87, 51, 0.8); /* Even bigger glow on hover! */
+        transform: translateX(-50%) scale(1.08); /* Makes it pop out a bit when you point at it */
       }
     </style>
   </head>
   <body>
     <script type="module">
-      // 1. We need to get the Three.js library.
-      // We'll grab the core part for our scene.
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
-      // And a special helper to create the AR button easily.
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
       let camera, scene, renderer;
 
       init();
-      // No animate() function called directly here; ARButton will handle the loop.
 
       function init() {
-        // This is like setting up our empty stage for the magic.
-
-        scene = new THREE.Scene(); // Our empty world
-
-        // Our camera is like your eyes in the magic world.
-        // We set it up to see things clearly, but its position will be updated by the headset.
+        scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-        // This is the artist who draws everything for us.
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // 'alpha: true' is important for transparency in AR
-        renderer.setPixelRatio(window.devicePixelRatio); // Makes sure things look sharp on high-res screens
-        renderer.setSize(window.innerWidth, window.innerHeight); // Makes the drawing area fill the screen
-        renderer.xr.enabled = true; // VERY important! This tells the artist to get ready for AR/VR magic.
-        document.body.appendChild(renderer.domElement); // Add the drawing area to our webpage
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-        // We need a special button to start the AR magic!
-        // ARButton helps us create a button that knows how to ask the headset to start AR.
-        // We tell it to request 'immersive-ar' session.
+        // This is where we create our special button that knows how to start AR.
         const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
+        // We make sure our custom ID is applied to the button so our styles work.
+        arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // When the window size changes, we want our scene to adjust
         window.addEventListener('resize', onWindowResize);
       }
 
