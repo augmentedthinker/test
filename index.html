@@ -37,18 +37,20 @@
   </head>
   <body>
     <script type="module">
-      // Still need Three.js and the AR button.
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
-      // --- NEW: This special helper loads the 3D models of the controllers! ---
+      // *** NEW HELPER FOR CONTROLLERS! ***
+      // This special helper knows how to find and draw the exact models of your Quest controllers.
       import { XRControllerModelFactory } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/XRControllerModelFactory.js';
 
       let camera, scene, renderer, sphere;
       let pivotGroup;
-      // --- NEW: Variables for our controllers! ---
+      
+      // *** NEW VARIABLES FOR CONTROLLERS ***
+      // These will hold our controller objects later.
       let controller1, controller2;
-      let controllerGrip1, controllerGrip2;
-      let controllerModelFactory; // This will help us get the controller look just right.
+      let controllerGrip1, controllerGrip2; // These are like invisible hands that hold the controller models
+      let controllerModelFactory; // Our tool to make the controller models
 
       init();
 
@@ -66,47 +68,58 @@
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // Add lights so we can see our sphere (and now controllers!)
+        // Add lights so we can see our sphere
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // Our invisible "merry-go-round" holder for the sphere.
+        // Setup the orbiting sphere
         pivotGroup = new THREE.Group();
         scene.add(pivotGroup);
-
         const geometry = new THREE.SphereGeometry(0.5, 32, 32);
         const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere = new THREE.Mesh(geometry, material);
-        sphere.position.set(0, 1.2, -2); // Still 1.2m high, 2m out from the center
+        sphere.position.set(0, 1.2, -2);
         pivotGroup.add(sphere);
 
-        // --- NEW MAGIC FOR CONTROLLERS! ---
+        // --- NEW MAGIC FOR OUR CONTROLLERS! ---
 
-        // 1. We get the "brains" of the controllers. These track their position and rotation.
-        controller1 = renderer.xr.getController(0); // This is usually your left controller
-        scene.add(controller1); // Add its tracking to our world
-        
-        controller2 = renderer.xr.getController(1); // This is usually your right controller
-        scene.add(controller2);
-
-        // 2. We get the "grip" parts. This is where the actual 3D model of the controller attaches.
-        controllerGrip1 = renderer.xr.getControllerGrip(0);
-        scene.add(controllerGrip1); // Add its tracking to our world
-
-        controllerGrip2 = renderer.xr.getControllerGrip(1);
-        scene.add(controllerGrip2);
-
-        // 3. We use our special helper to create the correct 3D models for your Quest controllers.
+        // 1. Get our special tool ready to make controller models.
         controllerModelFactory = new XRControllerModelFactory();
 
-        // 4. We attach the pretty 3D models to their tracking grips!
-        controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-        controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+        // 2. Set up Controller 1 (usually your right hand)
+        controller1 = renderer.xr.getController(0); // This gets the controller's "pointer"
+        scene.add(controller1); // Add it to the scene so it can track movement
 
-        // Set the animation loop to keep everything moving and updated.
+        controllerGrip1 = renderer.xr.getControllerGrip(0); // This gets the "grip" part, where the model will sit
+        // Load the actual 3D model of the Quest controller and add it to the grip.
+        controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+        scene.add(controllerGrip1); // Add the grip (with its model) to the scene
+
+        // 3. Set up Controller 2 (usually your left hand) - same steps!
+        controller2 = renderer.xr.getController(1);
+        scene.add(controller2);
+
+        controllerGrip2 = renderer.xr.getControllerGrip(1);
+        controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+        scene.add(controllerGrip2);
+
+        // Optional: Add a simple ray (like a laser pointer) coming out of each controller
+        // This helps you see where you're "pointing" with your controllers.
+        const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+        const rayMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2 }); // Magenta colored line
+
+        const line1 = new THREE.Line(rayGeometry, rayMaterial);
+        line1.scale.z = 5; // Make the line 5 units long (5 meters)
+        controller1.add(line1); // Attach it to the "pointer" part of Controller 1
+
+        const line2 = new THREE.Line(rayGeometry, rayMaterial);
+        line2.scale.z = 5;
+        controller2.add(line2); // Attach it to the "pointer" part of Controller 2
+
+        // Set the animation loop to keep everything moving.
         renderer.setAnimationLoop(render);
 
         window.addEventListener('resize', onWindowResize);
@@ -119,8 +132,7 @@
       }
 
       function render() {
-        // Keep our bouncy ball circling!
-        pivotGroup.rotation.y += 0.005;
+        pivotGroup.rotation.y += 0.005; // Keep the ball circling!
 
         renderer.render(scene, camera); // Draw everything!
       }
