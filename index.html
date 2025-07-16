@@ -1,100 +1,64 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
   <head>
-    <title>Quest 2 Simple AR Cube</title>
-
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-    <style>
-      /* Basic CSS to ensure the HTML body doesn't have default margins 
-        and to hide any overflow, which is good practice for full-screen XR apps.
-        Also, styling for our status message.
-      */
-      body {
-        margin: 0;
-        overflow: hidden;
-        background-color: black; /* Default background if AR doesn't start */
-      }
-      #status {
-        position: fixed;
-        bottom: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background-color: rgba(0, 0, 0, 0.7);
-        color: white;
-        padding: 10px 20px;
-        border-radius: 5px;
-        font-family: sans-serif;
-        font-size: 16px;
-        z-index: 10; /* Ensure it's above other elements */
-      }
-    </style>
+    <meta charset="UTF-8">
+    <title>Quest 2 AR Cube (Three.js)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Three.js core -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
+    <!-- Three.js WebXR helpers -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/webxr/ARButton.js"></script>
   </head>
-  <body>
-    <a-scene
-      vr-mode-ui="enabled: false"
-      ar-mode-ui="enabled: true"
-      webxr="requiredFeatures: ['hit-test', 'dom-overlay']; optionalFeatures: ['plane-detection', 'depth-sensing']; arModes: ['immersive-ar']; qol: true;"
-      renderer="alpha: true"
-    >
-      <a-camera position="0 1.6 0"></a-camera>
-
-      <a-box
-        position="0 1 -2"
-        rotation="0 45 0"
-        color="#FF0000"
-        depth="0.5"
-        height="0.5"
-        width="0.5"
-      ></a-box>
-
-      <div id="dom-overlay" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 1;"></div>
-    </a-scene>
-
-    <div id="status">Checking WebXR AR support...</div>
-
+  <body style="margin:0; overflow:hidden; background:transparent;">
     <script>
-      // 5. JavaScript for Status Updates:
-      // This script dynamically updates the text in the `#status` div.
+      let camera, scene, renderer;
+      let cube;
 
-      const statusDiv = document.getElementById('status');
-      const scene = document.querySelector('a-scene');
+      // Initialize Scene
+      function init() {
+        // Renderer: alpha:true for AR passthrough
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
 
-      // Listen for when the A-Frame scene enters any immersive mode (VR or AR)
-      scene.addEventListener('enter-vr', function () {
-        if (scene.is('ar-mode')) {
-          statusDiv.textContent = 'Entered AR Mode! Look for the red cube.';
-        } else if (scene.is('vr-mode')) {
-          // This should ideally not happen if arModes is set to 'immersive-ar' only
-          statusDiv.textContent = 'Entered VR Mode (AR session not initiated).';
-        } else {
-             statusDiv.textContent = 'Entered an unknown immersive mode.';
+        // Scene & Camera
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+        // Add a simple cube (1m x 1m x 1m)
+        const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+        const material = new THREE.MeshNormalMaterial();
+        cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 0, -1); // 1 meter in front of user
+        scene.add(cube);
+
+        // AR Button (from Three.js examples)
+        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+        // Animation Loop
+        renderer.setAnimationLoop(render);
+      }
+
+      // Render loop
+      function render(timestamp, frame) {
+        cube.rotation.y += 0.01;
+        cube.rotation.x += 0.005;
+        renderer.render(scene, camera);
+      }
+
+      window.addEventListener('load', init);
+      window.addEventListener('resize', () => {
+        if (renderer && camera) {
+          camera.aspect = window.innerWidth / window.innerHeight;
+          camera.updateProjectionMatrix();
+          renderer.setSize(window.innerWidth, window.innerHeight);
         }
       });
-
-      // Listen for when the A-Frame scene exits immersive mode
-      scene.addEventListener('exit-vr', function () {
-        statusDiv.textContent = 'Exited Immersive Mode. Click ENTER AR to re-enter.';
-      });
-
-      // Check for 'immersive-ar' session support when the page loads.
-      // This helps diagnose if the device/browser even supports AR.
-      if (navigator.xr) { // Check if the WebXR API is available
-        navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-          if (supported) {
-            statusDiv.textContent = 'WebXR AR supported! Click ENTER AR.';
-          } else {
-            statusDiv.textContent = 'WebXR AR not supported on this device/browser.';
-          }
-        }).catch(e => {
-          // Catch any errors during the session support check
-          statusDiv.textContent = `Error checking AR support: ${e.message}`;
-          console.error("Error checking AR session support:", e);
-        });
-      } else {
-        // If navigator.xr is not present, the browser does not support WebXR.
-        statusDiv.textContent = 'WebXR API not found in this browser.';
-      }
     </script>
+    <p style="position:fixed;bottom:1em;width:100%;text-align:center;z-index:10;color:#222;font-family:sans-serif;">
+      Tap "Enter AR" and look for the rotating cube!
+    </p>
   </body>
 </html>
