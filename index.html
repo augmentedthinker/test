@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with a Circling Ball and Controllers</title>
+    <title>My Magic AR Window with Circling Balls</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -39,18 +39,9 @@
     <script type="module">
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
-      // *** NEW HELPER FOR CONTROLLERS! ***
-      // This special helper knows how to find and draw the exact models of your Quest controllers.
-      import { XRControllerModelFactory } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/XRControllerModelFactory.js';
 
-      let camera, scene, renderer, sphere;
-      let pivotGroup;
-      
-      // *** NEW VARIABLES FOR CONTROLLERS ***
-      // These will hold our controller objects later.
-      let controller1, controller2;
-      let controllerGrip1, controllerGrip2; // These are like invisible hands that hold the controller models
-      let controllerModelFactory; // Our tool to make the controller models
+      let camera, scene, renderer, sphere1, sphere2; // Now we have two spheres!
+      let pivotGroup1, pivotGroup2; // And two merry-go-round holders!
 
       init();
 
@@ -68,56 +59,42 @@
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
-        // Add lights so we can see our sphere
+        // Add lights so we can see our spheres
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        // Setup the orbiting sphere
-        pivotGroup = new THREE.Group();
-        scene.add(pivotGroup);
-        const geometry = new THREE.SphereGeometry(0.5, 32, 32);
-        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        sphere = new THREE.Mesh(geometry, material);
-        sphere.position.set(0, 1.2, -2);
-        pivotGroup.add(sphere);
+        // --- FIRST BOUNCY BALL (Green) ---
+        // 1. Create its invisible "merry-go-round" holder.
+        pivotGroup1 = new THREE.Group();
+        scene.add(pivotGroup1); // Add this holder to our magic world
 
-        // --- NEW MAGIC FOR OUR CONTROLLERS! ---
+        // 2. Create the first bouncy ball (green)
+        const geometry1 = new THREE.SphereGeometry(0.5, 32, 32); // Still 0.5 meters big
+        const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 }); // Green color
+        sphere1 = new THREE.Mesh(geometry1, material1);
 
-        // 1. Get our special tool ready to make controller models.
-        controllerModelFactory = new XRControllerModelFactory();
+        // 3. Position the green ball relative to its merry-go-round.
+        // It's 1.0 meters high (lower than before, should be around eye level) and 2 meters in front.
+        sphere1.position.set(0, 1.0, -2);
+        pivotGroup1.add(sphere1); // Attach the green ball to its merry-go-round
 
-        // 2. Set up Controller 1 (usually your right hand)
-        controller1 = renderer.xr.getController(0); // This gets the controller's "pointer"
-        scene.add(controller1); // Add it to the scene so it can track movement
+        // --- SECOND BOUNCY BALL (Blue) ---
+        // 1. Create a *second* invisible "merry-go-round" holder for the blue ball.
+        pivotGroup2 = new THREE.Group();
+        scene.add(pivotGroup2); // Add this new holder to our magic world
 
-        controllerGrip1 = renderer.xr.getControllerGrip(0); // This gets the "grip" part, where the model will sit
-        // Load the actual 3D model of the Quest controller and add it to the grip.
-        controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-        scene.add(controllerGrip1); // Add the grip (with its model) to the scene
+        // 2. Create the second bouncy ball (blue)
+        const geometry2 = new THREE.SphereGeometry(0.5, 32, 32); // Same size
+        const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff }); // A nice blue color
+        sphere2 = new THREE.Mesh(geometry2, material2);
 
-        // 3. Set up Controller 2 (usually your left hand) - same steps!
-        controller2 = renderer.xr.getController(1);
-        scene.add(controller2);
-
-        controllerGrip2 = renderer.xr.getControllerGrip(1);
-        controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-        scene.add(controllerGrip2);
-
-        // Optional: Add a simple ray (like a laser pointer) coming out of each controller
-        // This helps you see where you're "pointing" with your controllers.
-        const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-        const rayMaterial = new THREE.LineBasicMaterial({ color: 0xff00ff, linewidth: 2 }); // Magenta colored line
-
-        const line1 = new THREE.Line(rayGeometry, rayMaterial);
-        line1.scale.z = 5; // Make the line 5 units long (5 meters)
-        controller1.add(line1); // Attach it to the "pointer" part of Controller 1
-
-        const line2 = new THREE.Line(rayGeometry, rayMaterial);
-        line2.scale.z = 5;
-        controller2.add(line2); // Attach it to the "pointer" part of Controller 2
+        // 3. Position the blue ball relative to its merry-go-round.
+        // It's also 1.0 meters high, but 2 meters *behind* the center, making it opposite the green one.
+        sphere2.position.set(0, 1.0, 2); // Notice the positive 'z' value
+        pivotGroup2.add(sphere2); // Attach the blue ball to its merry-go-round
 
         // Set the animation loop to keep everything moving.
         renderer.setAnimationLoop(render);
@@ -132,7 +109,11 @@
       }
 
       function render() {
-        pivotGroup.rotation.y += 0.005; // Keep the ball circling!
+        // Make the first merry-go-round (with the green ball) spin one way
+        pivotGroup1.rotation.y += 0.005;
+
+        // Make the second merry-go-round (with the blue ball) spin the OTHER way!
+        pivotGroup2.rotation.y -= 0.005; // Notice the '-=' to make it go opposite
 
         renderer.render(scene, camera); // Draw everything!
       }
