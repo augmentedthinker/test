@@ -6,43 +6,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- Three.js core -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.min.js"></script>
-    <!-- Three.js WebXR helpers -->
+    <!-- ARButton helper -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/webxr/ARButton.js"></script>
+    <style>
+      body { margin: 0; overflow: hidden; background: transparent; }
+      #info { position: fixed; bottom: 1em; width: 100%; text-align: center; z-index: 10; color: #222; font-family: sans-serif; }
+    </style>
   </head>
-  <body style="margin:0; overflow:hidden; background:transparent;">
+  <body>
+    <div id="info">Tap "Enter AR" and look for the rotating cube!</div>
     <script>
-      let camera, scene, renderer;
-      let cube;
+      let camera, scene, renderer, cube;
 
-      // Initialize Scene
       function init() {
-        // Renderer: alpha:true for AR passthrough
+        // Renderer: transparent for AR passthrough
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setClearColor(0x000000, 0); // FULLY transparent
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
+        renderer.xr.setReferenceSpaceType('local-floor');
         document.body.appendChild(renderer.domElement);
 
         // Scene & Camera
-        scene = new THREE.Scene();
+        scene = new THREE.Scene(); // NO background!
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-        // Add a simple cube (1m x 1m x 1m)
+        // Cube: 0.3m size, 1m in front
         const geometry = new THREE.BoxGeometry(0.3, 0.3, 0.3);
         const material = new THREE.MeshNormalMaterial();
         cube = new THREE.Mesh(geometry, material);
-        cube.position.set(0, 0, -1); // 1 meter in front of user
+        cube.position.set(0, 0, -1);
         scene.add(cube);
 
-        // AR Button (from Three.js examples)
-        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+        // ARButton - this will request "immersive-ar" for passthrough!
+        document.body.appendChild(ARButton.createButton(renderer, {
+          requiredFeatures: ['hit-test'],
+          optionalFeatures: ['dom-overlay'],
+          domOverlay: { root: document.body }
+        }));
 
-        // Animation Loop
+        // Animate!
         renderer.setAnimationLoop(render);
       }
 
-      // Render loop
-      function render(timestamp, frame) {
+      function render() {
         cube.rotation.y += 0.01;
         cube.rotation.x += 0.005;
         renderer.render(scene, camera);
@@ -57,8 +65,5 @@
         }
       });
     </script>
-    <p style="position:fixed;bottom:1em;width:100%;text-align:center;z-index:10;color:#222;font-family:sans-serif;">
-      Tap "Enter AR" and look for the rotating cube!
-    </p>
   </body>
 </html>
