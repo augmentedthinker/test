@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers</title>
+    <title>My Magic AR Window with Hit-Test</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -41,9 +41,13 @@
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
       let camera, scene, renderer, sphere1, sphere2;
-      let pivotGroup1, pivotGroup2;
+      let pivotGroup2; // Only pivotGroup2 remains for the blue sphere
       let controller1, controller2;
       let laser1, laser2;
+
+      // NEW: Variables for hit-testing
+      let hitTestSource = null; // This will hold our hit-test "tool"
+      let localReferenceSpace = null; // This tells us how positions are measured in the AR world
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -76,26 +80,27 @@
         directionalLight.position.set(0, 5, 5);
         scene.add(directionalLight);
 
-        pivotGroup1 = new THREE.Group();
-        scene.add(pivotGroup1);
+        // --- Our green bouncy ball (now for hit-testing) ---
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
         const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
         sphere1 = new THREE.Mesh(geometry1, material1);
-        sphere1.position.set(0, 1.0, -2);
-        pivotGroup1.add(sphere1);
+        scene.add(sphere1); // Add sphere1 directly to the scene
+        sphere1.visible = false; // Initially hide it until we find a hit!
 
+        // --- Our blue bouncy ball (still circling) ---
         pivotGroup2 = new THREE.Group();
         scene.add(pivotGroup2);
         const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
         const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff });
         sphere2 = new THREE.Mesh(geometry2, material2);
-        sphere2.position.set(0, 1.0, 2);
+        sphere2.position.set(0, 1.0, 2); // Still at eye level, 2m behind
         pivotGroup2.add(sphere2);
 
-        controller1 = renderer.xr.getController(0);
+        // --- Controllers and Lasers ---
+        controller1 = renderer.xr.getController(0); // Right controller
         scene.add(controller1);
 
-        controller2 = renderer.xr.getController(1);
+        controller2 = renderer.xr.getController(1); // Left controller
         scene.add(controller2);
 
         const laserGeometry = new THREE.BufferGeometry().setFromPoints([
@@ -103,18 +108,17 @@
           new THREE.Vector3(0, 0, -5)
         ]);
 
-        // NEW: We need to tell the material it can be transparent!
         const laserMaterial1 = new THREE.LineBasicMaterial({
           color: laserColors[currentColorIndex1],
           linewidth: 3,
-          transparent: true, // IMPORTANT: Allows us to change opacity
-          opacity: 1 // Start fully opaque
+          transparent: true,
+          opacity: 1
         });
         const laserMaterial2 = new THREE.LineBasicMaterial({
           color: laserColors[currentColorIndex2],
           linewidth: 3,
-          transparent: true, // IMPORTANT: Allows us to change opacity
-          opacity: 1 // Start fully opaque
+          transparent: true,
+          opacity: 1
         });
 
         laser1 = new THREE.Line(laserGeometry, laserMaterial1);
@@ -126,7 +130,39 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
-        // The render function will now receive a timestamp from WebXR
+        // --- NEW: WebXR Session Event Listeners for Hit-Testing ---
+        renderer.xr.addEventListener('sessionstart', function (event) {
+          const session = renderer.xr.getSession();
+
+          // Request a hit test source that uses the 'viewer' (your head) as the origin for rays
+          // This will allow us to cast rays into the environment.
+          session.requestReferenceSpace('viewer').then(function (viewerSpace) {
+            session.requestHitTestSource({ space: viewerSpace }).then(function (source) {
+              hitTestSource = source;
+            });
+          });
+
+          // Request the 'local-floor' reference space. This is how we'll get the
+          // hit test results in a way that matches your real-world floor.
+          session.requestReferenceSpace('local-floor').then(function (space) {
+            localReferenceSpace = space;
+          });
+
+          // Hide the green sphere until a hit is found
+          sphere1.visible = false;
+        });
+
+        renderer.xr.addEventListener('sessionend', function (event) {
+          // Clean up the hit test source when the AR session ends
+          if (hitTestSource) {
+            hitTestSource.cancel();
+            hitTestSource = null;
+          }
+          localReferenceSpace = null;
+          // Show the green sphere again, or hide it if you prefer it only in AR.
+          sphere1.visible = false; // Hide it when leaving AR
+        });
+
         renderer.setAnimationLoop(render);
 
         window.addEventListener('resize', onWindowResize);
@@ -141,7 +177,6 @@
       function onSelectEnd1() {
         currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
         laser1.material.color.setHex(laserColors[currentColorIndex1]);
-        // When changing color, reset pulse to full visibility for a moment
         laser1.material.opacity = 1;
         laser1.scale.z = 1;
       }
@@ -149,35 +184,56 @@
       function onSelectEnd2() {
         currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
         laser2.material.color.setHex(laserColors[currentColorIndex2]);
-        // When changing color, reset pulse to full visibility for a moment
         laser2.material.opacity = 1;
         laser2.scale.z = 1;
       }
 
-      // NEW: The render function now takes 'timestamp' which is milliseconds since the page loaded
-      function render(timestamp) {
-        // Our bouncy balls keep circling!
-        pivotGroup1.rotation.y += 0.005;
+      // The render function now takes 'timestamp' and 'frame' (important for hit-testing)
+      function render(timestamp, frame) {
+        // The blue bouncy ball keeps circling!
         pivotGroup2.rotation.y -= 0.005;
 
-        // --- NEW: Laser Pulsing Logic! ---
-        // We use Math.sin() because it gives us a smooth wave that goes from -1 to 1.
-        // By adding and multiplying, we can control the range of the pulse.
-
-        // `timestamp / 200` controls the speed of the opacity pulse (smaller number = faster)
-        // `* 0.4 + 0.6` means it will oscillate between 0.2 (0.6 - 0.4) and 1.0 (0.6 + 0.4) opacity.
+        // Lasers still pulse
         const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
-
-        // `timestamp / 150` controls the speed of the length pulse (slightly different speed for variety)
-        // `* 0.05 + 1.0` means it will oscillate between 0.95 (1.0 - 0.05) and 1.05 (1.0 + 0.05) of its original length.
         const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
-
-        // Apply these pulse values to both lasers
         laser1.material.opacity = opacityPulse;
         laser1.scale.z = lengthPulse;
-
         laser2.material.opacity = opacityPulse;
         laser2.scale.z = lengthPulse;
+
+        // --- NEW: Hit-Testing Logic for Green Sphere ---
+        // We only perform hit-testing if we have an active AR session,
+        // our hit test source, and a reference space to place objects in.
+        if (frame && hitTestSource && localReferenceSpace) {
+          // Get the hit test results for the current frame.
+          // This tells us if any of our 'transient-pointer' rays hit a surface.
+          const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+          if (hitTestResults.length > 0) {
+            // If we found a hit, get the very first one.
+            const hit = hitTestResults[0];
+
+            // Get the 3D position and orientation of where the hit occurred in our AR world.
+            // We use 'localReferenceSpace' so the position is relative to your starting floor.
+            const hitPose = hit.getPose(localReferenceSpace);
+
+            // Move the green sphere to the exact hit position.
+            sphere1.position.copy(hitPose.transform.position);
+
+            // Make the sphere sit nicely on the surface (adjust by its radius)
+            // Since our sphere has a radius of 0.5, we add 0.5 to its Y position.
+            sphere1.position.y += 0.5;
+
+            // Make the sphere visible now that it has a place to be!
+            sphere1.visible = true;
+          } else {
+            // If no hit is detected by the laser, hide the green sphere.
+            sphere1.visible = false;
+          }
+        } else {
+          // If we are not in an AR session, or hit-testing isn't ready, ensure sphere1 is hidden.
+          sphere1.visible = false;
+        }
 
         renderer.render(scene, camera); // Draw everything!
       }
