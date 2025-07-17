@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers and a 3D Grid</title>
+    <title>My Magic AR Window with Pulsing Lasers and a Volumetric Grid</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -44,7 +44,7 @@
       let pivotGroup1, pivotGroup2;
       let controller1, controller2;
       let laser1, laser2;
-      // Removed: let gridHelper; // We'll now have three grid helpers
+      let volumetricGrid; // NEW: Our variable for the volumetric grid
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -126,26 +126,54 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
-        // --- NEW: Create our 3D Volumetric Grid! ---
-        const gridSize = 10; // Overall size of our cubic grid (10 meters x 10 meters x 10 meters)
-        const gridDivisions = 10; // 10 divisions means lines every 1 meter
-        const centerColor = 0x00ffff; // Cyan
-        const gridColor = 0x008080;   // Darker Cyan
+        // --- NEW: Create our FULL 3D Volumetric Grid! ---
+        const gridSize = 20; // Total extent of the grid in meters (e.g., from -10 to +10 in each direction)
+        const gridStep = 1;  // Spacing between grid lines in meters (e.g., 1 meter per cube)
+        const gridColor = 0x008080; // Darker cyan for the grid lines
+        const opacity = 0.4; // Slightly transparent to avoid being too visually overwhelming
 
-        // 1. Grid on the XZ plane (like a floor and ceiling)
-        const gridXZ = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
-        // By default, GridHelper is centered at (0,0,0) and is on the XZ plane.
-        scene.add(gridXZ);
+        const points = []; // Array to store all the start and end points of our line segments
 
-        // 2. Grid on the XY plane (like front and back walls)
-        const gridXY = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
-        gridXY.rotation.x = Math.PI / 2; // Rotate 90 degrees around X-axis to make it XY plane
-        scene.add(gridXY);
+        // Generate lines parallel to the X-axis (running left-right)
+        // For each combination of Y and Z coordinates, draw a line across the X-axis
+        for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) {
+          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) {
+            points.push(new THREE.Vector3(-gridSize / 2, y, z)); // Start point
+            points.push(new THREE.Vector3(gridSize / 2, y, z));  // End point
+          }
+        }
 
-        // 3. Grid on the YZ plane (like side walls)
-        const gridYZ = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
-        gridYZ.rotation.z = Math.PI / 2; // Rotate 90 degrees around Z-axis to make it YZ plane
-        scene.add(gridYZ);
+        // Generate lines parallel to the Y-axis (running up-down)
+        // For each combination of X and Z coordinates, draw a line across the Y-axis
+        for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
+          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) {
+            points.push(new THREE.Vector3(x, -gridSize / 2, z)); // Start point
+            points.push(new THREE.Vector3(x, gridSize / 2, z));  // End point
+          }
+        }
+
+        // Generate lines parallel to the Z-axis (running front-back)
+        // For each combination of X and Y coordinates, draw a line across the Z-axis
+        for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
+          for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) {
+            points.push(new THREE.Vector3(x, y, -gridSize / 2)); // Start point
+            points.push(new THREE.Vector3(x, y, gridSize / 2));  // End point
+          }
+        }
+
+        // Create a BufferGeometry and set its vertices from our points array
+        const gridGeometry = new THREE.BufferGeometry().setFromPoints(points);
+
+        // Create a LineBasicMaterial for the grid lines
+        const gridMaterial = new THREE.LineBasicMaterial({
+          color: gridColor,
+          transparent: true,
+          opacity: opacity
+        });
+
+        // Use LineSegments to draw individual line segments
+        volumetricGrid = new THREE.LineSegments(gridGeometry, gridMaterial);
+        scene.add(volumetricGrid);
 
         renderer.setAnimationLoop(render);
 
