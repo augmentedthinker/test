@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers, Grid, and Interactive Spheres</title>
+    <title>My Magic AR Window with Pulsing Lasers, Grid, and Interactive Spheres Orbiting Me</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -46,9 +46,8 @@
       let laser1, laser2;
       let volumetricGrid;
 
-      // NEW: Sphere color management variables
-      let sphereColorIndex1; // Will be set in init to match initial color
-      let sphereColorIndex2; // Will be set in init to match initial color
+      let sphereColorIndex1;
+      let sphereColorIndex2;
       const sphereColors = [
         0xffa500, // Orange
         0x800080, // Purple
@@ -56,7 +55,6 @@
         0x0000ff  // Blue (original sphere2 color)
       ];
 
-      // Existing laser color management variables
       const laserColors = [
         0xff0000,
         0x00ff00,
@@ -66,11 +64,10 @@
       let currentColorIndex1 = 0;
       let currentColorIndex2 = 0;
 
-      // NEW: Raycasting variables
       let tempMatrix = new THREE.Matrix4();
       let raycaster = new THREE.Raycaster();
-      let intersectedSphere1 = null; // Stores the sphere currently hit by controller 1's laser
-      let intersectedSphere2 = null; // Stores the sphere currently hit by controller 2's laser
+      let intersectedSphere1 = null;
+      let intersectedSphere2 = null;
 
       init();
 
@@ -95,22 +92,25 @@
         scene.add(directionalLight);
 
         pivotGroup1 = new THREE.Group();
-        scene.add(pivotGroup1);
+        // CHANGED: Add pivotGroup1 to the camera, not the scene
+        camera.add(pivotGroup1);
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
-        // Set initial sphere colors and their corresponding indices in sphereColors array
-        sphereColorIndex1 = sphereColors.indexOf(0x00ff00); // Find index of green
+        sphereColorIndex1 = sphereColors.indexOf(0x00ff00);
         const material1 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex1] });
         sphere1 = new THREE.Mesh(geometry1, material1);
-        sphere1.position.set(0, 1.0, -2);
+        // CHANGED: Set sphere1's Y position to 0, relative to the camera's local space (eye level)
+        sphere1.position.set(0, 0, -2);
         pivotGroup1.add(sphere1);
 
         pivotGroup2 = new THREE.Group();
-        scene.add(pivotGroup2);
+        // CHANGED: Add pivotGroup2 to the camera, not the scene
+        camera.add(pivotGroup2);
         const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
-        sphereColorIndex2 = sphereColors.indexOf(0x0000ff); // Find index of blue
+        sphereColorIndex2 = sphereColors.indexOf(0x0000ff);
         const material2 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex2] });
         sphere2 = new THREE.Mesh(geometry2, material2);
-        sphere2.position.set(0, 1.0, 2);
+        // CHANGED: Set sphere2's Y position to 0, relative to the camera's local space (eye level)
+        sphere2.position.set(0, 0, 2);
         pivotGroup2.add(sphere2);
 
         controller1 = renderer.xr.getController(0);
@@ -196,14 +196,12 @@
       }
 
       function onSelectEnd1() {
-        // Current laser color change logic
         currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
         laser1.material.color.setHex(laserColors[currentColorIndex1]);
         laser1.material.opacity = 1;
         laser1.scale.z = 1;
 
-        // NEW: Sphere color change logic
-        if (intersectedSphere1) { // If controller 1's laser was hitting a sphere
+        if (intersectedSphere1) {
             if (intersectedSphere1 === sphere1) {
                 sphereColorIndex1 = (sphereColorIndex1 + 1) % sphereColors.length;
                 sphere1.material.color.setHex(sphereColors[sphereColorIndex1]);
@@ -215,14 +213,12 @@
       }
 
       function onSelectEnd2() {
-        // Current laser color change logic
         currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
         laser2.material.color.setHex(laserColors[currentColorIndex2]);
         laser2.material.opacity = 1;
         laser2.scale.z = 1;
 
-        // NEW: Sphere color change logic
-        if (intersectedSphere2) { // If controller 2's laser was hitting a sphere
+        if (intersectedSphere2) {
             if (intersectedSphere2 === sphere1) {
                 sphereColorIndex1 = (sphereColorIndex1 + 1) % sphereColors.length;
                 sphere1.material.color.setHex(sphereColors[sphereColorIndex1]);
@@ -246,29 +242,24 @@
         laser2.material.opacity = opacityPulse;
         laser2.scale.z = lengthPulse;
 
-        // --- NEW: Raycasting for Controller 1 ---
-        // Get controller's world position and direction
+        // Raycasting for Controller 1
         tempMatrix.identity().extractRotation(controller1.matrixWorld);
         raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); // Z-axis is forward for controllers
+        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-        // Check for intersections with our spheres
         const intersects1 = raycaster.intersectObjects([sphere1, sphere2]);
-
-        // Store the first intersected sphere (if any)
         if (intersects1.length > 0) {
             intersectedSphere1 = intersects1[0].object;
         } else {
             intersectedSphere1 = null;
         }
 
-        // --- NEW: Raycasting for Controller 2 ---
+        // Raycasting for Controller 2
         tempMatrix.identity().extractRotation(controller2.matrixWorld);
         raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
         raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
         const intersects2 = raycaster.intersectObjects([sphere1, sphere2]);
-
         if (intersects2.length > 0) {
             intersectedSphere2 = intersects2[0].object;
         } else {
