@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers and a Grid</title>
+    <title>My Magic AR Window with Pulsing Lasers and a 3D Grid</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -44,7 +44,7 @@
       let pivotGroup1, pivotGroup2;
       let controller1, controller2;
       let laser1, laser2;
-      let gridHelper; // NEW: Our variable for the grid helper
+      // Removed: let gridHelper; // We'll now have three grid helpers
 
       const laserColors = [
         0xff0000, // Red (initial default)
@@ -126,17 +126,26 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
-        // --- NEW: Create our Grid System! ---
-        // THREE.GridHelper(size, divisions, colorCenterLine, colorGrid)
-        // size: 10 meters wide/deep
-        // divisions: 10 divisions, meaning each major grid line represents 1 meter
-        // colorCenterLine: Cyan (a nice blend of blue/green) for the main axis lines
-        // colorGrid: A slightly darker cyan for the regular grid lines
-        gridHelper = new THREE.GridHelper(10, 10, 0x00ffff, 0x008080);
+        // --- NEW: Create our 3D Volumetric Grid! ---
+        const gridSize = 10; // Overall size of our cubic grid (10 meters x 10 meters x 10 meters)
+        const gridDivisions = 10; // 10 divisions means lines every 1 meter
+        const centerColor = 0x00ffff; // Cyan
+        const gridColor = 0x008080;   // Darker Cyan
 
-        // By default, GridHelper is placed at (0,0,0) and lies flat on the XZ plane.
-        // This means it should appear at the "ground" level where your AR session starts.
-        scene.add(gridHelper);
+        // 1. Grid on the XZ plane (like a floor and ceiling)
+        const gridXZ = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
+        // By default, GridHelper is centered at (0,0,0) and is on the XZ plane.
+        scene.add(gridXZ);
+
+        // 2. Grid on the XY plane (like front and back walls)
+        const gridXY = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
+        gridXY.rotation.x = Math.PI / 2; // Rotate 90 degrees around X-axis to make it XY plane
+        scene.add(gridXY);
+
+        // 3. Grid on the YZ plane (like side walls)
+        const gridYZ = new THREE.GridHelper(gridSize, gridDivisions, centerColor, gridColor);
+        gridYZ.rotation.z = Math.PI / 2; // Rotate 90 degrees around Z-axis to make it YZ plane
+        scene.add(gridYZ);
 
         renderer.setAnimationLoop(render);
 
