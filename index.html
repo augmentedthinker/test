@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window with Pulsing Lasers, Grid, and Interactive Spheres Orbiting Me</title>
+    <title>My Magic AR Window with Lasers, Grid, Interactive Spheres, and Real-World Hit-Test!</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -46,15 +46,17 @@
       let laser1, laser2;
       let volumetricGrid;
 
+      // Sphere color management variables
       let sphereColorIndex1;
       let sphereColorIndex2;
       const sphereColors = [
         0xffa500, // Orange
         0x800080, // Purple
-        0x00ff00, // Green (original sphere1 color)
-        0x0000ff  // Blue (original sphere2 color)
+        0x00ff00, // Green
+        0x0000ff  // Blue
       ];
 
+      // Laser color management variables
       const laserColors = [
         0xff0000,
         0x00ff00,
@@ -64,10 +66,17 @@
       let currentColorIndex1 = 0;
       let currentColorIndex2 = 0;
 
+      // Raycasting variables (for virtual sphere interaction)
       let tempMatrix = new THREE.Matrix4();
       let raycaster = new THREE.Raycaster();
       let intersectedSphere1 = null;
       let intersectedSphere2 = null;
+
+      // NEW: Hit-Testing variables
+      let hitTestSource1 = null; // Hit test source for controller 1
+      let hitTestSource2 = null; // Hit test source for controller 2
+      let referenceSpace = null; // The AR reference space (e.g., 'local-floor')
+      let hitSphere1, hitSphere2; // Small spheres to visualize hit points
 
       init();
 
@@ -81,7 +90,7 @@
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] }); // 'hit-test' already included!
         arButton.id = 'arButton';
         document.body.appendChild(arButton);
 
@@ -92,25 +101,21 @@
         scene.add(directionalLight);
 
         pivotGroup1 = new THREE.Group();
-        // CHANGED: Add pivotGroup1 to the camera, not the scene
-        camera.add(pivotGroup1);
+        scene.add(pivotGroup1);
         const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
         sphereColorIndex1 = sphereColors.indexOf(0x00ff00);
         const material1 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex1] });
         sphere1 = new THREE.Mesh(geometry1, material1);
-        // CHANGED: Set sphere1's Y position to 0, relative to the camera's local space (eye level)
-        sphere1.position.set(0, 0, -2);
+        sphere1.position.set(0, 1.0, -2);
         pivotGroup1.add(sphere1);
 
         pivotGroup2 = new THREE.Group();
-        // CHANGED: Add pivotGroup2 to the camera, not the scene
-        camera.add(pivotGroup2);
+        scene.add(pivotGroup2);
         const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
         sphereColorIndex2 = sphereColors.indexOf(0x0000ff);
         const material2 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex2] });
         sphere2 = new THREE.Mesh(geometry2, material2);
-        // CHANGED: Set sphere2's Y position to 0, relative to the camera's local space (eye level)
-        sphere2.position.set(0, 0, 2);
+        sphere2.position.set(0, 1.0, 2);
         pivotGroup2.add(sphere2);
 
         controller1 = renderer.xr.getController(0);
@@ -121,7 +126,7 @@
 
         const laserGeometry = new THREE.BufferGeometry().setFromPoints([
           new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(0, 0, -5)
+          new THREE.Vector3(0, 0, -5) // Original length 5 units
         ]);
 
         const laserMaterial1 = new THREE.LineBasicMaterial({
@@ -146,43 +151,79 @@
         controller1.addEventListener('selectend', onSelectEnd1);
         controller2.addEventListener('selectend', onSelectEnd2);
 
+        // Volumetric Grid Setup (existing code)
         const gridSize = 20;
         const gridStep = 2;
         const gridColor = 0x008080;
         const opacity = 0.3;
-
         const points = [];
-
         for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) {
-          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) {
-            points.push(new THREE.Vector3(-gridSize / 2, y, z));
-            points.push(new THREE.Vector3(gridSize / 2, y, z));
-          }
+          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) { points.push(new THREE.Vector3(-gridSize / 2, y, z)); points.push(new THREE.Vector3(gridSize / 2, y, z)); }
         }
-
         for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
-          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) {
-            points.push(new THREE.Vector3(x, -gridSize / 2, z));
-            points.push(new THREE.Vector3(x, gridSize / 2, z));
-          }
+          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) { points.push(new THREE.Vector3(x, -gridSize / 2, z)); points.push(new THREE.Vector3(x, gridSize / 2, z)); }
         }
-
         for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
-          for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) {
-            points.push(new THREE.Vector3(x, y, -gridSize / 2));
-            points.push(new THREE.Vector3(x, y, gridSize / 2));
-          }
+          for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) { points.push(new THREE.Vector3(x, y, -gridSize / 2)); points.push(new THREE.Vector3(x, y, gridSize / 2)); }
         }
-
         const gridGeometry = new THREE.BufferGeometry().setFromPoints(points);
-        const gridMaterial = new THREE.LineBasicMaterial({
-          color: gridColor,
-          transparent: true,
-          opacity: opacity
-        });
-
+        const gridMaterial = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: opacity });
         volumetricGrid = new THREE.LineSegments(gridGeometry, gridMaterial);
         scene.add(volumetricGrid);
+
+
+        // NEW: Set up hit-testing when the AR session starts
+        renderer.xr.addEventListener('sessionstart', (event) => {
+            // Request a 'local-floor' reference space to get stable poses relative to the floor
+            event.session.requestReferenceSpace('local-floor').then((space) => {
+                referenceSpace = space; // Store the reference space
+
+                // Create the small "light sphere" visualizers
+                const hitSphereGeometry = new THREE.SphereGeometry(0.05, 16, 16); // 5cm radius sphere
+                const hitSphereMaterial = new THREE.MeshBasicMaterial({
+                    color: 0x00ffff, // Cyan color
+                    emissive: 0x00ffff, // Emissive property makes it glow
+                    emissiveIntensity: 1.5 // How strong the glow is
+                });
+
+                hitSphere1 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+                hitSphere1.visible = false; // Start invisible
+                scene.add(hitSphere1);
+
+                hitSphere2 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+                hitSphere2.visible = false; // Start invisible
+                scene.add(hitSphere2);
+
+                // Get hit test sources for each controller's pointer
+                // We need to find the correct inputSource for each controller (right/left hand)
+                const inputSources = event.session.inputSources;
+
+                const rightControllerInputSource = inputSources.find(source => source.handedness === 'right' && source.pointerSpace);
+                if (rightControllerInputSource) {
+                    event.session.requestHitTestSource({ space: rightControllerInputSource.pointerSpace }).then((source) => {
+                        hitTestSource1 = source; // Assign to controller 1 (assuming right hand)
+                    }).catch(e => console.error("Failed to get right controller hit test source:", e));
+                }
+
+                const leftControllerInputSource = inputSources.find(source => source.handedness === 'left' && source.pointerSpace);
+                if (leftControllerInputSource) {
+                    event.session.requestHitTestSource({ space: leftControllerInputSource.pointerSpace }).then((source) => {
+                        hitTestSource2 = source; // Assign to controller 2 (assuming left hand)
+                    }).catch(e => console.error("Failed to get left controller hit test source:", e));
+                }
+            }).catch(e => console.error("Failed to get reference space:", e));
+        });
+
+        // NEW: Clean up hit-testing objects when AR session ends
+        renderer.xr.addEventListener('sessionend', () => {
+            if (hitTestSource1) { hitTestSource1.cancel(); hitTestSource1 = null; }
+            if (hitTestSource2) { hitTestSource2.cancel(); hitTestSource2 = null; }
+            referenceSpace = null;
+            // Also remove and dispose of the hit spheres
+            if (hitSphere1) { scene.remove(hitSphere1); hitSphere1.geometry.dispose(); hitSphere1.material.dispose(); hitSphere1 = null; }
+            if (hitSphere2) { scene.remove(hitSphere2); hitSphere2.geometry.dispose(); hitSphere2.material.dispose(); hitSphere2 = null; }
+        });
+
 
         renderer.setAnimationLoop(render);
 
@@ -229,24 +270,24 @@
         }
       }
 
-      function render(timestamp) {
+      function render(timestamp, frame) { // 'frame' argument is essential for WebXR
         pivotGroup1.rotation.y += 0.005;
         pivotGroup2.rotation.y -= 0.005;
 
         const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
         const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
 
-        laser1.material.opacity = opacityPulse;
+        // Reset laser length to default for virtual intersections
         laser1.scale.z = lengthPulse;
-
-        laser2.material.opacity = opacityPulse;
         laser2.scale.z = lengthPulse;
 
-        // Raycasting for Controller 1
+        laser1.material.opacity = opacityPulse;
+        laser2.material.opacity = opacityPulse;
+
+        // Raycasting for virtual sphere interaction (existing code)
         tempMatrix.identity().extractRotation(controller1.matrixWorld);
         raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
         raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
         const intersects1 = raycaster.intersectObjects([sphere1, sphere2]);
         if (intersects1.length > 0) {
             intersectedSphere1 = intersects1[0].object;
@@ -254,11 +295,9 @@
             intersectedSphere1 = null;
         }
 
-        // Raycasting for Controller 2
         tempMatrix.identity().extractRotation(controller2.matrixWorld);
         raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
         raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
         const intersects2 = raycaster.intersectObjects([sphere1, sphere2]);
         if (intersects2.length > 0) {
             intersectedSphere2 = intersects2[0].object;
@@ -266,8 +305,50 @@
             intersectedSphere2 = null;
         }
 
-        renderer.render(scene, camera);
-      }
-    </script>
-  </body>
-</html>
+
+        // NEW: Hit-Testing and Laser/Sphere Update
+        if (frame && referenceSpace) { // Ensure frame and referenceSpace are available
+            // --- Hit Test for Controller 1 (Right Hand) ---
+            if (hitTestSource1) {
+                const hitTestResults = frame.getHitTestResults(hitTestSource1);
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0]; // Get the first hit result
+                    const hitPose = hit.getPose(referenceSpace); // Get the pose in our reference space
+
+                    if (hitPose) {
+                        // Position and show the hit sphere
+                        hitSphere1.position.copy(hitPose.transform.position);
+                        hitSphere1.quaternion.copy(hitPose.transform.orientation);
+                        hitSphere1.visible = true;
+
+                        // Shorten laser 1 to the hit point
+                        const controller1WorldPos = new THREE.Vector3().setFromMatrixPosition(controller1.matrixWorld);
+                        const distance = controller1WorldPos.distanceTo(hitSphere1.position);
+                        // The original laser length is 5 (from new THREE.Vector3(0, 0, -5))
+                        // So, scale.z should be (actual_distance / original_length)
+                        laser1.scale.z = distance / 5;
+                    }
+                } else {
+                    // No hit, hide sphere and reset laser length
+                    hitSphere1.visible = false;
+                    laser1.scale.z = lengthPulse; // Reset to pulsing length
+                }
+            } else { // If hit test source not yet available, hide sphere and reset laser
+                hitSphere1.visible = false;
+                laser1.scale.z = lengthPulse;
+            }
+
+            // --- Hit Test for Controller 2 (Left Hand) ---
+            if (hitTestSource2) {
+                const hitTestResults = frame.getHitTestResults(hitTestSource2);
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0];
+                    const hitPose = hit.getPose(referenceSpace);
+                    if (hitPose) {
+                        hitSphere2.position.copy(hitPose.transform.position);
+                        hitSphere2.quaternion.copy(hitPose.transform.orientation);
+                        hitSphere2.visible = true;
+
+                        const controller2WorldPos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
+                        const distance = controller2WorldPos.distanceTo(hitSphere2.position);
+                        laser2.scale.z = distance
