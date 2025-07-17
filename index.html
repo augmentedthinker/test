@@ -351,4 +351,20 @@
 
                         const controller2WorldPos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
                         const distance = controller2WorldPos.distanceTo(hitSphere2.position);
-                        laser2.scale.z = distance
+                        laser2.scale.z = distance / 5;
+                    }
+                } else {
+                    hitSphere2.visible = false;
+                    laser2.scale.z = lengthPulse;
+                }
+            } else {
+                hitSphere2.visible = false;
+                laser2.scale.z = lengthPulse;
+            }
+        }
+
+        renderer.render(scene, camera);
+      }
+    </script>
+  </body>
+</html>
