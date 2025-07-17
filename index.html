@@ -1,52 +1,59 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My First Magic AR Window (Three.js)</title>
+    <title>My Magic AR Window with Pulsing Lasers</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
-      
-      /* --- This is the only part we are changing! --- */
       #arButton {
         position: absolute;
-        bottom: 40px; /* Kept it off the very bottom edge */
+        bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        
-        /* --- SIZE CHANGES (Made ~3x larger) --- */
-        padding: 60px 120px; /* Increased padding for a much bigger button */
-        font-size: 80px;     /* Made the font size huge */
-        border-width: 15px;  /* Made the border thicker to match */
-        border-radius: 40px; /* Increased rounding for the bigger size */
-
-        /* --- COLOR CHANGES --- */
-        background-color: #001f3f; /* A very dark, deep "Navy" blue */
-        color: white;              /* White text stands out nicely */
-        border-color: #000033;     /* A border that is almost black for contrast */
-        
-        /* --- Other styling to keep it looking good --- */
+        padding: 75px 150px;
+        font-size: 90px;
+        background-color: #000080; /* Dark blue */
+        color: white;
+        border: 10px solid #000050;
+        border-radius: 25px;
         font-weight: bold;
-        text-shadow: 2px 2px 8px rgba(0, 0, 0, 0.8); /* A stronger shadow for the big text */
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8);
         cursor: pointer;
         z-index: 1000;
-        transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out; /* Smooth transition for color changes */
-        box-shadow: 0 0 40px rgba(70, 130, 180, 0.7); /* A subtle steel-blue glow */
+        transition: all 0.2s ease-in-out;
       }
-      
-      /* This is what happens when you point your controller at it */
       #arButton:hover {
-        background-color: #cc0000; /* A strong, solid red */
-        box-shadow: 0 0 80px rgba(255, 0, 0, 0.9); /* A vibrant red glow */
+        background-color: #FF0000; /* Fiery red on hover */
+        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9);
+        transform: translateX(-50%) scale(1.03);
+      }
+      #arButton:active {
+        background-color: #CC0000; /* Darker red when pressed */
+        transform: translateX(-50%) scale(0.98);
+        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9);
       }
     </style>
   </head>
   <body>
     <script type="module">
-      // This JavaScript part is exactly the same as before!
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
       import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
-      let camera, scene, renderer;
+      let camera, scene, renderer, sphere1, sphere2;
+      let pivotGroup1, pivotGroup2;
+      let controller1, controller2;
+      let laser1, laser2;
+      // Removed: let floor;
+
+      const laserColors = [
+        0xff0000, // Red (initial default)
+        0x00ff00, // Green
+        0x0000ff, // Blue
+        0xffff00  // Yellow
+      ];
+      let currentColorIndex1 = 0;
+      let currentColorIndex2 = 0;
 
       init();
 
@@ -60,9 +67,72 @@
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
 
+        // We explicitly request 'hit-test' here, which is key for interacting with the environment
         const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
-        arButton.id = 'arButton'; // This makes sure our styles are applied
+        arButton.id = 'arButton';
         document.body.appendChild(arButton);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 5, 5);
+        scene.add(directionalLight);
+
+        pivotGroup1 = new THREE.Group();
+        scene.add(pivotGroup1);
+        const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
+        const material1 = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        sphere1 = new THREE.Mesh(geometry1, material1);
+        sphere1.position.set(0, 1.0, -2);
+        pivotGroup1.add(sphere1);
+
+        pivotGroup2 = new THREE.Group();
+        scene.add(pivotGroup2);
+        const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
+        const material2 = new THREE.MeshStandardMaterial({ color: 0x0000ff });
+        sphere2 = new THREE.Mesh(geometry2, material2);
+        sphere2.position.set(0, 1.0, 2);
+        pivotGroup2.add(sphere2);
+
+        controller1 = renderer.xr.getController(0);
+        scene.add(controller1);
+
+        controller2 = renderer.xr.getController(1);
+        scene.add(controller2);
+
+        const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, -5)
+        ]);
+
+        const laserMaterial1 = new THREE.LineBasicMaterial({
+          color: laserColors[currentColorIndex1],
+          linewidth: 3,
+          transparent: true,
+          opacity: 1
+        });
+        const laserMaterial2 = new THREE.LineBasicMaterial({
+          color: laserColors[currentColorIndex2],
+          linewidth: 3,
+          transparent: true,
+          opacity: 1
+        });
+
+        laser1 = new THREE.Line(laserGeometry, laserMaterial1);
+        controller1.add(laser1);
+
+        laser2 = new THREE.Line(laserGeometry, laserMaterial2);
+        controller2.add(laser2);
+
+        controller1.addEventListener('selectend', onSelectEnd1);
+        controller2.addEventListener('selectend', onSelectEnd2);
+
+        // Removed: Floor creation code
+        // Removed: floorGeometry, floorMaterial, floor = new THREE.Mesh(...)
+        // Removed: floor.rotation.x, floor.position.y
+        // Removed: scene.add(floor);
+
+        renderer.setAnimationLoop(render);
 
         window.addEventListener('resize', onWindowResize);
       }
@@ -71,6 +141,36 @@
         camera.aspect = window.innerWidth / window.innerHeight;
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
+      }
+
+      function onSelectEnd1() {
+        currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
+        laser1.material.color.setHex(laserColors[currentColorIndex1]);
+        laser1.material.opacity = 1;
+        laser1.scale.z = 1;
+      }
+
+      function onSelectEnd2() {
+        currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
+        laser2.material.color.setHex(laserColors[currentColorIndex2]);
+        laser2.material.opacity = 1;
+        laser2.scale.z = 1;
+      }
+
+      function render(timestamp) {
+        pivotGroup1.rotation.y += 0.005;
+        pivotGroup2.rotation.y -= 0.005;
+
+        const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
+        const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
+
+        laser1.material.opacity = opacityPulse;
+        laser1.scale.z = lengthPulse;
+
+        laser2.material.opacity = opacityPulse;
+        laser2.scale.z = lengthPulse;
+
+        renderer.render(scene, camera);
       }
     </script>
   </body>
