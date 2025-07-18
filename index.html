@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Babylon.js Simple AR Hit-Test (Initial Debug)</title>
+    <title>Babylon.js Simple AR Hit-Test (Detailed Debug)</title>
     <style>
         html, body {
             overflow: hidden;
@@ -54,8 +54,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@babylonjs/inspector@5.0.0/babylon.inspector.min.js"></script>
 
     <script>
-        // NEW: This alert will fire as soon as the JavaScript begins executing
-        alert("JavaScript loaded and running!");
+        alert("JavaScript loaded and running!"); // Initial alert, already confirmed working
 
         const canvas = document.getElementById("renderCanvas");
         const arButton = document.getElementById("arButton");
@@ -105,16 +104,18 @@
 
         // WebXR setup
         arButton.onclick = async () => {
-            alert("ENTER AR button clicked!"); // This alert still remains for click confirmation
+            alert("ENTER AR button clicked! Starting XR experience setup..."); // This alert already confirmed working
 
             if (!xr) {
                 try {
+                    alert("Attempting to create WebXR Experience..."); // NEW ALERT 1
                     xr = await scene.createDefaultXRExperienceAsync({
                         uiOptions: {
                             sessionMode: BABYLON.WebXRSessionMode.AR
                         },
                         optionalFeatures: ["hit-test"]
                     });
+                    alert("WebXR Experience created successfully!"); // NEW ALERT 2
                     console.log("Babylon.js WebXR Experience created.");
 
                     if (xr.baseExperience.featuresManager.isEnabled(BABYLON.WebXRFeatureName.HIT_TEST)) {
@@ -153,10 +154,12 @@
 
             if (xr && xr.baseExperience.state === BABYLON.WebXRState.NOT_IN_XR) {
                 try {
+                    alert("Attempting to enter AR session..."); // NEW ALERT 3
                     await xr.enterXRAsync(
                         BABYLON.WebXRSessionMode.AR,
                         BABYLON.WebXRReferenceSpaceType.LOCAL_FLOOR
                     );
+                    alert("Entered AR session successfully!"); // NEW ALERT 4
                     console.log("Entered AR session.");
                     arButton.style.display = 'none';
                 } catch (e) {
