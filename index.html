@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Simple AR Cube</title>
+    <title>AR Cube with Robust Hit-Test</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -40,41 +40,190 @@
 
       let camera, scene, renderer;
       let cube;
+      let controller1, controller2;
+      let laser1, laser2;
+
+      // Hit-Testing variables
+      let hitTestSources = new Map(); // Maps XRInputSource to its XRHitTestSource
+      let referenceSpace = null; // The AR reference space (e.g., 'local-floor' or 'viewer')
+      let hitSphere1, hitSphere2; // Small spheres to visualize hit points
+      let hitTestingAvailable = false; // Flag to track if hit-testing is supported and active
 
       init();
 
       function init() {
-        // 1. Setup Scene, Camera, Renderer
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true; // Enable WebXR for the renderer
+        renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
 
-        // 2. Add Ambient Light
+        // Claude's Fix 1: Move hit-test to optionalFeatures
+        // We request 'local-floor' as required because it's good for placing objects on the floor.
+        const arButton = ARButton.createButton(renderer, {
+            requiredFeatures: ['local-floor'],
+            optionalFeatures: ['hit-test']
+        });
+        arButton.id = 'arButton';
+        arButton.textContent = 'ENTER AR';
+        document.body.appendChild(arButton);
+
+        // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+        directionalLight.position.set(0, 5, 5);
+        scene.add(directionalLight);
 
-        // 3. Add a Cube
-        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5); // 0.5 units side length
-        const material = new THREE.MeshNormalMaterial(); // Simple material to see rotation
+        // Cube (from our simple example)
+        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
+        const material = new THREE.MeshNormalMaterial();
         cube = new THREE.Mesh(geometry, material);
         cube.position.set(0, 1.0, -2); // Position the cube 1 meter high, 2 meters in front
         scene.add(cube);
 
-        // 4. Create AR Button
-        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor'] });
-        arButton.id = 'arButton'; // Assign an ID for styling
-        arButton.textContent = 'ENTER AR'; // Custom button text
-        document.body.appendChild(arButton);
+        // Controllers setup
+        controller1 = renderer.xr.getController(0);
+        scene.add(controller1);
 
-        // 5. Set Animation Loop
+        controller2 = renderer.xr.getController(1);
+        scene.add(controller2);
+
+        // Lasers setup
+        const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+          new THREE.Vector3(0, 0, 0),
+          new THREE.Vector3(0, 0, -5) // Original length 5 units
+        ]);
+        const laserMaterial = new THREE.LineBasicMaterial({
+          color: 0xff0000, // Default red laser
+          linewidth: 3,
+          transparent: true,
+          opacity: 1
+        });
+
+        laser1 = new THREE.Line(laserGeometry, laserMaterial.clone()); // Clone material for separate control
+        controller1.add(laser1);
+
+        laser2 = new THREE.Line(laserGeometry, laserMaterial.clone());
+        controller2.add(laser2);
+
+
+        // NEW: Set up hit-testing when the AR session starts
+        renderer.xr.addEventListener('sessionstart', async (event) => {
+            const session = event.session;
+            console.log("AR Session started.");
+
+            // Claude's Fix 1 (cont.): Check for hit-test feature support
+            hitTestingAvailable = session.supportedFeatures.has('hit-test');
+            if (!hitTestingAvailable) {
+                console.warn("Hit-testing feature not available in this AR session.");
+                // Optionally hide hit spheres or disable related UI here
+            } else {
+                console.log("Hit-testing feature is available.");
+            }
+
+            // 1. Request reference space with fallback
+            try {
+                referenceSpace = await session.requestReferenceSpace('local-floor');
+                console.log("Using 'local-floor' reference space for hit-testing.");
+            } catch (e) {
+                console.warn("Failed to get 'local-floor' reference space, falling back to 'viewer'.", e);
+                try {
+                    referenceSpace = await session.requestReferenceSpace('viewer');
+                    console.log("Using 'viewer' reference space for hit-testing.");
+                } catch (e2) {
+                    console.error("Failed to get 'viewer' reference space. Hit-testing will not work.", e2);
+                    referenceSpace = null;
+                    hitTestingAvailable = false; // Mark hit-testing as unavailable if no valid space
+                    return;
+                }
+            }
+
+            // 2. Create the small "light sphere" visualizers (if not already created)
+            const hitSphereGeometry = new THREE.SphereGeometry(0.05, 16, 16); // 5cm radius sphere
+            const hitSphereMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff, // Cyan color
+                emissive: 0x00ffff, // Emissive property makes it glow
+                emissiveIntensity: 1.5 // How strong the glow is
+            });
+
+            if (!hitSphere1) {
+                hitSphere1 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+                hitSphere1.visible = false; // Start invisible
+                scene.add(hitSphere1);
+            }
+            if (!hitSphere2) {
+                hitSphere2 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+                hitSphere2.visible = false; // Start invisible
+                scene.add(hitSphere2);
+            }
+
+            // Claude's Fix 2: Add 1-second delay for controller initialization
+            setTimeout(() => {
+                // Claude's Fix 3 (part 1): Create hit test sources for all initially available pointer input sources
+                Array.from(session.inputSources).forEach(inputSource => {
+                    // Claude's Fix 3 (part 2): Use targetRaySpace and check targetRayMode
+                    if (inputSource.targetRaySpace && inputSource.targetRayMode === 'tracked-pointer') {
+                        session.requestHitTestSource({ space: inputSource.targetRaySpace }).then(source => {
+                            hitTestSources.set(inputSource, source);
+                            console.log(`Hit Test Source created for input source: ${inputSource.handedness || 'unknown'}. Total sources: ${hitTestSources.size}`);
+                        }).catch(e => console.error(`Failed to create hit test source for input source (${inputSource.handedness || 'unknown'}):`, e));
+                    } else {
+                        console.log(`Input source (${inputSource.handedness || 'unknown'}) not suitable for hit-testing (no targetRaySpace or not tracked-pointer).`);
+                    }
+                });
+            }, 1000); // 1-second delay
+
+
+            // 4. Listen for future input source changes (controllers connecting/disconnecting)
+            session.addEventListener('inputsourceschange', (changeEvent) => {
+                // Add new hit test sources for newly connected input sources
+                changeEvent.added.forEach(inputSource => {
+                    if (inputSource.targetRaySpace && inputSource.targetRayMode === 'tracked-pointer') {
+                        session.requestHitTestSource({ space: inputSource.targetRaySpace }).then(source => {
+                            hitTestSources.set(inputSource, source);
+                            console.log(`New Hit Test Source added for input source: ${inputSource.handedness || 'unknown'}. Total sources: ${hitTestSources.size}`);
+                        }).catch(e => console.error(`Failed to create hit test source for added input source (${inputSource.handedness || 'unknown'}):`, e));
+                    }
+                });
+                // Cancel hit test sources for disconnected input sources
+                changeEvent.removed.forEach(inputSource => {
+                    const source = hitTestSources.get(inputSource);
+                    if (source) {
+                        source.cancel();
+                        hitTestSources.delete(inputSource);
+                        console.log(`Hit Test Source removed for input source: ${inputSource.handedness || 'unknown'}. Total sources: ${hitTestSources.size}`);
+                        // Also hide and reset the associated hit sphere if it was visible
+                        if (controller1 && controller1.inputSource === inputSource && hitSphere1) {
+                            hitSphere1.visible = false;
+                            laser1.scale.z = 1; // Reset laser
+                        } else if (controller2 && controller2.inputSource === inputSource && hitSphere2) {
+                            hitSphere2.visible = false;
+                            laser2.scale.z = 1; // Reset laser
+                        }
+                    }
+                });
+            });
+        });
+
+        // NEW: Clean up hit-testing objects when AR session ends
+        renderer.xr.addEventListener('sessionend', () => {
+            console.log("AR Session ended. Cleaning up hit test sources and spheres.");
+            hitTestSources.forEach(source => source.cancel());
+            hitTestSources.clear();
+            referenceSpace = null;
+            hitTestingAvailable = false;
+            // Remove the hit sphere meshes from the scene and dispose them
+            if (hitSphere1) { scene.remove(hitSphere1); hitSphere1.geometry.dispose(); hitSphere1.material.dispose(); hitSphere1 = null; }
+            if (hitSphere2) { scene.remove(hitSphere2); hitSphere2.geometry.dispose(); hitSphere2.material.dispose(); hitSphere2 = null; }
+        });
+
+
         renderer.setAnimationLoop(render);
 
-        // 6. Handle Window Resizing
         window.addEventListener('resize', onWindowResize);
       }
 
@@ -84,10 +233,79 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      function render() {
+      function render(timestamp, frame) {
         // Rotate the cube
         cube.rotation.x += 0.01;
         cube.rotation.y += 0.01;
+
+        const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
+        const defaultLaserLength = 5; // Original max length of laser
+        const pulsingLaserScale = (Math.sin(timestamp / 150) * 0.05 + 1.0) * (1 / defaultLaserLength); // Scale for original 5 unit laser
+
+        laser1.material.opacity = opacityPulse;
+        laser2.material.opacity = opacityPulse;
+
+        // Default to pulsing length if no hit is detected
+        laser1.scale.z = pulsingLaserScale;
+        laser2.scale.z = pulsingLaserScale;
+
+
+        // Claude's Fixes: Robust Hit-Testing and Laser/Sphere Update
+        if (frame && referenceSpace && hitTestingAvailable) {
+            // Iterate through all active input sources to find which controller they belong to
+            Array.from(renderer.xr.getSession().inputSources).forEach(inputSource => {
+                const hitTestSource = hitTestSources.get(inputSource);
+                if (!hitTestSource) {
+                    // console.log(`No hit test source for input source: ${inputSource.handedness || 'unknown'}`);
+                    return; // No hit test source created for this input source yet or it's not a pointer
+                }
+
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+
+                // Determine which of our specific controllers (controller1 or controller2) this inputSource corresponds to
+                let currentController = null;
+                let currentLaser = null;
+                let currentHitSphere = null;
+
+                // Three.js populates controller.inputSource when it's tracked
+                if (controller1 && controller1.inputSource === inputSource) {
+                    currentController = controller1;
+                    currentLaser = laser1;
+                    currentHitSphere = hitSphere1;
+                } else if (controller2 && controller2.inputSource === inputSource) {
+                    currentController = controller2;
+                    currentLaser = laser2;
+                    currentHitSphere = hitSphere2;
+                } else {
+                    // This inputSource is not one of our main tracked controllers (e.g., hand tracking if enabled later)
+                    return;
+                }
+
+                if (hitTestResults.length > 0) {
+                    const hit = hitTestResults[0]; // Take the first hit result
+                    const hitPose = hit.getPose(referenceSpace); // Get the pose (position/orientation) in our reference space
+
+                    if (hitPose) {
+                        // Update hit sphere position, orientation, and visibility
+                        currentHitSphere.position.copy(hitPose.transform.position);
+                        currentHitSphere.quaternion.copy(hitPose.transform.orientation);
+                        currentHitSphere.visible = true;
+
+                        // Shorten the laser to the hit point
+                        const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(currentController.matrixWorld);
+                        const distance = controllerWorldPos.distanceTo(currentHitSphere.position);
+                        // The laser's original length is 5, so we scale it by distance / 5
+                        currentLaser.scale.z = distance / defaultLaserLength;
+                    }
+                } else {
+                    // No hit, hide the sphere and reset laser length to its pulsing default
+                    if (currentHitSphere) { // Ensure sphere exists before trying to hide
+                        currentHitSphere.visible = false;
+                    }
+                    currentLaser.scale.z = pulsingLaserScale;
+                }
+            });
+        }
 
         renderer.render(scene, camera);
       }
