@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>My Magic AR Window - Quest 2 Hit-Test Enabled!</title>
+    <title>Simple AR Cube</title>
     <style>
       body { margin: 0; overflow: hidden; }
       canvas { display: block; }
@@ -10,176 +10,71 @@
         bottom: 30px;
         left: 50%;
         transform: translateX(-50%);
-        padding: 75px 150px;
-        font-size: 90px;
+        padding: 20px 40px;
+        font-size: 24px;
         background-color: #000080; /* Dark blue */
         color: white;
-        border: 10px solid #000050;
-        border-radius: 25px;
+        border: 2px solid #000050;
+        border-radius: 10px;
         font-weight: bold;
-        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
-        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8);
         cursor: pointer;
         z-index: 1000;
         transition: all 0.2s ease-in-out;
       }
       #arButton:hover {
         background-color: #FF0000; /* Fiery red on hover */
-        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9);
+        box-shadow: 0 0 20px rgba(255, 0, 0, 0.9);
         transform: translateX(-50%) scale(1.03);
       }
       #arButton:active {
         background-color: #CC0000; /* Darker red when pressed */
         transform: translateX(-50%) scale(0.98);
-        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9);
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.9);
       }
     </style>
   </head>
   <body>
-    <button id="arButton" style="display: none;"></button>
     <script type="module">
       import * as THREE from 'https://unpkg.com/three@0.155.0/build/three.module.js';
-      // NEW: Import Reality Accelerator Toolkit (RATK)
-      import { ARButton, RealityAccelerator } from 'https://unpkg.com/ratk@1.1.0/dist/ratk.module.js';
+      import { ARButton } from 'https://unpkg.com/three@0.155.0/examples/jsm/webxr/ARButton.js';
 
-      let camera, scene, renderer, sphere1, sphere2;
-      let pivotGroup1, pivotGroup2;
-      let controller1, controller2;
-      let laser1, laser2;
-      let volumetricGrid;
-      
-      // NEW: RATK variable
-      let ratk;
-
-      // Sphere color management variables
-      let sphereColorIndex1;
-      let sphereColorIndex2;
-      const sphereColors = [0xffa500, 0x800080, 0x00ff00, 0x0000ff];
-
-      // Laser color management variables
-      const laserColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
-      let currentColorIndex1 = 0;
-      let currentColorIndex2 = 0;
-
-      // Raycasting variables (for virtual sphere interaction)
-      let tempMatrix = new THREE.Matrix4();
-      let raycaster = new THREE.Raycaster();
-      let intersectedSphere1 = null;
-      let intersectedSphere2 = null;
-
-      // Hit-Testing Visualizers
-      let hitSphere1, hitSphere2; // Small spheres to visualize hit points
+      let camera, scene, renderer;
+      let cube;
 
       init();
 
       function init() {
+        // 1. Setup Scene, Camera, Renderer
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setPixelRatio(window.devicePixelRatio);
         renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
+        renderer.xr.enabled = true; // Enable WebXR for the renderer
         document.body.appendChild(renderer.domElement);
-        
-        // --- NEW: AR Button and RATK Setup ---
-        const arButton = document.getElementById('arButton');
-        arButton.style.display = 'block';
 
-        // Convert the button and request the correct features for Quest 2
-        ARButton.convertToARButton(arButton, renderer, {
-            sessionInit: {
-                requiredFeatures: ['local-floor', 'hit-test', 'plane-detection'],
-                optionalFeatures: ['anchors']
-            }
-        });
-
+        // 2. Add Ambient Light
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(0, 5, 5);
-        scene.add(directionalLight);
 
-        pivotGroup1 = new THREE.Group();
-        scene.add(pivotGroup1);
-        const geometry1 = new THREE.SphereGeometry(0.5, 32, 32);
-        sphereColorIndex1 = sphereColors.indexOf(0x00ff00);
-        const material1 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex1] });
-        sphere1 = new THREE.Mesh(geometry1, material1);
-        sphere1.position.set(0, 1.0, -2);
-        pivotGroup1.add(sphere1);
+        // 3. Add a Cube
+        const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5); // 0.5 units side length
+        const material = new THREE.MeshNormalMaterial(); // Simple material to see rotation
+        cube = new THREE.Mesh(geometry, material);
+        cube.position.set(0, 1.0, -2); // Position the cube 1 meter high, 2 meters in front
+        scene.add(cube);
 
-        pivotGroup2 = new THREE.Group();
-        scene.add(pivotGroup2);
-        const geometry2 = new THREE.SphereGeometry(0.5, 32, 32);
-        sphereColorIndex2 = sphereColors.indexOf(0x0000ff);
-        const material2 = new THREE.MeshStandardMaterial({ color: sphereColors[sphereColorIndex2] });
-        sphere2 = new THREE.Mesh(geometry2, material2);
-        sphere2.position.set(0, 1.0, 2);
-        pivotGroup2.add(sphere2);
+        // 4. Create AR Button
+        const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor'] });
+        arButton.id = 'arButton'; // Assign an ID for styling
+        arButton.textContent = 'ENTER AR'; // Custom button text
+        document.body.appendChild(arButton);
 
-        controller1 = renderer.xr.getController(0);
-        scene.add(controller1);
-
-        controller2 = renderer.xr.getController(1);
-        scene.add(controller2);
-
-        const laserGeometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(0, 0, -5)
-        ]);
-
-        const laserMaterial1 = new THREE.LineBasicMaterial({ color: laserColors[currentColorIndex1], linewidth: 3, transparent: true, opacity: 1 });
-        const laserMaterial2 = new THREE.LineBasicMaterial({ color: laserColors[currentColorIndex2], linewidth: 3, transparent: true, opacity: 1 });
-
-        laser1 = new THREE.Line(laserGeometry, laserMaterial1);
-        controller1.add(laser1);
-
-        laser2 = new THREE.Line(laserGeometry, laserMaterial2);
-        controller2.add(laser2);
-        
-        // --- NEW: Create Hit Test Visuals ---
-        const hitSphereGeometry = new THREE.SphereGeometry(0.05, 16, 16);
-        const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, emissive: 0x00ffff, emissiveIntensity: 1.5 });
-        hitSphere1 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
-        hitSphere2 = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
-        hitSphere1.visible = false;
-        hitSphere2.visible = false;
-        scene.add(hitSphere1);
-        scene.add(hitSphere2);
-        
-        controller1.addEventListener('selectend', onSelectEnd1);
-        controller2.addEventListener('selectend', onSelectEnd2);
-
-        const gridSize = 20;
-        const gridStep = 2;
-        const gridColor = 0x008080;
-        const opacity = 0.3;
-        const points = [];
-        for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) {
-          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) { points.push(new THREE.Vector3(-gridSize / 2, y, z)); points.push(new THREE.Vector3(gridSize / 2, y, z)); }
-        }
-        for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
-          for (let z = -gridSize / 2; z <= gridSize / 2; z += gridStep) { points.push(new THREE.Vector3(x, -gridSize / 2, z)); points.push(new THREE.Vector3(x, gridSize / 2, z)); }
-        }
-        for (let x = -gridSize / 2; x <= gridSize / 2; x += gridStep) {
-          for (let y = -gridSize / 2; y <= gridSize / 2; y += gridStep) { points.push(new THREE.Vector3(x, y, -gridSize / 2)); points.push(new THREE.Vector3(x, y, gridSize / 2)); }
-        }
-        const gridGeometry = new THREE.BufferGeometry().setFromPoints(points);
-        const gridMaterial = new THREE.LineBasicMaterial({ color: gridColor, transparent: true, opacity: opacity });
-        volumetricGrid = new THREE.LineSegments(gridGeometry, gridMaterial);
-        scene.add(volumetricGrid);
-        
-        // --- NEW: RATK Initialization ---
-        ratk = new RealityAccelerator(renderer.xr);
-        ratk.onPlaneAdded = (plane) => {
-            // Optional: You can add visuals for detected planes here if you want
-            // For now, we'll just let RATK know about them so hit-testing works.
-            console.log("Detected plane:", plane);
-        };
-        scene.add(ratk.root); // Add RATK's root object to the scene
-
+        // 5. Set Animation Loop
         renderer.setAnimationLoop(render);
+
+        // 6. Handle Window Resizing
         window.addEventListener('resize', onWindowResize);
       }
 
@@ -189,89 +84,11 @@
         renderer.setSize(window.innerWidth, window.innerHeight);
       }
 
-      function onSelectEnd1() {
-        currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
-        laser1.material.color.setHex(laserColors[currentColorIndex1]);
-        if (intersectedSphere1) {
-            const targetSphere = intersectedSphere1 === sphere1 ? sphere1 : sphere2;
-            const colorIndex = intersectedSphere1 === sphere1 ? sphereColorIndex1 : sphereColorIndex2;
-            const newIndex = (colorIndex + 1) % sphereColors.length;
-            targetSphere.material.color.setHex(sphereColors[newIndex]);
-            if (intersectedSphere1 === sphere1) sphereColorIndex1 = newIndex;
-            else sphereColorIndex2 = newIndex;
-        }
-      }
+      function render() {
+        // Rotate the cube
+        cube.rotation.x += 0.01;
+        cube.rotation.y += 0.01;
 
-      function onSelectEnd2() {
-        currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
-        laser2.material.color.setHex(laserColors[currentColorIndex2]);
-        if (intersectedSphere2) {
-            const targetSphere = intersectedSphere2 === sphere1 ? sphere1 : sphere2;
-            const colorIndex = intersectedSphere2 === sphere1 ? sphereColorIndex1 : sphereColorIndex2;
-            const newIndex = (colorIndex + 1) % sphereColors.length;
-            targetSphere.material.color.setHex(sphereColors[newIndex]);
-            if (intersectedSphere2 === sphere1) sphereColorIndex1 = newIndex;
-            else sphereColorIndex2 = newIndex;
-        }
-      }
-
-      function render(timestamp, frame) {
-        // --- NEW: Update RATK ---
-        if (ratk) {
-            ratk.update(frame);
-        }
-
-        pivotGroup1.rotation.y += 0.005;
-        pivotGroup2.rotation.y -= 0.005;
-
-        const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
-        const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
-
-        laser1.material.opacity = opacityPulse;
-        laser2.material.opacity = opacityPulse;
-        
-        // Default state
-        laser1.scale.z = lengthPulse;
-        laser2.scale.z = lengthPulse;
-        hitSphere1.visible = false;
-        hitSphere2.visible = false;
-
-        // Virtual sphere raycasting
-        tempMatrix.identity().extractRotation(controller1.matrixWorld);
-        raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-        const intersects1 = raycaster.intersectObjects([sphere1, sphere2]);
-        intersectedSphere1 = intersects1.length > 0 ? intersects1[0].object : null;
-
-        tempMatrix.identity().extractRotation(controller2.matrixWorld);
-        raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
-        raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-        const intersects2 = raycaster.intersectObjects([sphere1, sphere2]);
-        intersectedSphere2 = intersects2.length > 0 ? intersects2[0].object : null;
-        
-        // --- NEW: Real-World Hit-Testing with RATK ---
-        if (frame && ratk) {
-            // Controller 1
-            const hitResult1 = ratk.hitTest(controller1);
-            if (hitResult1) {
-                hitSphere1.visible = true;
-                hitSphere1.position.copy(hitResult1.point);
-                const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller1.matrixWorld);
-                const distance = controllerWorldPos.distanceTo(hitSphere1.position);
-                laser1.scale.z = distance / 5; // Original laser length is 5
-            }
-
-            // Controller 2
-            const hitResult2 = ratk.hitTest(controller2);
-            if (hitResult2) {
-                hitSphere2.visible = true;
-                hitSphere2.position.copy(hitResult2.point);
-                const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
-                const distance = controllerWorldPos.distanceTo(hitSphere2.position);
-                laser2.scale.z = distance / 5; // Original laser length is 5
-            }
-        }
-        
         renderer.render(scene, camera);
       }
     </script>
