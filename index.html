@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Babylon.js Simple AR Hit-Test (Debug)</title>
+    <title>Babylon.js Simple AR Hit-Test (Initial Debug)</title>
     <style>
         html, body {
             overflow: hidden;
@@ -54,6 +54,9 @@
     <script src="https://cdn.jsdelivr.net/npm/@babylonjs/inspector@5.0.0/babylon.inspector.min.js"></script>
 
     <script>
+        // NEW: This alert will fire as soon as the JavaScript begins executing
+        alert("JavaScript loaded and running!");
+
         const canvas = document.getElementById("renderCanvas");
         const arButton = document.getElementById("arButton");
         const engine = new BABYLON.Engine(canvas, true);
@@ -102,8 +105,7 @@
 
         // WebXR setup
         arButton.onclick = async () => {
-            // NEW: Debugging alert to confirm button click
-            alert("ENTER AR button clicked!");
+            alert("ENTER AR button clicked!"); // This alert still remains for click confirmation
 
             if (!xr) {
                 try {
