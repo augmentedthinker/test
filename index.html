@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Babylon.js Simple AR Hit-Test</title>
+    <title>Babylon.js Simple AR Hit-Test (Debug)</title>
     <style>
         html, body {
             overflow: hidden;
@@ -65,32 +65,27 @@
         const createScene = function () {
             scene = new BABYLON.Scene(engine);
 
-            // Add a basic camera for initial view (will be replaced by XR camera in AR)
             const camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1.6, -2), scene);
             camera.setTarget(BABYLON.Vector3.Zero());
             camera.attachControl(canvas, true);
 
-            // Add lights
             const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
             light.intensity = 0.7;
 
-            // Create a rotating cube
             const box = BABYLON.MeshBuilder.CreateBox("box", { size: 0.5 }, scene);
-            box.position.y = 1.0; // Place it 1 meter high
-            box.position.z = 2.0; // Place it 2 meters away from origin
+            box.position.y = 1.0;
+            box.position.z = 2.0;
 
-            // Animate the cube
             scene.registerBeforeRender(() => {
                 box.rotation.y += 0.01;
                 box.rotation.x += 0.005;
             });
 
-            // Create a sphere to visualize hit points (initially hidden)
-            hitTestSphere = BABYLON.MeshBuilder.CreateSphere("hitTestSphere", { diameter: 0.1 }, scene); // 10cm diameter
+            hitTestSphere = BABYLON.MeshBuilder.CreateSphere("hitTestSphere", { diameter: 0.1 }, scene);
             hitTestSphere.material = new BABYLON.StandardMaterial("hitMat", scene);
-            hitTestSphere.material.diffuseColor = new BABYLON.Color3(0, 1, 1); // Cyan
-            hitTestSphere.material.emissiveColor = new BABYLON.Color3(0, 1, 1); // Cyan glow
-            hitTestSphere.isVisible = false; // Hide until a hit is detected
+            hitTestSphere.material.diffuseColor = new BABYLON.Color3(0, 1, 1);
+            hitTestSphere.material.emissiveColor = new BABYLON.Color3(0, 1, 1);
+            hitTestSphere.isVisible = false;
 
             return scene;
         };
@@ -107,27 +102,25 @@
 
         // WebXR setup
         arButton.onclick = async () => {
+            // NEW: Debugging alert to confirm button click
+            alert("ENTER AR button clicked!");
+
             if (!xr) {
                 try {
-                    // Create WebXR experience helper for AR
                     xr = await scene.createDefaultXRExperienceAsync({
                         uiOptions: {
-                            sessionMode: BABYLON.WebXRSessionMode.AR // Specify AR mode
+                            sessionMode: BABYLON.WebXRSessionMode.AR
                         },
-                        optionalFeatures: ["hit-test"] // Request hit-test as optional
+                        optionalFeatures: ["hit-test"]
                     });
                     console.log("Babylon.js WebXR Experience created.");
 
-                    // Check if hit-test is supported and enabled
                     if (xr.baseExperience.featuresManager.isEnabled(BABYLON.WebXRFeatureName.HIT_TEST)) {
                         console.log("WebXR Hit Test feature is enabled!");
-                        // Get the hit test feature
-                        const hitTest = xr.baseExperience.featuresManager.get<ctrl61>Feature(BABYLON.WebXRFeatureName.HIT_TEST);
+                        const hitTest = xr.baseExperience.featuresManager.getFeature(BABYLON.WebXRFeatureName.HIT_TEST);
 
-                        // Listen for hit test results
                         hitTest.onHitTestResultObservable.add((results) => {
                             if (results.length) {
-                                // If a hit is detected, show the sphere at the first hit's position
                                 const hit = results[0];
                                 hit.transformationMatrix.decompose(
                                     hitTestSphere.scaling,
@@ -135,9 +128,7 @@
                                     hitTestSphere.position
                                 );
                                 hitTestSphere.isVisible = true;
-                                // console.log("Hit detected!", hitTestSphere.position);
                             } else {
-                                // No hit, hide the sphere
                                 hitTestSphere.isVisible = false;
                             }
                         });
@@ -145,21 +136,19 @@
                         console.warn("WebXR Hit Test feature is not available or enabled.");
                     }
 
-                    // Optional: Listen for session start/end
                     xr.baseExperience.onSessionInitObservable.add(() => console.log("XR Session Initialized"));
                     xr.baseExperience.onSessionStartedObservable.add(() => console.log("XR Session Started"));
                     xr.baseExperience.onSessionEndedObservable.add(() => {
                         console.log("XR Session Ended");
-                        hitTestSphere.isVisible = false; // Ensure sphere is hidden on session end
+                        hitTestSphere.isVisible = false;
                     });
 
                 } catch (error) {
                     console.error("Failed to create WebXR experience:", error);
-                    alert("AR not supported or failed to start: " + error.message);
+                    alert("AR not supported or failed to create experience: " + error.message);
                 }
             }
 
-            // Attempt to enter AR session if XR is ready
             if (xr && xr.baseExperience.state === BABYLON.WebXRState.NOT_IN_XR) {
                 try {
                     await xr.enterXRAsync(
@@ -167,11 +156,11 @@
                         BABYLON.WebXRReferenceSpaceType.LOCAL_FLOOR
                     );
                     console.log("Entered AR session.");
-                    arButton.style.display = 'none'; // Hide button once in AR
+                    arButton.style.display = 'none';
                 } catch (e) {
                     console.error("Failed to enter AR session:", e);
                     alert("Could not enter AR: " + e.message);
-                    arButton.style.display = 'block'; // Show button again on failure
+                    arButton.style.display = 'block';
                 }
             }
         };
