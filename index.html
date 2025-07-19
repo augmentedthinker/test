@@ -1,175 +1,49 @@
-<!DOCTYPE html>
+<!-- arcade-room.html: Color Pad Prototype for Quest VR -->
 <html>
-<head>
-    <title>Babylon.js Simple AR Hit-Test (Detailed Debug)</title>
-    <style>
-        html, body {
-            overflow: hidden;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 0;
-        }
-        #renderCanvas {
-            width: 100%;
-            height: 100%;
-            touch-action: none;
-        }
-        #arButton {
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 20px 40px;
-            font-size: 24px;
-            background-color: #000080; /* Dark blue */
-            color: white;
-            border: 2px solid #000050;
-            border-radius: 10px;
-            font-weight: bold;
-            cursor: pointer;
-            z-index: 1000;
-            transition: all 0.2s ease-in-out;
-        }
-        #arButton:hover {
-            background-color: #FF0000; /* Fiery red on hover */
-            box-shadow: 0 0 20px rgba(255, 0, 0, 0.9);
-            transform: translateX(-50%) scale(1.03);
-        }
-        #arButton:active {
-            background-color: #CC0000; /* Darker red when pressed */
-            transform: translateX(-50%) scale(0.98);
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.9);
-        }
-    </style>
-</head>
-<body>
-    <canvas id="renderCanvas"></canvas>
-    <button id="arButton">ENTER AR</button>
+  <head>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  </head>
+  <body>
+    <a-scene background="color: #333">
 
-    <script src="https://cdn.jsdelivr.net/npm/@babylonjs/core@5.0.0/babylon.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babylonjs/loaders@5.0.0/babylonjs.loaders.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babylonjs/materials@5.0.0/babylonjs.materials.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babylonjs/gui@5.0.0/babylon.gui.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@babylonjs/inspector@5.0.0/babylon.inspector.min.js"></script>
+      <!-- Room (big cube) -->
+      <a-box position="0 5 0" width="15" height="10" depth="15" color="#222" side="double" material="opacity:0.9"></a-box>
 
-    <script>
-        alert("JavaScript loaded and running!"); // Initial alert, already confirmed working
+      <!-- Arcade Cabinet (rectangle) -->
+      <a-box id="arcade" position="0 2 -4" width="2" height="4" depth="0.5" color="#555"></a-box>
 
-        const canvas = document.getElementById("renderCanvas");
-        const arButton = document.getElementById("arButton");
-        const engine = new BABYLON.Engine(canvas, true);
+      <!-- Color Tiles (attached to arcade) -->
+      <a-box class="color-tile" color="#e74c3c" position="-0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box class="color-tile" color="#3498db" position="0 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box class="color-tile" color="#2ecc71" position="0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box class="color-tile" color="#f1c40f" position="-0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
 
-        let scene;
-        let xr; // WebXR experience helper
-        let hitTestSphere; // Sphere to visualize hit point
+      <!-- Controllers and cursor for Quest -->
+      <a-entity laser-controls="hand: right"></a-entity>
+      <a-entity cursor="rayOrigin: mouse"></a-entity> <!-- optional: desktop testing -->
 
-        const createScene = function () {
-            scene = new BABYLON.Scene(engine);
-
-            const camera = new BABYLON.FreeCamera("camera1", new BABYLON.Vector3(0, 1.6, -2), scene);
-            camera.setTarget(BABYLON.Vector3.Zero());
-            camera.attachControl(canvas, true);
-
-            const light = new BABYLON.HemisphericLight("light", new BABYLON.Vector3(0, 1, 0), scene);
-            light.intensity = 0.7;
-
-            const box = BABYLON.MeshBuilder.CreateBox("box", { size: 0.5 }, scene);
-            box.position.y = 1.0;
-            box.position.z = 2.0;
-
-            scene.registerBeforeRender(() => {
-                box.rotation.y += 0.01;
-                box.rotation.x += 0.005;
+      <!-- JS: color change on tile click -->
+      <script>
+        AFRAME.registerComponent('color-changer', {
+          init: function () {
+            this.el.addEventListener('click', function () {
+              // Get the clicked color
+              var color = this.getAttribute('color');
+              // Set the room's color
+              document.querySelector('a-box').setAttribute('color', color);
             });
-
-            hitTestSphere = BABYLON.MeshBuilder.CreateSphere("hitTestSphere", { diameter: 0.1 }, scene);
-            hitTestSphere.material = new BABYLON.StandardMaterial("hitMat", scene);
-            hitTestSphere.material.diffuseColor = new BABYLON.Color3(0, 1, 1);
-            hitTestSphere.material.emissiveColor = new BABYLON.Color3(0, 1, 1);
-            hitTestSphere.isVisible = false;
-
-            return scene;
-        };
-
-        scene = createScene();
-
-        engine.runRenderLoop(() => {
-            scene.render();
+          }
         });
 
-        window.addEventListener("resize", () => {
-            engine.resize();
+        // Attach color-changer to all color tiles after DOM loads
+        window.addEventListener('DOMContentLoaded', function () {
+          document.querySelectorAll('.color-tile').forEach(tile => {
+            tile.setAttribute('color-changer', '');
+          });
         });
-
-        // WebXR setup
-        arButton.onclick = async () => {
-            alert("ENTER AR button clicked! Starting XR experience setup..."); // This alert already confirmed working
-
-            if (!xr) {
-                try {
-                    alert("Attempting to create WebXR Experience..."); // NEW ALERT 1
-                    xr = await scene.createDefaultXRExperienceAsync({
-                        uiOptions: {
-                            sessionMode: BABYLON.WebXRSessionMode.AR
-                        },
-                        optionalFeatures: ["hit-test"]
-                    });
-                    alert("WebXR Experience created successfully!"); // NEW ALERT 2
-                    console.log("Babylon.js WebXR Experience created.");
-
-                    if (xr.baseExperience.featuresManager.isEnabled(BABYLON.WebXRFeatureName.HIT_TEST)) {
-                        console.log("WebXR Hit Test feature is enabled!");
-                        const hitTest = xr.baseExperience.featuresManager.getFeature(BABYLON.WebXRFeatureName.HIT_TEST);
-
-                        hitTest.onHitTestResultObservable.add((results) => {
-                            if (results.length) {
-                                const hit = results[0];
-                                hit.transformationMatrix.decompose(
-                                    hitTestSphere.scaling,
-                                    hitTestSphere.rotationQuaternion,
-                                    hitTestSphere.position
-                                );
-                                hitTestSphere.isVisible = true;
-                            } else {
-                                hitTestSphere.isVisible = false;
-                            }
-                        });
-                    } else {
-                        console.warn("WebXR Hit Test feature is not available or enabled.");
-                    }
-
-                    xr.baseExperience.onSessionInitObservable.add(() => console.log("XR Session Initialized"));
-                    xr.baseExperience.onSessionStartedObservable.add(() => console.log("XR Session Started"));
-                    xr.baseExperience.onSessionEndedObservable.add(() => {
-                        console.log("XR Session Ended");
-                        hitTestSphere.isVisible = false;
-                    });
-
-                } catch (error) {
-                    console.error("Failed to create WebXR experience:", error);
-                    alert("AR not supported or failed to create experience: " + error.message);
-                }
-            }
-
-            if (xr && xr.baseExperience.state === BABYLON.WebXRState.NOT_IN_XR) {
-                try {
-                    alert("Attempting to enter AR session..."); // NEW ALERT 3
-                    await xr.enterXRAsync(
-                        BABYLON.WebXRSessionMode.AR,
-                        BABYLON.WebXRReferenceSpaceType.LOCAL_FLOOR
-                    );
-                    alert("Entered AR session successfully!"); // NEW ALERT 4
-                    console.log("Entered AR session.");
-                    arButton.style.display = 'none';
-                } catch (e) {
-                    console.error("Failed to enter AR session:", e);
-                    alert("Could not enter AR: " + e.message);
-                    arButton.style.display = 'block';
-                }
-            }
-        };
-
-    </script>
-</body>
+      </script>
+    </a-scene>
+  </body>
 </html>
