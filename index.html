@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>VR Arcade - Room & Controllers</title>
+    <title>VR Arcade - Room, Controllers, & Movement</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  </head>
+    </head>
   <body>
     <a-scene>
       <a-assets>
@@ -28,7 +28,10 @@
         shadow="cast: true"
       ></a-box>
 
-      <a-entity id="rig" position="0 0 0">
+      <a-entity
+        id="rig"
+        position="0 0 0"
+        movement-controls="speed: 0.15"   snap-turn="hand: right"          >
         <a-camera position="0 1.6 0" look-controls></a-camera>
 
         <a-entity
@@ -49,17 +52,24 @@
       <script>
         AFRAME.registerComponent('clickable', {
           init: function () {
-            // This component just serves as a marker for the raycaster.
-            // When we add interactive elements, we'll attach this component
-            // to them and add event listeners here or elsewhere.
             console.log("Clickable component initialized for:", this.el.id || this.el.tagName);
             this.el.addEventListener('click', function(evt) {
               console.log('Clicked!', evt.target.id || evt.target.tagName);
-              // You can add visual feedback here later, e.g., changing color
-              // evt.target.setAttribute('material', 'color', 'green');
+              // For demonstration, let's change the color of the clicked object
+              evt.target.setAttribute('material', 'color', getRandomColor());
             });
           }
         });
+
+        // Function to generate a random color for testing clicks
+        function getRandomColor() {
+          const letters = '0123456789ABCDEF';
+          let color = '#';
+          for (let i = 0; i < 6; i++) {
+            color += letters[Math.floor(Math.random() * 16)];
+          }
+          return color;
+        }
 
         // Attach 'clickable' component to the arcade cabinet for initial testing
         document.querySelector('a-box[color="#775555"]').setAttribute('clickable', '');
