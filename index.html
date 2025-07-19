@@ -1,4 +1,4 @@
-<!-- arcade-room-dual-controllers.html: Dual Controller VR Arcade with Color Tiles -->
+<!-- arcade-room-movement.html: Dual Controller, Movement, and Eye Height Fix -->
 <html>
   <head>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -22,6 +22,11 @@
       <!-- BOTH Controllers with Lasers -->
       <a-entity laser-controls="hand: right" raycaster="objects: .color-tile"></a-entity>
       <a-entity laser-controls="hand: left" raycaster="objects: .color-tile"></a-entity>
+
+      <!-- Camera Rig for Movement + Eye Height -->
+      <a-entity id="cameraRig" position="0 2 -1" movement-controls="fly: false; speed: 0.15">
+        <a-camera wasd-controls="acceleration: 20" look-controls="pointerLockEnabled: false"></a-camera>
+      </a-entity>
 
       <!-- Optional: Desktop cursor support -->
       <a-entity cursor="rayOrigin: mouse"></a-entity>
