@@ -20,9 +20,18 @@
       <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
       <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
 
-      <!-- Controllers and cursor for Quest -->
-      <a-entity laser-controls="hand: right"></a-entity>
-      <a-entity cursor="rayOrigin: mouse"></a-entity> <!-- optional: desktop testing -->
+      <!-- VR Rig: movement + both controllers + camera -->
+<a-entity id="rig" movement-controls position="0 1.6 8">
+  <!-- Main camera -->
+  <a-entity camera look-controls wasd-controls="enabled: false"></a-entity>
+
+  <!-- Right hand: laser pointer -->
+  <a-entity laser-controls="hand: right"></a-entity>
+  
+  <!-- Left hand: laser pointer -->
+  <a-entity laser-controls="hand: left"></a-entity>
+</a-entity>
+
 
       <!-- JS: color change on tile click -->
       <script>
