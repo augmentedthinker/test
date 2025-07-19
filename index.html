@@ -1,4 +1,4 @@
-<!-- arcade-room-movement.html: Dual Controller, Movement, and Eye Height Fix -->
+<!-- arcade-room-movement.html: Dual Controllers + Locomotion + Raised POV -->
 <html>
   <head>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
@@ -19,13 +19,13 @@
       <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
       <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
 
-      <!-- BOTH Controllers with Lasers -->
-      <a-entity laser-controls="hand: right" raycaster="objects: .color-tile"></a-entity>
-      <a-entity laser-controls="hand: left" raycaster="objects: .color-tile"></a-entity>
-
-      <!-- Camera Rig for Movement + Eye Height -->
-      <a-entity id="cameraRig" position="0 2 -1" movement-controls="fly: false; speed: 0.15">
-        <a-camera wasd-controls="acceleration: 20" look-controls="pointerLockEnabled: false"></a-camera>
+      <!-- Camera Rig for movement and proper height -->
+      <a-entity id="rig" position="0 2 -1" movement-controls="fly: false; speed: 0.1">
+        <!-- Camera: raised to about chest/face level of arcade -->
+        <a-camera wasd-controls="enabled: false"></a-camera>
+        <!-- Both controllers (attached to rig, so move with you) -->
+        <a-entity laser-controls="hand: right" raycaster="objects: .color-tile"></a-entity>
+        <a-entity laser-controls="hand: left" raycaster="objects: .color-tile"></a-entity>
       </a-entity>
 
       <!-- Optional: Desktop cursor support -->
@@ -51,6 +51,8 @@
           });
         });
       </script>
+      <!-- Include A-Frame Extras for movement-controls -->
+      <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
     </a-scene>
   </body>
 </html>
