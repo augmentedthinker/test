@@ -1,7 +1,8 @@
-<!-- arcade-room.html: Color Pad Prototype for Quest VR -->
+<!-- arcade-room.html: VR Arcade w/ Dual Controllers + Movement -->
 <html>
   <head>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- movement-controls is built-in since 1.1.0 -->
   </head>
   <body>
     <a-scene background="color: #333">
@@ -20,18 +21,15 @@
       <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
       <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
 
-      <!-- VR Rig: movement + both controllers + camera -->
-<a-entity id="rig" movement-controls position="0 1.6 8">
-  <!-- Main camera -->
-  <a-entity camera look-controls wasd-controls="enabled: false"></a-entity>
-
-  <!-- Right hand: laser pointer -->
-  <a-entity laser-controls="hand: right"></a-entity>
-  
-  <!-- Left hand: laser pointer -->
-  <a-entity laser-controls="hand: left"></a-entity>
-</a-entity>
-
+      <!-- VR Rig: Movement + Both Controllers + Camera -->
+      <a-entity id="rig" movement-controls position="0 1.6 8">
+        <!-- Main camera -->
+        <a-entity camera look-controls wasd-controls="enabled: false"></a-entity>
+        <!-- Right hand laser pointer -->
+        <a-entity laser-controls="hand: right"></a-entity>
+        <!-- Left hand laser pointer -->
+        <a-entity laser-controls="hand: left"></a-entity>
+      </a-entity>
 
       <!-- JS: color change on tile click -->
       <script>
@@ -40,7 +38,7 @@
             this.el.addEventListener('click', function () {
               // Get the clicked color
               var color = this.getAttribute('color');
-              // Set the room's color
+              // Set the room's color (first <a-box> is the room)
               document.querySelector('a-box').setAttribute('color', color);
             });
           }
