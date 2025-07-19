@@ -1,58 +1,69 @@
-<!-- arcade-room-movement.html: Dual Controllers + Locomotion + Raised POV -->
+<!DOCTYPE html>
 <html>
   <head>
+    <title>VR Arcade - Room & Controllers</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   </head>
   <body>
-    <a-scene background="color: #333">
-      <!-- Room (big cube) -->
-      <a-box position="0 5 0" width="15" height="10" depth="15" color="#222" side="double" material="opacity:0.9"></a-box>
+    <a-scene>
+      <a-assets>
+        </a-assets>
 
-      <!-- Arcade Cabinet (rectangle) -->
-      <a-box id="arcade" position="0 2 -4" width="2" height="4" depth="0.5" color="#555"></a-box>
+      <a-sky color="#333344"></a-sky>
+      <a-plane
+        position="0 0 -4"
+        rotation="-90 0 0"
+        width="20"
+        height="20"
+        color="#222222"
+        shadow="receive: true"
+      ></a-plane>
 
-      <!-- Color Tiles (attached to arcade) -->
-      <a-box class="color-tile" color="#e74c3c" position="-0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#3498db" position="0 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#2ecc71" position="0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#f1c40f" position="-0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+      <a-box
+        position="0 2 0"
+        width="2"
+        height="4"
+        depth="0.5"
+        color="#775555"
+        shadow="cast: true"
+      ></a-box>
 
-      <!-- Camera Rig for movement and proper height -->
-      <a-entity id="rig" position="0 2 -1" movement-controls="fly: false; speed: 0.1">
-        <!-- Camera: raised to about chest/face level of arcade -->
-        <a-camera wasd-controls="enabled: false"></a-camera>
-        <!-- Both controllers (attached to rig, so move with you) -->
-        <a-entity laser-controls="hand: right" raycaster="objects: .color-tile"></a-entity>
-        <a-entity laser-controls="hand: left" raycaster="objects: .color-tile"></a-entity>
+      <a-entity id="rig" position="0 0 0">
+        <a-camera position="0 1.6 0" look-controls></a-camera>
+
+        <a-entity
+          id="left-hand"
+          laser-controls="hand: left"
+          raycaster="objects: [clickable]; far: 20"
+          line="color: blue; opacity: 0.8"
+        ></a-entity>
+
+        <a-entity
+          id="right-hand"
+          laser-controls="hand: right"
+          raycaster="objects: [clickable]; far: 20"
+          line="color: red; opacity: 0.8"
+        ></a-entity>
       </a-entity>
 
-      <!-- Optional: Desktop cursor support -->
-      <a-entity cursor="rayOrigin: mouse"></a-entity>
-
-      <!-- JS: color change on tile click -->
       <script>
-        AFRAME.registerComponent('color-changer', {
+        AFRAME.registerComponent('clickable', {
           init: function () {
-            this.el.addEventListener('click', function () {
-              // Get the clicked color
-              var color = this.getAttribute('color');
-              // Set the room's color
-              document.querySelector('a-box').setAttribute('color', color);
+            // This component just serves as a marker for the raycaster.
+            // When we add interactive elements, we'll attach this component
+            // to them and add event listeners here or elsewhere.
+            console.log("Clickable component initialized for:", this.el.id || this.el.tagName);
+            this.el.addEventListener('click', function(evt) {
+              console.log('Clicked!', evt.target.id || evt.target.tagName);
+              // You can add visual feedback here later, e.g., changing color
+              // evt.target.setAttribute('material', 'color', 'green');
             });
           }
         });
 
-        // Attach color-changer to all color tiles after DOM loads
-        window.addEventListener('DOMContentLoaded', function () {
-          document.querySelectorAll('.color-tile').forEach(tile => {
-            tile.setAttribute('color-changer', '');
-          });
-        });
+        // Attach 'clickable' component to the arcade cabinet for initial testing
+        document.querySelector('a-box[color="#775555"]').setAttribute('clickable', '');
       </script>
-      <!-- Include A-Frame Extras for movement-controls -->
-      <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
     </a-scene>
   </body>
 </html>
