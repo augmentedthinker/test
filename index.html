@@ -1,164 +1,38 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>VR Arcade Game</title>
-    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-extras@v7.1.0/dist/aframe-extras.min.js"></script>
-
-    <style>
-        body { margin: 0; overflow: hidden; }
-        /* Hide the game canvas as it's only for texture mapping */
-        #gameCanvas { display: none; }
-    </style>
+  <title>Interactive VR/AR Arcade</title>
+  <meta name="description" content="A-Frame WebXR Arcade for Meta Quest 2">
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.7.0/dist/aframe.min.js"></script>
 </head>
 <body>
-    <canvas id="gameCanvas" width="512" height="512"></canvas>
-    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test;"
-             renderer="alpha: true; antialias: true;"
-             background="color: black"
-    >
-        <a-assets>
-            </a-assets>
+  <a-scene
+    webxr="requiredFeatures: local-floor;"
+    renderer="antialias: true; colorManagement: true; highRefreshRate: true; foveationLevel: 1;">
 
-        <a-entity id="cameraRig" movement-controls="speed: 0.1">
-            <a-entity camera look-controls position="0 1.6 0"></a-entity>
-            <a-entity id="rightHand"
-                      meta-touch-controls="hand: right"
-                      raycaster="objects: .clickable; far: 5; showLine: true; lineColor: red; lineOpacity: 0.8;"
-                      laser-controls
-                      cursor="rayOrigin: entity; fuse: false; mouseCursorEvents: true"
-            ></a-entity>
-            <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-        </a-entity>
+    <a-assets timeout="10000">
+      <a-asset-item id="arcade-cabinet-model" src="https://cdn.glitch.global/a2a0422c-29e8-464a-91a5-e6772436f568/arcade-cabinet.glb?v=1663445894132"></a-asset-item>
+    </a-assets>
 
-        <a-plane static-body rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+    <a-entity
+      gltf-model="#arcade-cabinet-model"
+      position="0 0 -2.5"
+      scale="1.2 1.2 1.2">
+    </a-entity>
 
-        <a-plane id="gameScreen"
-                 class="clickable"
-                 position="0 1.5 -2"
-                 width="2" height="2"
-                 material="shader: flat;"
-                 canvas-texture
-                 game-input-bridge="gameCanvasId: gameCanvas"
-        ></a-plane>
+    <a-plane
+      position="0 0 0"
+      rotation="-90 0 0"
+      width="20"
+      height="20"
+      material="shader: flat; color: #222222">
+    </a-plane>
 
-        <a-light type="directional" color="#fff" intensity="0.5" position="-1 1 2"></a-light>
-        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
+    <a-sky color="#111111"></a-sky>
 
-    </a-scene>
+    <a-entity light="type: ambient; color: #444444"></a-entity>
+    <a-entity light="type: directional; intensity: 0.5" position="-1 3 2"></a-entity>
 
-    <script>
-        // Component to apply a canvas as a live texture on an entity
-        AFRAME.registerComponent('canvas-texture', {
-            init: function() {
-                const canvasEl = document.getElementById('gameCanvas');
-                // Ensure the canvas element exists
-                if (!canvasEl) {
-                    console.error('Canvas element with ID "gameCanvas" not found!');
-                    return;
-                }
-
-                // Create a Three.js CanvasTexture from the HTML canvas
-                this.texture = new THREE.CanvasTexture(canvasEl); [cite: 32, 34]
-
-                // Get the mesh of the entity and apply the texture
-                const mesh = this.el.getObject3D('mesh');
-                if (mesh && mesh.material) {
-                    mesh.material.map = this.texture; [cite: 34]
-                    // Use a flat material so the game screen isn't affected by scene lighting
-                    mesh.material.flatShading = true; // [cite: 34, 36]
-                    mesh.material.needsUpdate = true; // [cite: 34]
-                } else {
-                    console.warn('Entity does not have a mesh or material to apply canvas texture.');
-                }
-            },
-            tick: function() {
-                // Refresh the texture each frame to reflect canvas updates
-                if (this.texture) {
-                    this.texture.needsUpdate = true; [cite: 33, 35]
-                }
-            }
-        });
-
-        // Component to bridge A-Frame raycaster events to 2D canvas mouse events
-        AFRAME.registerComponent('game-input-bridge', {
-            schema: {
-                gameCanvasId: {type: 'string', default: 'gameCanvas'}
-            },
-            init: function() {
-                this.gameCanvas = document.getElementById(this.data.gameCanvasId);
-                if (!this.gameCanvas) {
-                    console.error(`Game canvas with ID "${this.data.gameCanvasId}" not found!`);
-                    return;
-                }
-
-                this.onClick = this.onClick.bind(this);
-                this.el.addEventListener('click', this.onClick);
-            },
-            onClick: function(evt) {
-                if (!evt.detail.intersection || !evt.detail.intersection.uv) {
-                    console.warn('Click event missing UV coordinates for game input bridging.');
-                    return;
-                }
-
-                const uv = evt.detail.intersection.uv; [cite: 20, 21]
-                const canvasWidth = this.gameCanvas.width;
-                const canvasHeight = this.gameCanvas.height;
-
-                // Convert normalized UV coordinates (0-1) to pixel coordinates on the canvas
-                // A-Frame's plane geometry UV (0,0) is typically at the bottom-left,
-                // so we invert the Y to get a top-left origin for pixel coordinates. [cite: 24]
-                const x = uv.x * canvasWidth;
-                const y = (1 - uv.y) * canvasHeight; // Invert Y coordinate [cite: 24]
-
-                // Simulate a mouse click event on the canvas 
-                const mouseEvent = new MouseEvent('click', {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: x,
-                    clientY: y,
-                    buttons: 1 // Left mouse button
-                });
-
-                this.gameCanvas.dispatchEvent(mouseEvent);
-                console.log(`Simulated click at canvas pixels: (${x}, ${y})`);
-            },
-            remove: function() {
-                this.el.removeEventListener('click', this.onClick);
-            }
-        });
-
-        // --- Your 2D Game Logic Goes Here ---
-        // This is a placeholder for your actual Tetris/Minesweeper game code.
-        // It should draw to the 'gameCanvas' element.
-
-        window.onload = function() {
-            const gameCanvas = document.getElementById('gameCanvas');
-            const ctx = gameCanvas.getContext('2d');
-
-            // Simple example: Draw a rotating square to simulate game content
-            let rotation = 0;
-            function drawGame() {
-                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
-                ctx.fillStyle = 'blue';
-                ctx.save();
-                ctx.translate(gameCanvas.width / 2, gameCanvas.height / 2);
-                ctx.rotate(rotation);
-                ctx.fillRect(-50, -50, 100, 100);
-                ctx.restore();
-                rotation += 0.05;
-                requestAnimationFrame(drawGame);
-            }
-            drawGame();
-
-            // Example of handling simulated clicks (replace with your game's input handling)
-            gameCanvas.addEventListener('click', (event) => {
-                console.log('Game canvas clicked at:', event.clientX, event.clientY);
-                // Add your game's logic to respond to this click
-                ctx.fillStyle = 'red';
-                ctx.fillRect(event.clientX - 5, event.clientY - 5, 10, 10);
-            });
-        };
-    </script>
+  </a-scene>
 </body>
 </html>
