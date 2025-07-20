@@ -1,74 +1,63 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>VR Arcade Room – Full Controls</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- Movement controls via aframe-extras (controller support, smooth locomotion) -->
-    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
-  </head>
-  <body>
-    <a-scene background="color: #333344" shadow="type: pcfsoft">
-      <!-- Room (large cube) -->
-      <a-box position="0 5 0" width="15" height="10" depth="15" color="#222" side="double" material="opacity:0.93"></a-box>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Cubic Room • Quest 2 WebXR</title>
+  <meta name="description" content="A-Frame cube room with joystick movement & laser pointers for Oculus Quest 2." />
+  <!-- A-Frame core -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe@1.5.0/dist/aframe.min.js"></script>
+  <!-- Extras: gamepad+joystick+smooth locomotion packed into movement-controls -->
+  <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+  <style>
+    /* Optional: make desktop-preview fill the browser tab */
+    html,body {margin:0;height:100%;overflow:hidden;}
+  </style>
+</head>
 
-      <!-- Arcade Cabinet -->
-      <a-box id="arcade" position="0 2 -4" width="2" height="4" depth="0.5" color="#775555" shadow="cast: true"></a-box>
+<body>
+  <!-- ▶️ SCENE -->
+  <a-scene
+      renderer="colorManagement:true"
+      background="color: #222"
+      xr-mode-ui="enabled: true"    <!-- shows “Enter VR” button on desktop -->
+      device-orientation-permission-ui="enabled: false">
 
-      <!-- Color Tiles (on the front face of the arcade) -->
-      <a-box class="color-tile" color="#e74c3c" position="-0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#3498db" position="0 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#2ecc71" position="0.7 3.2 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#f1c40f" position="-0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#9b59b6" position="0 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
-      <a-box class="color-tile" color="#ffffff" position="0.7 2.5 -3.7" width="0.6" height="0.6" depth="0.1"></a-box>
+    <!-- ⚙️ CAMERA RIG with movement & look controls -->
+    <a-entity id="rig"
+              movement-controls="fly: true; speed: 0.06"
+              position="0 1.6 0">
+      <a-entity camera look-controls></a-entity>
 
-      <!-- Camera Rig with WASD and VR controller movement -->
-      <a-entity id="rig" movement-controls="fly: false; speed: 0.08" position="0 0 8">
-        <a-entity
-          id="camera"
-          camera
-          wasd-controls
-          look-controls="pointerLockEnabled: false"
-          position="0 1.6 0">
-        </a-entity>
-        <!-- Left hand controller (laser + click) -->
-        <a-entity
-          id="left-hand"
-          laser-controls="hand: left"
-          raycaster="objects: .color-tile"
-          line="color: blue; opacity: 0.8">
-        </a-entity>
-        <!-- Right hand controller (laser + click) -->
-        <a-entity
-          id="right-hand"
-          laser-controls="hand: right"
-          raycaster="objects: .color-tile"
-          line="color: red; opacity: 0.8">
-        </a-entity>
-      </a-entity>
+      <!-- 🔺 Laser pointers (Quest 2 controllers automatically appear) -->
+      <a-entity laser-controls="hand: left"
+                raycaster="objects: .interactive; lineColor: #22aaff;"></a-entity>
+      <a-entity laser-controls="hand: right"
+                raycaster="objects: .interactive; lineColor: #22aaff;"></a-entity>
+    </a-entity>
 
-      <!-- Desktop cursor (optional for quick browser testing) -->
-      <a-entity cursor="rayOrigin: mouse"></a-entity>
+    <!-- 🏠 Cube room (10 m³, viewable only from the inside) -->
+    <a-box position="0 5 0" width="10" height="10" depth="10"
+           material="color: #808080; metalness: 0.1; roughness: 1; side: back"></a-box>
 
-      <script>
-        // Color-changer for tiles
-        AFRAME.registerComponent('color-changer', {
-          init: function () {
-            this.el.addEventListener('click', function () {
-              var color = this.getAttribute('color');
-              // Find the big room box and change its color
-              document.querySelector('a-box').setAttribute('color', color);
-            });
-          }
-        });
-        // Attach color-changer to all color tiles
-        window.addEventListener('DOMContentLoaded', function () {
-          document.querySelectorAll('.color-tile').forEach(tile => {
-            tile.setAttribute('color-changer', '');
-          });
-        });
-      </script>
-    </a-scene>
-  </body>
+    <!-- ✨ Lighting -->
+    <a-entity light="type: ambient; color: #BBBBBB"></a-entity>
+    <a-entity light="type: point; intensity: 0.8; distance: 20; color:#ffffff"
+              position="0 5 0"></a-entity>
+
+    <!-- 🔘 Simple interactive target to test the lasers -->
+    <a-sphere class="interactive"
+              position="0 1.5 -3"
+              radius="0.25"
+              color="#ff4040"
+              animation__hover="property: scale; dir: alternate; dur: 300; startEvents: raycaster-intersected; from: 1 1 1; to: 1.3 1.3 1.3"
+              animation__leave="property: scale; dur: 300; startEvents: raycaster-intersected-cleared; to: 1 1 1">
+    </a-sphere>
+
+    <!-- Sky (just to hide default infinity grid when outside box) -->
+    <a-sky color="#222"></a-sky>
+  </a-scene>
+
+  <!-- 📓  Controls Quick-Ref (visible only in desktop preview) -->
+  <noscript>Your browser must support JavaScript to view this experience.</noscript>
+</body>
 </html>
