@@ -1,233 +1,164 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AR Arcade Room</title>
+    <title>VR Arcade Game</title>
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/n5ro/aframe-extras@v7.1.0/dist/aframe-extras.min.js"></script>
+
     <style>
         body { margin: 0; overflow: hidden; }
-        canvas { display: block; }
-        #arButton {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            z-index: 1000;
-        }
-        #arButton.unsupported {
-            background-color: #dc3545;
-            cursor: not-allowed;
-        }
+        /* Hide the game canvas as it's only for texture mapping */
+        #gameCanvas { display: none; }
     </style>
 </head>
 <body>
-    <script type="module">
-        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js';
+    <canvas id="gameCanvas" width="512" height="512"></canvas>
+    <a-scene webxr="requiredFeatures: local-floor; optionalFeatures: hit-test;"
+             renderer="alpha: true; antialias: true;"
+             background="color: black"
+    >
+        <a-assets>
+            </a-assets>
 
-        // Custom XRButton similar to Three.js examples for simplicity in a single file
-        class XRButton {
-            constructor(renderer) {
-                this.renderer = renderer;
-                this.domElement = document.createElement('button');
-                this.domElement.id = 'arButton';
-                this.domElement.textContent = 'Enter AR';
-                document.body.appendChild(this.domElement);
+        <a-entity id="cameraRig" movement-controls="speed: 0.1">
+            <a-entity camera look-controls position="0 1.6 0"></a-entity>
+            <a-entity id="rightHand"
+                      meta-touch-controls="hand: right"
+                      raycaster="objects: .clickable; far: 5; showLine: true; lineColor: red; lineOpacity: 0.8;"
+                      laser-controls
+                      cursor="rayOrigin: entity; fuse: false; mouseCursorEvents: true"
+            ></a-entity>
+            <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
+        </a-entity>
 
-                this.session = null;
-                this.onSessionStarted = this.onSessionStarted.bind(this);
-                this.onSessionEnded = this.onSessionEnded.bind(this);
+        <a-plane static-body rotation="-90 0 0" width="10" height="10" color="#7BC8A4"></a-plane>
+
+        <a-plane id="gameScreen"
+                 class="clickable"
+                 position="0 1.5 -2"
+                 width="2" height="2"
+                 material="shader: flat;"
+                 canvas-texture
+                 game-input-bridge="gameCanvasId: gameCanvas"
+        ></a-plane>
+
+        <a-light type="directional" color="#fff" intensity="0.5" position="-1 1 2"></a-light>
+        <a-light type="ambient" color="#fff" intensity="0.5"></a-light>
+
+    </a-scene>
+
+    <script>
+        // Component to apply a canvas as a live texture on an entity
+        AFRAME.registerComponent('canvas-texture', {
+            init: function() {
+                const canvasEl = document.getElementById('gameCanvas');
+                // Ensure the canvas element exists
+                if (!canvasEl) {
+                    console.error('Canvas element with ID "gameCanvas" not found!');
+                    return;
+                }
+
+                // Create a Three.js CanvasTexture from the HTML canvas
+                this.texture = new THREE.CanvasTexture(canvasEl); [cite: 32, 34]
+
+                // Get the mesh of the entity and apply the texture
+                const mesh = this.el.getObject3D('mesh');
+                if (mesh && mesh.material) {
+                    mesh.material.map = this.texture; [cite: 34]
+                    // Use a flat material so the game screen isn't affected by scene lighting
+                    mesh.material.flatShading = true; // [cite: 34, 36]
+                    mesh.material.needsUpdate = true; // [cite: 34]
+                } else {
+                    console.warn('Entity does not have a mesh or material to apply canvas texture.');
+                }
+            },
+            tick: function() {
+                // Refresh the texture each frame to reflect canvas updates
+                if (this.texture) {
+                    this.texture.needsUpdate = true; [cite: 33, 35]
+                }
+            }
+        });
+
+        // Component to bridge A-Frame raycaster events to 2D canvas mouse events
+        AFRAME.registerComponent('game-input-bridge', {
+            schema: {
+                gameCanvasId: {type: 'string', default: 'gameCanvas'}
+            },
+            init: function() {
+                this.gameCanvas = document.getElementById(this.data.gameCanvasId);
+                if (!this.gameCanvas) {
+                    console.error(`Game canvas with ID "${this.data.gameCanvasId}" not found!`);
+                    return;
+                }
+
                 this.onClick = this.onClick.bind(this);
-
-                this.domElement.addEventListener('click', this.onClick);
-
-                if (navigator.xr) {
-                    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-                        if (!supported) {
-                            this.domElement.textContent = 'AR Not Supported';
-                            this.domElement.classList.add('unsupported');
-                        }
-                    });
-                } else {
-                    this.domElement.textContent = 'WebXR Not Available';
-                    this.domElement.classList.add('unsupported');
+                this.el.addEventListener('click', this.onClick);
+            },
+            onClick: function(evt) {
+                if (!evt.detail.intersection || !evt.detail.intersection.uv) {
+                    console.warn('Click event missing UV coordinates for game input bridging.');
+                    return;
                 }
+
+                const uv = evt.detail.intersection.uv; [cite: 20, 21]
+                const canvasWidth = this.gameCanvas.width;
+                const canvasHeight = this.gameCanvas.height;
+
+                // Convert normalized UV coordinates (0-1) to pixel coordinates on the canvas
+                // A-Frame's plane geometry UV (0,0) is typically at the bottom-left,
+                // so we invert the Y to get a top-left origin for pixel coordinates. [cite: 24]
+                const x = uv.x * canvasWidth;
+                const y = (1 - uv.y) * canvasHeight; // Invert Y coordinate [cite: 24]
+
+                // Simulate a mouse click event on the canvas 
+                const mouseEvent = new MouseEvent('click', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX: x,
+                    clientY: y,
+                    buttons: 1 // Left mouse button
+                });
+
+                this.gameCanvas.dispatchEvent(mouseEvent);
+                console.log(`Simulated click at canvas pixels: (${x}, ${y})`);
+            },
+            remove: function() {
+                this.el.removeEventListener('click', this.onClick);
             }
+        });
 
-            async onClick() {
-                if (this.session === null) {
-                    try {
-                        const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['hit-test', 'dom-overlay'], domOverlay: { root: document.body } });
-                        this.renderer.xr.setSession(session);
-                        this.onSessionStarted(session);
-                    } catch (error) {
-                        console.error('Failed to start AR session:', error);
-                        this.domElement.textContent = 'Error starting AR';
-                        this.domElement.classList.add('unsupported');
-                    }
-                } else {
-                    this.session.end();
-                }
+        // --- Your 2D Game Logic Goes Here ---
+        // This is a placeholder for your actual Tetris/Minesweeper game code.
+        // It should draw to the 'gameCanvas' element.
+
+        window.onload = function() {
+            const gameCanvas = document.getElementById('gameCanvas');
+            const ctx = gameCanvas.getContext('2d');
+
+            // Simple example: Draw a rotating square to simulate game content
+            let rotation = 0;
+            function drawGame() {
+                ctx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+                ctx.fillStyle = 'blue';
+                ctx.save();
+                ctx.translate(gameCanvas.width / 2, gameCanvas.height / 2);
+                ctx.rotate(rotation);
+                ctx.fillRect(-50, -50, 100, 100);
+                ctx.restore();
+                rotation += 0.05;
+                requestAnimationFrame(drawGame);
             }
+            drawGame();
 
-            onSessionStarted(session) {
-                session.addEventListener('end', this.onSessionEnded);
-                this.session = session;
-                this.domElement.textContent = 'Exit AR';
-            }
-
-            onSessionEnded() {
-                this.session.removeEventListener('end', this.onSessionEnded);
-                this.session = null;
-                this.domElement.textContent = 'Enter AR';
-            }
-        }
-
-        let scene, camera, renderer, arcadeTower;
-
-        function init() {
-            // Scene setup
-            scene = new THREE.Scene();
-
-            // Camera setup
-            // In AR, the camera position is controlled by the XR device, so initial position doesn't matter much
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 1.6, 0); // A common eye height for initial view
-
-            // Renderer setup
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Alpha true for AR passthrough
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true; // Enable WebXR
-            document.body.appendChild(renderer.domElement);
-
-            // Lighting
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x888888, 1);
-            scene.add(hemiLight);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(1, 2, 1).normalize();
-            scene.add(dirLight);
-
-            // Add an AR Button
-            new XRButton(renderer);
-
-            // Create the room (simple floor plane for AR context)
-            const floorGeometry = new THREE.PlaneGeometry(100, 100);
-            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, side: THREE.DoubleSide });
-            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-            floor.rotation.x = -Math.PI / 2; // Rotate to lie flat on the XZ plane
-            floor.position.y = 0; // At ground level
-            scene.add(floor);
-
-            // Create the Arcade Tower
-            arcadeTower = new THREE.Group();
-
-            // Dimensions estimation: Stick figure is about 1.7m (average height).
-            // Tower should be "larger than the person", so let's aim for 2.5m - 3m tall.
-            // Let's make it 2.8m tall for an imposing presence.
-            const towerHeight = 2.8;
-            const towerWidth = 1.2;
-            const towerDepth = 1.0;
-
-            // Main Body (large kind of Game Boy looking tower)
-            const bodyGeometry = new THREE.BoxGeometry(towerWidth, towerHeight, towerDepth);
-            const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x444444 }); // Dark grey
-            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-            body.position.y = towerHeight / 2; // Position so base is on the floor
-            arcadeTower.add(body);
-
-            // Large Screen (takes up most of the object)
-            const screenWidth = towerWidth * 0.9;
-            const screenHeight = towerHeight * 0.7;
-            const screenDepth = 0.05; // Thin screen
-            const screenGeometry = new THREE.BoxGeometry(screenWidth, screenHeight, screenDepth);
-            const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 }); // Black for screen
-            const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-            screen.position.set(0, (towerHeight / 2) + (screenHeight / 2) - (towerHeight - screenHeight) / 2.5, (towerDepth / 2) + (screenDepth / 2)); // Position on front face
-            arcadeTower.add(screen);
-
-            // Control Panel Area (just below the screen)
-            const panelHeight = towerHeight * 0.2;
-            const panelWidth = towerWidth * 0.9;
-            const panelDepth = screenDepth * 2; // Slightly protrude
-            const panelGeometry = new THREE.BoxGeometry(panelWidth, panelHeight, panelDepth);
-            const panelMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
-            const panel = new THREE.Mesh(panelGeometry, panelMaterial);
-            panel.position.set(0, (towerHeight / 2) - (screenHeight / 2) - (panelHeight / 2) + 0.1, (towerDepth / 2) + (panelDepth / 2));
-            arcadeTower.add(panel);
-
-            // Red Button
-            const buttonRadius = 0.1;
-            const buttonHeight = 0.05;
-            const redButtonGeometry = new THREE.CylinderGeometry(buttonRadius, buttonRadius, buttonHeight, 32);
-            const redButtonMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            const redButton = new THREE.Mesh(redButtonGeometry, redButtonMaterial);
-            redButton.rotation.x = Math.PI / 2; // Point outwards
-            redButton.position.set(screenWidth * 0.3, panel.position.y + 0.05, (towerDepth / 2) + (panelDepth / 2) + buttonRadius / 2); // On the right of panel
-            arcadeTower.add(redButton);
-
-            // Green Button
-            const greenButtonGeometry = new THREE.CylinderGeometry(buttonRadius, buttonRadius, buttonHeight, 32);
-            const greenButtonMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-            const greenButton = new THREE.Mesh(greenButtonGeometry, greenButtonMaterial);
-            greenButton.rotation.x = Math.PI / 2;
-            greenButton.position.set(screenWidth * 0.3, panel.position.y - 0.1, (towerDepth / 2) + (panelDepth / 2) + buttonRadius / 2); // Below red button
-            arcadeTower.add(greenButton);
-
-            // Directional Keypad (D-Pad)
-            const dpadSize = 0.3;
-            const dpadHeight = 0.03;
-            const dpadMainGeometry = new THREE.BoxGeometry(dpadSize, dpadSize, dpadHeight);
-            const dpadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
-            const dpad = new THREE.Mesh(dpadMainGeometry, dpadMaterial);
-            dpad.position.set(-screenWidth * 0.3, panel.position.y - 0.025, (towerDepth / 2) + (panelDepth / 2) + dpadHeight / 2);
-            arcadeTower.add(dpad);
-
-            // Bottom Button
-            const bottomButtonRadius = 0.07;
-            const bottomButtonHeight = 0.04;
-            const bottomButtonGeometry = new THREE.CylinderGeometry(bottomButtonRadius, bottomButtonRadius, bottomButtonHeight, 32);
-            const bottomButtonMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Grey
-            const bottomButton = new THREE.Mesh(bottomButtonGeometry, bottomButtonMaterial);
-            bottomButton.rotation.x = Math.PI / 2;
-            bottomButton.position.set(0, panel.position.y - panelHeight / 2 + 0.05, (towerDepth / 2) + (panelDepth / 2) + bottomButtonRadius / 2); // Centered at bottom of panel
-            arcadeTower.add(bottomButton);
-
-
-            // Position the entire arcade tower group in the scene
-            // For AR, it's often good to place objects slightly in front of the camera's initial position
-            // (0, 0, -Z) in world space, where (0,0,0) is usually where the user starts.
-            arcadeTower.position.set(0, 0, -2); // 2 meters in front of the starting point
-            scene.add(arcadeTower);
-
-            // Handle window resizing
-            window.addEventListener('resize', onWindowResize, false);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function render() {
-            // Animation for the screen (simple pulsating effect as if it's "on")
-            if (screen && screen.material.isMeshBasicMaterial) {
-                const pulse = Math.sin(Date.now() * 0.002) * 0.1 + 0.9;
-                screen.material.color.setRGB(0 * pulse, 0 * pulse, 0 * pulse);
-            }
-
-            renderer.render(scene, camera);
-        }
-
-        init();
-
+            // Example of handling simulated clicks (replace with your game's input handling)
+            gameCanvas.addEventListener('click', (event) => {
+                console.log('Game canvas clicked at:', event.clientX, event.clientY);
+                // Add your game's logic to respond to this click
+                ctx.fillStyle = 'red';
+                ctx.fillRect(event.clientX - 5, event.clientY - 5, 10, 10);
+            });
+        };
     </script>
 </body>
 </html>
