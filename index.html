@@ -1,55 +1,80 @@
-<!-- ar_passthrough_minimal.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <title>Minimal ARButton Passthrough (Quest 2)</title>
-  <!--
-    Load Three.js core library and ARButton utility.
-    - three.min.js: Needed for the renderer and WebXR support.
-    - ARButton.js: Provides the official "Enter AR" button for WebXR.
-    Both from unpkg CDN for direct HTML use.
-  -->
-  <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
-  <script src="https://unpkg.com/three@0.150.1/examples/jsm/webxr/ARButton.js"></script>
+  <title>Quest 2 AR with Controllers (Three.js)</title>
+
+  <!-- Load Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js"></script>
+
+  <!-- Load ARButton for entering AR mode -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/webxr/ARButton.js"></script>
+
+  <!-- Load XRControllerModelFactory for controller visuals -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/webxr/XRControllerModelFactory.js"></script>
+
   <style>
-    /* Simple centering for the AR button */
-    body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #111; }
+    body, html {
+      margin: 0;
+      overflow: hidden;
+      width: 100%;
+      height: 100%;
+      background-color: #000;
+    }
   </style>
 </head>
 <body>
 <script>
-  // --- Minimal Three.js setup for WebXR ARButton only ---
+  // Set up basic Three.js elements: scene, camera, renderer
+  const scene = new THREE.Scene();
 
-  // 1. Create the renderer. Required for WebXR.
-  //    - alpha: true makes the background transparent for passthrough.
-  //    - antialias: optional, for smooth AR button rendering.
-  const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-  // Not added to the DOM: we do not display a canvas, as no 3D scene is rendered.
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-  // 2. Enable WebXR support. Required for ARButton.
+  const renderer = new THREE.WebGLRenderer({ alpha: true }); // alpha:true allows passthrough
+  renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
 
-  // 3. Create the ARButton.
-  //    - Pass 'renderer' so ARButton can trigger XR sessions.
-  //    - Pass options with 'requiredFeatures: ["hit-test"]' if you plan to do surface detection.
-  //      For passthrough only, can omit or just specify mode: 'immersive-ar'.
-  //    - ARButton automatically inserts a button into the page.
-  //    - It handles HTTPS, XR support, and error messages for you.
-  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body }, sessionInit: { optionalFeatures: ['dom-overlay'] }, mode: 'immersive-ar' }));
+  // Add ARButton to enter AR mode
+  document.body.appendChild(ARButton.createButton(renderer, {
+    requiredFeatures: ['local-floor']
+  }));
 
-  // 4. No scene, camera, or animation loop is set up.
-  //    - We don't call renderer.setAnimationLoop or renderer.render.
-  //    - No objects, no background, no lights, nothing.
-  //    - The entire experience is: click Enter AR → passthrough starts → nothing else happens.
+  // Controller setup
+  const controllerModelFactory = new THREE.XRControllerModelFactory();
 
-  // --- Explanations for inclusion ---
-  // - three.min.js: Required by ARButton and renderer.
-  // - ARButton.js: Only way to create the WebXR AR "Enter AR" button in Three.js.
-  // - renderer: Needed because ARButton expects a Three.js renderer.
-  // - renderer.xr.enabled = true: WebXR API requires this to be set for any XR mode.
-  // - ARButton.createButton: Handles all button UI and AR session creation.
-  // - No THREE.Scene, THREE.Camera, or animation loop: not needed unless you want to draw something.
+  // Function to set up a controller
+  function setupController(index) {
+    const controller = renderer.xr.getController(index);
+    scene.add(controller);
+
+    const controllerGrip = renderer.xr.getControllerGrip(index);
+    const model = controllerModelFactory.createControllerModel(controllerGrip);
+    controllerGrip.add(model);
+    scene.add(controllerGrip);
+  }
+
+  // Set up both controllers (left and right)
+  setupController(0); // First controller (right)
+  setupController(1); // Second controller (left)
+
+  // Render loop
+  function animate() {
+    renderer.setAnimationLoop(render);
+  }
+
+  function render() {
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  // Resize handling
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
 </script>
 </body>
 </html>
