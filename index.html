@@ -1,269 +1,368 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="utf-8">
-    <title>Interactive VR Environment - Quest 2</title>
-    <meta name="description" content="VR Environment with Hand Controllers for Quest 2">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/aframe/1.4.0/aframe-extras.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-        }
-        
-        #ui-overlay {
-            position: fixed;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 15px;
-            border-radius: 10px;
-            max-width: 300px;
-        }
-        
-        .control-button {
-            background: #4CAF50;
-            border: none;
-            color: white;
-            padding: 10px 15px;
-            margin: 5px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-        
-        .control-button:hover {
-            background: #45a049;
-        }
-        
-        .control-button:active {
-            background: #3d8b40;
-        }
-        
-        #status {
-            margin-top: 10px;
-            font-size: 14px;
-        }
-    </style>
+  <title>WebXR Arcade Cabinet Demo</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background-color: #111;
+      color: #fff;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      z-index: 100;
+      display: block;
+      padding: 10px 0;
+    }
+    /* AR Button styles are handled by the ARButton script below */
+  </style>
 </head>
 <body>
-    <!-- UI Overlay -->
-    <div id="ui-overlay">
-        <h3>VR Controller</h3>
-        <button class="control-button" onclick="spawnObject()">Spawn Cube</button>
-        <button class="control-button" onclick="clearObjects()">Clear All</button>
-        <button class="control-button" onclick="changeMode()">Change Mode</button>
-        <div id="status">Mode: Interactive | Objects: 0</div>
-    </div>
+  <div id="info">
+    WebXR Arcade Cabinet Demo
+  </div>
 
-    <!-- A-Frame VR Scene -->
-    <a-scene
-        background="color: #0a0a0a"
-        vr-mode-ui="enabled: true"
-        device-orientation-permission-ui="enabled: false"
-        id="scene">
-        
-        <!-- Environment -->
-        <a-sky color="#0a0a0a"></a-sky>
-        <a-plane position="0 0 -4" rotation="-90 0 0" width="8" height="8" color="#1a1a1a" shadow></a-plane>
-        
-        <!-- Lighting -->
-        <a-light type="ambient" color="#404040"></a-light>
-        <a-light type="directional" position="2 4 2" color="#ffffff" intensity="0.5" shadow></a-light>
-        
-        <!-- Camera Rig with Hand Controllers -->
-        <a-entity id="cameraRig" position="0 1.6 3">
-            <!-- Head/Camera -->
-            <a-camera look-controls wasd-controls="enabled: false"></a-camera>
-            
-            <!-- Left Hand Controller -->
-            <a-entity id="leftHand"
-                      hand-controls="hand: left; handModelStyle: lowPoly; color: #15AABF"
-                      laser-controls="hand: left"
-                      raycaster="objects: .interactive; far: 20"
-                      line="color: cyan; opacity: 0.5">
-            </a-entity>
-            
-            <!-- Right Hand Controller -->
-            <a-entity id="rightHand" 
-                      hand-controls="hand: right; handModelStyle: lowPoly; color: #15AABF"
-                      laser-controls="hand: right"
-                      raycaster="objects: .interactive; far: 20"
-                      line="color: cyan; opacity: 0.5">
-            </a-entity>
-        </a-entity>
-        
-        <!-- Assets -->
-        <a-assets>
-            <a-mixin id="interactive-cube" 
-                     class="interactive"
-                     geometry="primitive: box; width: 0.3; height: 0.3; depth: 0.3"
-                     material="color: #FF6B6B; opacity: 0.9; metalness: 0.3; roughness: 0.4"
-                     shadow="cast: true; receive: true"
-                     animation__rotation="property: rotation; to: 0 360 0; dur: 8000; loop: true; easing: linear">
-            </a-mixin>
-            
-            <a-mixin id="interactive-sphere"
-                     class="interactive"
-                     geometry="primitive: sphere; radius: 0.15"
-                     material="color: #4ECDC4; opacity: 0.9; metalness: 0.2; roughness: 0.3"
-                     shadow="cast: true; receive: true"
-                     animation__bounce="property: position; to: 0 0.3 0; dur: 2000; dir: alternate; loop: true; easing: easeInOutSine">
-            </a-mixin>
-            
-            <a-mixin id="interactive-pyramid"
-                     class="interactive"
-                     geometry="primitive: cone; radiusBottom: 0.2; radiusTop: 0; height: 0.4"
-                     material="color: #FFD93D; opacity: 0.9; metalness: 0.1; roughness: 0.5"
-                     shadow="cast: true; receive: true"
-                     animation__wobble="property: rotation; to: 5 0 5; dur: 1500; dir: alternate; loop: true; easing: easeInOutQuad">
-            </a-mixin>
-        </a-assets>
-        
-        <!-- Interactive Objects Container -->
-        <a-entity id="objects-container"></a-entity>
-        
-        <!-- Sample Interactive Objects -->
-        <a-entity mixin="interactive-cube" 
-                  position="-1 1 -2"
-                  class="interactive clickable"
-                  click-handler>
-        </a-entity>
-        
-        <a-entity mixin="interactive-sphere" 
-                  position="0 1.5 -2"
-                  class="interactive clickable"
-                  click-handler>
-        </a-entity>
-        
-        <a-entity mixin="interactive-pyramid" 
-                  position="1 1 -2"
-                  class="interactive clickable"
-                  click-handler>
-        </a-entity>
-        
-        <!-- UI Panel in 3D Space -->
-        <a-entity id="ui-panel" position="0 2.5 -1.5" rotation="-15 0 0">
-            <a-plane width="2" height="0.8" color="#222" opacity="0.8" radius="0.1"></a-plane>
-            <a-text value="VR Interactive Environment\nUse controllers to point and click objects\nTrigger to interact"
-                    position="0 0 0.01" 
-                    align="center"
-                    color="#fff"
-                    width="6">
-            </a-text>
-        </a-entity>
+  <!-- Using an import map is a modern way to define module locations -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
 
-    </a-scene>
+  <script type="module">
+    // Import the main Three.js library
+    import * as THREE from 'three';
 
-    <script>
-        let objectCount = 3;
-        let currentMode = 'interactive';
-        
-        // Register click handler component
-        AFRAME.registerComponent('click-handler', {
-            init: function () {
-                this.el.addEventListener('click', this.onClick.bind(this));
-                this.el.addEventListener('mouseenter', this.onMouseEnter.bind(this));
-                this.el.addEventListener('mouseleave', this.onMouseLeave.bind(this));
-            },
-            
-            onClick: function (evt) {
-                console.log('Object clicked!', this.el);
-                
-                // Change color on click
-                const colors = ['#FF6B6B', '#4ECDC4', '#FFD93D', '#95E1D3', '#F38BA8'];
-                const randomColor = colors[Math.floor(Math.random() * colors.length)];
-                this.el.setAttribute('material', 'color', randomColor);
-                
-                // Add click animation
-                this.el.setAttribute('animation__click', {
-                    property: 'scale',
-                    to: '1.3 1.3 1.3',
-                    dur: 150,
-                    dir: 'alternate',
-                    loop: 1
-                });
-                
-                // Play sound (if available)
-                this.el.components.sound?.playSound();
-                
-                updateStatus();
-            },
-            
-            onMouseEnter: function (evt) {
-                this.el.setAttribute('animation__hover', {
-                    property: 'scale',
-                    to: '1.1 1.1 1.1',
-                    dur: 200
-                });
-            },
-            
-            onMouseLeave: function (evt) {
-                this.el.setAttribute('animation__hover', {
-                    property: 'scale',
-                    to: '1 1 1',
-                    dur: 200
-                });
-            }
-        });
-        
-        function spawnObject() {
-            const container = document.getElementById('objects-container');
-            const objectTypes = ['interactive-cube', 'interactive-sphere', 'interactive-pyramid'];
-            const randomType = objectTypes[Math.floor(Math.random() * objectTypes.length)];
-            
-            const newObject = document.createElement('a-entity');
-            newObject.setAttribute('mixin', randomType);
-            newObject.setAttribute('class', 'interactive clickable');
-            newObject.setAttribute('click-handler', '');
-            
-            // Random position around the user
-            const x = (Math.random() - 0.5) * 4;
-            const y = Math.random() * 2 + 0.5;
-            const z = -(Math.random() * 3 + 1);
-            
-            newObject.setAttribute('position', `${x} ${y} ${z}`);
-            
-            container.appendChild(newObject);
-            objectCount++;
-            updateStatus();
-        }
-        
-        function clearObjects() {
-            const container = document.getElementById('objects-container');
-            while (container.firstChild) {
-                container.removeChild(container.firstChild);
-            }
-            objectCount = 3; // Keep the initial 3 objects
-            updateStatus();
-        }
-        
-        function changeMode() {
-            currentMode = currentMode === 'interactive' ? 'creation' : 'interactive';
-            updateStatus();
-        }
-        
-        function updateStatus() {
-            document.getElementById('status').textContent = 
-                `Mode: ${currentMode} | Objects: ${objectCount}`;
-        }
-        
-        // Initialize
-        updateStatus();
-        
-        // Controller event listeners
-        document.addEventListener('DOMContentLoaded', function() {
-            const scene = document.querySelector('a-scene');
-            
-            scene.addEventListener('enter-vr', function () {
-                console.log('Entered VR mode');
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
+    // Inlining it here keeps everything in a single file as requested.
+    class ARButton {
+      static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
+
+        function showStartAR( /*device*/ ) {
+          if (sessionInit.domOverlay === undefined) {
+            const overlay = document.createElement('div');
+            overlay.style.display = 'none';
+            document.body.appendChild(overlay);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 38);
+            svg.setAttribute('height', 38);
+            svg.style.position = 'absolute';
+            svg.style.right = '20px';
+            svg.style.top = '20px';
+            svg.addEventListener('click', function() {
+              currentSession.end();
             });
-            
-            scene.addEventListener('exit-vr', function () {
-                console.log('Exited VR mode');
-            });
-        });
-    </script>
+            overlay.appendChild(svg);
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', 2);
+            svg.appendChild(path);
+            if (sessionInit.optionalFeatures === undefined) {
+              sessionInit.optionalFeatures = [];
+            }
+            sessionInit.optionalFeatures.push('dom-overlay');
+            sessionInit.domOverlay = {
+              root: overlay
+            };
+          }
+
+          let currentSession = null;
+
+          async function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+            button.textContent = 'STOP AR';
+            sessionInit.domOverlay.root.style.display = '';
+            currentSession = session;
+          }
+
+          function onSessionEnded( /*event*/ ) {
+            currentSession.removeEventListener('end', onSessionEnded);
+            button.textContent = 'START AR';
+            sessionInit.domOverlay.root.style.display = 'none';
+            currentSession = null;
+          }
+
+          button.style.display = '';
+          button.style.cursor = 'pointer';
+          button.style.left = 'calc(50% - 50px)';
+          button.style.width = '100px';
+          button.textContent = 'START AR';
+          button.onmouseenter = function() {
+            button.style.opacity = '1.0';
+          };
+          button.onmouseleave = function() {
+            button.style.opacity = '0.5';
+          };
+          button.onclick = function() {
+            if (currentSession === null) {
+              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+            } else {
+              currentSession.end();
+            }
+          };
+        }
+
+        function disableButton() {
+          button.style.display = '';
+          button.style.cursor = 'auto';
+          button.style.left = 'calc(50% - 75px)';
+          button.style.width = '150px';
+          button.onmouseenter = null;
+          button.onmouseleave = null;
+          button.onclick = null;
+        }
+
+        function showARNotSupported() {
+          disableButton();
+          button.textContent = 'AR NOT SUPPORTED';
+        }
+
+        function stylizeElement(element) {
+          element.style.position = 'absolute';
+          element.style.bottom = '20px';
+          element.style.padding = '12px 6px';
+          element.style.border = '1px solid #fff';
+          element.style.borderRadius = '4px';
+          element.style.background = 'rgba(0,0,0,0.1)';
+          element.style.color = '#fff';
+          element.style.font = 'normal 13px sans-serif';
+          element.style.textAlign = 'center';
+          element.style.opacity = '0.5';
+          element.style.outline = 'none';
+          element.style.zIndex = '999';
+        }
+
+        if ('xr' in navigator) {
+          button.id = 'ARButton';
+          stylizeElement(button);
+          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
+            supported ? showStartAR() : showARNotSupported();
+          }).catch(showARNotSupported);
+          return button;
+        } else {
+          const message = document.createElement('a');
+          if (window.isSecureContext === false) {
+            message.href = document.location.href.replace(/^http:/, 'https:');
+            message.innerHTML = 'WEBXR NEEDS HTTPS';
+          } else {
+            message.href = 'https://immersiveweb.dev/';
+            message.innerHTML = 'WEBXR NOT AVAILABLE';
+          }
+          message.style.left = 'calc(50% - 90px)';
+          message.style.width = '180px';
+          message.style.textDecoration = 'none';
+          stylizeElement(message);
+          return message;
+        }
+      }
+    }
+
+    // --- Main Application Logic ---
+    let camera, scene, renderer;
+    let arcadeCabinet;
+    let screen, screenGlow;
+
+    init();
+    animate();
+
+    function init() {
+      // Create the main scene
+      scene = new THREE.Scene();
+
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true // alpha: true is required for AR passthrough
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      document.body.appendChild(renderer.domElement);
+
+      // Add the AR button to the body. It will handle session start/end.
+      document.body.appendChild(ARButton.createButton(renderer, {
+        requiredFeatures: ['local']
+      }));
+
+      // Create the arcade cabinet
+      createArcadeCabinet();
+
+      // Add lighting
+      const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
+      scene.add(ambientLight);
+
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(1, 1, 1);
+      scene.add(directionalLight);
+
+      // Add a point light for the screen glow
+      const screenLight = new THREE.PointLight(0x00ffff, 0.5, 2);
+      screenLight.position.set(0, 0.3, -0.8);
+      scene.add(screenLight);
+
+      // Add a listener to handle window resizing
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function createArcadeCabinet() {
+      arcadeCabinet = new THREE.Group();
+
+      // Main cabinet body (rectangular prism)
+      const cabinetGeometry = new THREE.BoxGeometry(0.6, 1.5, 0.8);
+      const cabinetMaterial = new THREE.MeshLambertMaterial({ color: 0x2c1810 });
+      const cabinet = new THREE.Mesh(cabinetGeometry, cabinetMaterial);
+      cabinet.position.y = 0.75;
+      arcadeCabinet.add(cabinet);
+
+      // Screen bezel (darker frame around screen)
+      const bezelGeometry = new THREE.BoxGeometry(0.45, 0.35, 0.05);
+      const bezelMaterial = new THREE.MeshLambertMaterial({ color: 0x000000 });
+      const bezel = new THREE.Mesh(bezelGeometry, bezelMaterial);
+      bezel.position.set(0, 1.1, 0.4);
+      arcadeCabinet.add(bezel);
+
+      // Screen (glowing blue-green)
+      const screenGeometry = new THREE.PlaneGeometry(0.4, 0.3);
+      const screenMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00ffaa,
+        transparent: true,
+        opacity: 0.8
+      });
+      screen = new THREE.Mesh(screenGeometry, screenMaterial);
+      screen.position.set(0, 1.1, 0.425);
+      arcadeCabinet.add(screen);
+
+      // Screen glow effect
+      const glowGeometry = new THREE.PlaneGeometry(0.5, 0.4);
+      const glowMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffaa,
+        transparent: true,
+        opacity: 0.2
+      });
+      screenGlow = new THREE.Mesh(glowGeometry, glowMaterial);
+      screenGlow.position.set(0, 1.1, 0.42);
+      arcadeCabinet.add(screenGlow);
+
+      // Control panel (slanted)
+      const controlGeometry = new THREE.BoxGeometry(0.5, 0.1, 0.3);
+      const controlMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+      const controlPanel = new THREE.Mesh(controlGeometry, controlMaterial);
+      controlPanel.position.set(0, 0.8, 0.2);
+      controlPanel.rotation.x = -0.3;
+      arcadeCabinet.add(controlPanel);
+
+      // Joystick
+      const stickGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.08);
+      const stickMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
+      const joystick = new THREE.Mesh(stickGeometry, stickMaterial);
+      joystick.position.set(-0.1, 0.87, 0.25);
+      arcadeCabinet.add(joystick);
+
+      // Joystick ball
+      const ballGeometry = new THREE.SphereGeometry(0.025);
+      const ballMaterial = new THREE.MeshLambertMaterial({ color: 0xcc0000 });
+      const ball = new THREE.Mesh(ballGeometry, ballMaterial);
+      ball.position.set(-0.1, 0.91, 0.25);
+      arcadeCabinet.add(ball);
+
+      // Buttons
+      const buttonColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff];
+      for (let i = 0; i < 6; i++) {
+        const buttonGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.01);
+        const buttonMaterial = new THREE.MeshLambertMaterial({ color: buttonColors[i] });
+        const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
+        button.position.set(0.05 + (i % 3) * 0.06, 0.87, 0.2 + Math.floor(i / 3) * 0.06);
+        button.rotation.x = -Math.PI / 2;
+        arcadeCabinet.add(button);
+      }
+
+      // Coin slot
+      const coinSlotGeometry = new THREE.BoxGeometry(0.08, 0.02, 0.02);
+      const coinSlotMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+      const coinSlot = new THREE.Mesh(coinSlotGeometry, coinSlotMaterial);
+      coinSlot.position.set(0.2, 0.6, 0.4);
+      arcadeCabinet.add(coinSlot);
+
+      // Speaker grilles (left and right)
+      for (let side = 0; side < 2; side++) {
+        const grillGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.02);
+        const grillMaterial = new THREE.MeshLambertMaterial({ color: 0x111111 });
+        const grille = new THREE.Mesh(grillGeometry, grillMaterial);
+        grille.position.set(side === 0 ? -0.2 : 0.2, 1.0, 0.4);
+        grille.rotation.z = Math.PI / 2;
+        arcadeCabinet.add(grille);
+
+        // Speaker holes
+        for (let hole = 0; hole < 12; hole++) {
+          const holeGeometry = new THREE.CylinderGeometry(0.008, 0.008, 0.03);
+          const holeMaterial = new THREE.MeshBasicMaterial({ color: 0x000000 });
+          const speakerHole = new THREE.Mesh(holeGeometry, holeMaterial);
+          const angle = (hole / 12) * Math.PI * 2;
+          const radius = 0.05;
+          speakerHole.position.set(
+            (side === 0 ? -0.2 : 0.2) + Math.cos(angle) * radius,
+            1.0 + Math.sin(angle) * radius,
+            0.41
+          );
+          speakerHole.rotation.z = Math.PI / 2;
+          arcadeCabinet.add(speakerHole);
+        }
+      }
+
+      // Position the entire cabinet in front of the user
+      arcadeCabinet.position.set(0, -0.75, -2);
+      arcadeCabinet.scale.set(0.8, 0.8, 0.8);
+      
+      scene.add(arcadeCabinet);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      renderer.setAnimationLoop(render);
+    }
+
+    // This function is called every frame
+    function render(timestamp, frame) {
+      // Animate the screen with a subtle glow pulse
+      if (screen && screenGlow) {
+        const pulse = Math.sin(timestamp * 0.003) * 0.2 + 0.8;
+        screen.material.opacity = pulse;
+        screenGlow.material.opacity = pulse * 0.3;
+        
+        // Slight color shift for the screen
+        const colorShift = Math.sin(timestamp * 0.002) * 0.5 + 0.5;
+        screen.material.color.setHSL(0.5 + colorShift * 0.1, 1, 0.5);
+        screenGlow.material.color.copy(screen.material.color);
+      }
+      
+      // Subtle cabinet sway
+      if (arcadeCabinet) {
+        arcadeCabinet.rotation.y = Math.sin(timestamp * 0.001) * 0.02;
+      }
+      
+      renderer.render(scene, camera);
+    }
+  </script>
+</body>
+</html>
