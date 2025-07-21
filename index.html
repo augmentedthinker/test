@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebXR Interactive Retro Handheld with Tetris</title>
+  <title>Gemini's WebXR Falling Tetris Demo</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -9,6 +9,8 @@
       margin: 0;
       padding: 0;
       font-family: sans-serif;
+      background-color: #111;
+      color: #fff;
     }
     #info {
       position: absolute;
@@ -18,304 +20,227 @@
       z-index: 100;
       display: block;
       padding: 10px 0;
-      color: white;
-      background-color: rgba(0,0,0,0.2);
     }
+    /* AR Button styles are handled by the ARButton script below */
   </style>
 </head>
 <body>
   <div id="info">
-    Interactive Retro Handheld Demo - V2 with Tetris
+    A WebXR Falling Tetris Demo by Christopher & Gemini
   </div>
 
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       }
     }
   </script>
 
   <script type="module">
+    // Import the main Three.js library
     import * as THREE from 'three';
-    import { ARButton } from 'three/addons/webxr/ARButton.js';
-    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
+    // Inlining it here keeps everything in a single file as requested.
+    class ARButton {
+      static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
+
+        function showStartAR( /*device*/ ) {
+          if (sessionInit.domOverlay === undefined) {
+            const overlay = document.createElement('div');
+            overlay.style.display = 'none';
+            document.body.appendChild(overlay);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 38);
+            svg.setAttribute('height', 38);
+            svg.style.position = 'absolute';
+            svg.style.right = '20px';
+            svg.style.top = '20px';
+            svg.addEventListener('click', function() {
+              currentSession.end();
+            });
+            overlay.appendChild(svg);
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', 2);
+            svg.appendChild(path);
+            if (sessionInit.optionalFeatures === undefined) {
+              sessionInit.optionalFeatures = [];
+            }
+            sessionInit.optionalFeatures.push('dom-overlay');
+            sessionInit.domOverlay = {
+              root: overlay
+            };
+          }
+
+          let currentSession = null;
+
+          async function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+            button.textContent = 'STOP AR';
+            sessionInit.domOverlay.root.style.display = '';
+            currentSession = session;
+          }
+
+          function onSessionEnded( /*event*/ ) {
+            currentSession.removeEventListener('end', onSessionEnded);
+            button.textContent = 'START AR';
+            sessionInit.domOverlay.root.style.display = 'none';
+            currentSession = null;
+          }
+
+          button.style.display = '';
+          button.style.cursor = 'pointer';
+          button.style.left = 'calc(50% - 50px)';
+          button.style.width = '100px';
+          button.textContent = 'START AR';
+          button.onmouseenter = function() {
+            button.style.opacity = '1.0';
+          };
+          button.onmouseleave = function() {
+            button.style.opacity = '0.5';
+          };
+          button.onclick = function() {
+            if (currentSession === null) {
+              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+            } else {
+              currentSession.end();
+            }
+          };
+        }
+
+        function disableButton() {
+          button.style.display = '';
+          button.style.cursor = 'auto';
+          button.style.left = 'calc(50% - 75px)';
+          button.style.width = '150px';
+          button.onmouseenter = null;
+          button.onmouseleave = null;
+          button.onclick = null;
+        }
+
+        function showARNotSupported() {
+          disableButton();
+          button.textContent = 'AR NOT SUPPORTED';
+        }
+
+        function stylizeElement(element) {
+          element.style.position = 'absolute';
+          element.style.bottom = '20px';
+          element.style.padding = '12px 6px';
+          element.style.border = '1px solid #fff';
+          element.style.borderRadius = '4px';
+          element.style.background = 'rgba(0,0,0,0.1)';
+          element.style.color = '#fff';
+          element.style.font = 'normal 13px sans-serif';
+          element.style.textAlign = 'center';
+          element.style.opacity = '0.5';
+          element.style.outline = 'none';
+          element.style.zIndex = '999';
+        }
+
+        if ('xr' in navigator) {
+          button.id = 'ARButton';
+          stylizeElement(button);
+          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
+            supported ? showStartAR() : showARNotSupported();
+          }).catch(showARNotSupported);
+          return button;
+        } else {
+          const message = document.createElement('a');
+          if (window.isSecureContext === false) {
+            message.href = document.location.href.replace(/^http:/, 'https:');
+            message.innerHTML = 'WEBXR NEEDS HTTPS';
+          } else {
+            message.href = 'https://immersiveweb.dev/';
+            message.innerHTML = 'WEBXR NOT AVAILABLE';
+          }
+          message.style.left = 'calc(50% - 90px)';
+          message.style.width = '180px';
+          message.style.textDecoration = 'none';
+          stylizeElement(message);
+          return message;
+        }
+      }
+    }
+
+    // --- Main Application Logic ---
     let camera, scene, renderer;
-    let retroHandheld;
-    const interactiveButtons = [];
-    let hoveredObject = null;
-    const raycaster = new THREE.Raycaster();
-    const tempMatrix = new THREE.Matrix4();
+    let fallingPieces = []; // Array to hold all currently falling Tetris pieces
+    let lastPieceSpawnTime = 0;
+    const SPAWN_INTERVAL = 1500; // Spawn a new piece every 1.5 seconds (milliseconds)
+    const FALL_SPEED = 0.01; // How much to decrease Y position per frame
 
-    // Store original colors to revert highlights
-    const originalColors = new Map();
-    const highlightColor = new THREE.Color(0xFFFF88); // Yellow for hover
-    const clickColor = new THREE.Color(0x00FF00); // Green for click
-
-    // --- Tetris Game Variables ---
-    let tetrisCanvas;
-    let tetrisCtx;
-    let tetrisTexture;
-    let tetrisGameLoopId; // To store the interval ID for Tetris game loop
-    const TETRIS_COLS = 10;
-    const TETRIS_ROWS = 20;
-    const BLOCK_SIZE = 20; // Pixel size of each block
-    let board; // The game board
-    let currentPiece;
-    let nextPiece;
-    let score = 0;
-    let gameOver = false;
-    let dropInterval = 1000; // Milliseconds for auto-drop
-    let lastDropTime = 0;
-
-    const COLORS = [
-        '#000', // Empty
-        '#F00', // I
-        '#0F0', // J
-        '#00F', // L
-        '#FF0', // O
-        '#F0F', // S
-        '#0FF', // T
-        '#F80'  // Z
-    ];
-
-    const PIECES = {
-        'I': [[1,1,1,1]],
-        'J': [[1,0,0],[1,1,1]],
-        'L': [[0,0,1],[1,1,1]],
-        'O': [[1,1],[1,1]],
-        'S': [[0,1,1],[1,1,0]],
-        'T': [[0,1,0],[1,1,1]],
-        'Z': [[1,1,0],[0,1,1]]
+    // Define the Tetris piece configurations (relative positions of cubes)
+    // Each element is an array of [x, y, z] offsets for 0.1m cubes
+    const TETRIS_PIECES = {
+      'I': { color: 0x00ffff, shape: [[0,0,0], [0,1,0], [0,2,0], [0,3,0]] }, // Cyan
+      'O': { color: 0xffff00, shape: [[0,0,0], [0,1,0], [1,0,0], [1,1,0]] }, // Yellow
+      'T': { color: 0x800080, shape: [[0,0,0], [1,0,0], [2,0,0], [1,1,0]] }, // Purple
+      'S': { color: 0x00ff00, shape: [[0,0,0], [1,0,0], [1,1,0], [2,1,0]] }, // Green
+      'Z': { color: 0xff0000, shape: [[0,1,0], [1,1,0], [1,0,0], [2,0,0]] }, // Red
+      'J': { color: 0x0000ff, shape: [[0,1,0], [0,0,0], [1,0,0], [2,0,0]] }, // Blue
+      'L': { color: 0xffa500, shape: [[2,1,0], [0,0,0], [1,0,0], [2,0,0]] }  // Orange
     };
+    const CUBE_SIZE = 0.1; // Size of individual cubes making up the Tetris pieces
+
+    function createTetrisPiece(type) {
+      const pieceData = TETRIS_PIECES[type];
+      if (!pieceData) return null;
+
+      const group = new THREE.Group();
+      const material = new THREE.MeshBasicMaterial({ color: pieceData.color });
+
+      pieceData.shape.forEach(offset => {
+        const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
+        const cube = new THREE.Mesh(geometry, material);
+        cube.position.set(offset[0] * CUBE_SIZE, offset[1] * CUBE_SIZE, offset[2] * CUBE_SIZE);
+        group.add(cube);
+      });
+
+      return group;
+    }
 
     init();
     animate();
 
     function init() {
+      // Create the main scene
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true // alpha: true is required for AR passthrough
+      });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
       document.body.appendChild(renderer.domElement);
-      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor'] }));
 
-      setupLights();
-      createHandheld();
-      setupControllers();
+      // Add the AR button to the body. It will handle session start/end.
+      // We pass the renderer and a session configuration object.
+      // 'local' is a good starting point for reference space.
+      document.body.appendChild(ARButton.createButton(renderer, {
+        requiredFeatures: ['local']
+      }));
 
-      // Initialize Tetris offscreen canvas and game
-      initTetrisGame();
+      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
+      // it's good practice for when you use more advanced materials.
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
 
+      // Add a listener to handle window resizing, which is good practice.
       window.addEventListener('resize', onWindowResize, false);
-    }
-
-    function setupLights() {
-      scene.add(new THREE.AmbientLight(0xffffff, 0.8));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
-      dirLight.position.set(-2, 2, -1);
-      scene.add(dirLight);
-    }
-
-    function createHandheld() {
-      retroHandheld = new THREE.Group();
-
-      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x9E9E9E, roughness: 0.7 });
-      const bezelMaterial = new THREE.MeshStandardMaterial({ color: 0x424242, roughness: 0.6 });
-      const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0x880E4F, roughness: 0.5 });
-      const dpadMaterial = new THREE.MeshStandardMaterial({ color: 0x212121, roughness: 0.5 });
-
-      // Adjusted to be person-sized, sitting on the floor
-      const bodyWidth = 1.2;
-      const bodyHeight = 1.8; // Approx 6ft tall
-      const bodyDepth = 0.25;
-
-      // --- Main Body ---
-      const bodyGeom = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
-      const mainBody = new THREE.Mesh(bodyGeom, bodyMaterial);
-      mainBody.position.y = bodyHeight / 2; // Bottom of the model is at y=0 (the floor)
-      retroHandheld.add(mainBody);
-
-      // --- Screen at eye-level ---
-      const bezelWidth = bodyWidth * 0.9;
-      const bezelHeight = bodyHeight * 0.4;
-      const bezelDepth = 0.05;
-      const screenBezel = new THREE.Mesh(new THREE.BoxGeometry(bezelWidth, bezelHeight, bezelDepth), bezelMaterial);
-      screenBezel.position.set(0, 1.3, bodyDepth / 2 + 0.01); // Positioned in the upper half
-      retroHandheld.add(screenBezel);
-
-      // --- Tetris Screen ---
-      // The screen will now use a CanvasTexture
-      const screenGeom = new THREE.PlaneGeometry(bezelWidth * 0.95, bezelHeight * 0.9); // Use PlaneGeometry for 2D texture
-      tetrisCanvas = document.createElement('canvas'); // Create offscreen canvas
-      tetrisCanvas.width = TETRIS_COLS * BLOCK_SIZE;
-      tetrisCanvas.height = TETRIS_ROWS * BLOCK_SIZE;
-      tetrisCtx = tetrisCanvas.getContext('2d');
-      tetrisCtx.imageSmoothingEnabled = false; // For crisp pixel art
-
-      tetrisTexture = new THREE.CanvasTexture(tetrisCanvas);
-      const screenMaterial = new THREE.MeshBasicMaterial({ map: tetrisTexture }); // Map the canvas texture
-      const screen = new THREE.Mesh(screenGeom, screenMaterial);
-      screen.position.set(0, 1.3, bodyDepth / 2 + bezelDepth / 2 + 0.005);
-      // Ensure the plane faces forward
-      screen.rotation.y = Math.PI; // Correctly orient the plane if needed, or adjust z-offset
-      retroHandheld.add(screen);
-
-      // --- Controls positioned lower down ---
-      const dpadGroup = new THREE.Group();
-      const dpadArmWidth = 0.25, dpadArmHeight = 0.09, dpadArmDepth = 0.05;
-      const dpadH = new THREE.Mesh(new THREE.BoxGeometry(dpadArmWidth, dpadArmHeight, dpadArmDepth), dpadMaterial.clone());
-      const dpadV = new THREE.Mesh(new THREE.BoxGeometry(dpadArmHeight, dpadArmWidth, dpadArmDepth), dpadMaterial.clone());
-      dpadGroup.add(dpadH, dpadV);
-      dpadGroup.position.set(-0.3, 0.6, bodyDepth / 2 + 0.01);
-      retroHandheld.add(dpadGroup);
-      interactiveButtons.push(dpadGroup);
-      originalColors.set(dpadGroup, dpadMaterial.color.clone());
-
-      const buttonRadius = 0.1, buttonHeight = 0.05;
-      const buttonGeom = new THREE.CylinderGeometry(buttonRadius, buttonRadius, buttonHeight, 32);
-      
-      const buttonA = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
-      buttonA.position.set(0.35, 0.65, bodyDepth / 2 + buttonHeight / 2);
-      buttonA.rotation.x = Math.PI / 2;
-      retroHandheld.add(buttonA);
-      interactiveButtons.push(buttonA);
-      originalColors.set(buttonA, buttonMaterial.color.clone());
-      
-      const buttonB = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
-      buttonB.position.set(0.15, 0.5, bodyDepth / 2 + buttonHeight / 2);
-      buttonB.rotation.x = Math.PI / 2;
-      retroHandheld.add(buttonB);
-      interactiveButtons.push(buttonB);
-      originalColors.set(buttonB, buttonMaterial.color.clone());
-
-      // Positioned closer to the user for walk-around interaction
-      retroHandheld.position.set(0, -2.0, -2.5); // Lowered and positioned
-      scene.add(retroHandheld);
-    }
-    
-    function setupControllers() {
-      const controllerModelFactory = new XRControllerModelFactory();
-      for (let i = 0; i < 2; i++) {
-        const controller = renderer.xr.getController(i);
-        scene.add(controller);
-        controller.addEventListener('selectstart', onSelectStart);
-        controller.addEventListener('selectend', onSelectEnd);
-        // Add listeners for squeeze (for d-pad/buttons)
-        controller.addEventListener('squeezestart', onSqueezeStart);
-        controller.addEventListener('squeezeend', onSqueezeEnd);
-
-
-        const laserGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-        const laser = new THREE.Line(laserGeom);
-        laser.name = 'laser';
-        laser.scale.z = 5;
-        controller.add(laser);
-
-        const grip = renderer.xr.getControllerGrip(i);
-        grip.add(controllerModelFactory.createControllerModel(grip));
-        scene.add(grip);
-      }
-    }
-
-    function onSelectStart(event) {
-        // On trigger press, change color to the 'click' color if hovering
-        if (hoveredObject) {
-            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
-            material.color.set(clickColor);
-            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(clickColor);
-        }
-    }
-
-    function onSelectEnd(event) {
-        // On trigger release, change color back to the 'highlight' color
-        if (hoveredObject) {
-            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
-            material.color.set(highlightColor);
-            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(highlightColor);
-        }
-    }
-
-    // --- Controller Squeeze for Tetris Input ---
-    function onSqueezeStart(event) {
-        if (hoveredObject) {
-            // Map controller squeeze to Tetris game actions based on hovered button
-            switch (hoveredObject) {
-                case interactiveButtons[0]: // D-pad group
-                    // This is conceptual. You'd need to determine which part of dpad
-                    // is "hit" or define multiple dpad meshes.
-                    // For now, let's assume dpad click moves left or right.
-                    // A more robust solution would detect which part of the dpad was pressed.
-                    // For simplicity, let's just make it move the piece down for now.
-                    movePiece(0, 1); // Move down (instant drop)
-                    break;
-                case interactiveButtons[1]: // Button A
-                    rotatePiece(); // Rotate
-                    break;
-                case interactiveButtons[2]: // Button B
-                    movePiece(0, 1); // Move down faster or hard drop
-                    break;
-            }
-        }
-    }
-
-    function onSqueezeEnd(event) {
-        // Handle release if needed, though for Tetris, press actions are usually enough.
-    }
-
-    function handleInteractions() {
-        let currentlyHovered = null;
-
-        // Check for intersections from both controllers
-        for (let i = 0; i < 2; i++) {
-            const controller = renderer.xr.getController(i);
-            const laser = controller.getObjectByName('laser');
-            if (!controller.visible) continue;
-
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-            const intersects = raycaster.intersectObjects(interactiveButtons, true);
-
-            if (intersects.length > 0) {
-                const intersection = intersects[0];
-                let object = intersection.object;
-                
-                if (object.parent.isGroup && interactiveButtons.includes(object.parent)) {
-                    object = object.parent;
-                }
-                
-                if (!currentlyHovered) { // Only take the first controller that hits something
-                    currentlyHovered = object;
-                    laser.scale.z = intersection.distance;
-                }
-            } else {
-                 if (!currentlyHovered) laser.scale.z = 5;
-            }
-        }
-
-        // Update colors based on hover state
-        if (hoveredObject && hoveredObject !== currentlyHovered) {
-            // Object is no longer hovered
-            const originalColor = originalColors.get(hoveredObject);
-            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
-            material.color.copy(originalColor);
-            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.copy(originalColor);
-        }
-
-        hoveredObject = currentlyHovered;
-        if (hoveredObject) {
-            // New object is hovered, apply highlight (if not being clicked)
-            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
-            if (!material.color.equals(clickColor)) {
-                material.color.set(highlightColor);
-                if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(highlightColor);
-            }
-        }
     }
 
     function onWindowResize() {
@@ -325,237 +250,50 @@
     }
 
     function animate() {
+      // Use the renderer's built-in animation loop, which is XR-aware.
+      // This will call the 'render' function on every frame.
       renderer.setAnimationLoop(render);
     }
 
-    function render(time) {
-      handleInteractions();
+    // This function is called every frame
+    function render(timestamp, frame) {
+      // Spawn a new piece if enough time has passed
+      if (timestamp - lastPieceSpawnTime > SPAWN_INTERVAL) {
+        const pieceTypes = Object.keys(TETRIS_PIECES);
+        const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+        const newPiece = createTetrisPiece(randomType);
 
-      // Update Tetris game
-      if (!gameOver && time - lastDropTime > dropInterval) {
-          dropPiece();
-          lastDropTime = time;
+        if (newPiece) {
+          // Position the new piece "in the sky" (higher Y), slightly varied X and Z
+          newPiece.position.set(
+            (Math.random() - 0.5) * 0.8, // -0.4 to 0.4 meters X
+            2,                           // 2 meters above the origin (user's initial position)
+            -1.5 - (Math.random() * 0.5) // 1.5 to 2 meters in front of the user
+          );
+          scene.add(newPiece);
+          fallingPieces.push(newPiece);
+          lastPieceSpawnTime = timestamp;
+        }
       }
-      drawTetris(); // Redraw Tetris to the canvas
-      tetrisTexture.needsUpdate = true; // Tell Three.js the texture needs to be refreshed
 
+      // Update positions of all falling pieces
+      for (let i = fallingPieces.length - 1; i >= 0; i--) {
+        const piece = fallingPieces[i];
+        piece.position.y -= FALL_SPEED;
+
+        // Remove pieces that have fallen too far below the floor (e.g., -2 meters below origin)
+        // Adjust this threshold based on how far you want them to fall "through"
+        if (piece.position.y < -2) {
+          scene.remove(piece);
+          fallingPieces.splice(i, 1);
+        }
+      }
+      
+      // Render the scene with the camera.
+      // In an AR session, Three.js will automatically handle rendering
+      // for each eye and clearing the background for passthrough.
       renderer.render(scene, camera);
     }
-
-    // --- Tetris Game Logic (Adapted from tetris_gameboy.html) ---
-
-    function initTetrisGame() {
-        board = Array(TETRIS_ROWS).fill(0).map(() => Array(TETRIS_COLS).fill(0));
-        currentPiece = generateNewPiece();
-        nextPiece = generateNewPiece();
-        score = 0;
-        gameOver = false;
-        dropInterval = 1000;
-        lastDropTime = performance.now(); // Initialize for the first drop
-
-        // No need for a separate game loop in Tetris if we call drawTetris in render()
-        // and dropPiece based on time.
-        // If you want a fixed-rate update independent of Three.js render frame rate,
-        // you could re-introduce an interval here.
-        // tetrisGameLoopId = setInterval(dropPiece, dropInterval);
-    }
-
-    function drawBlock(x, y, colorIndex) {
-        tetrisCtx.fillStyle = COLORS[colorIndex];
-        tetrisCtx.fillRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-        tetrisCtx.strokeStyle = '#333';
-        tetrisCtx.strokeRect(x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
-    }
-
-    function drawTetris() {
-        // Clear the canvas
-        tetrisCtx.clearRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
-        tetrisCtx.fillStyle = COLORS[0]; // Background color
-        tetrisCtx.fillRect(0, 0, tetrisCanvas.width, tetrisCanvas.height);
-
-
-        // Draw the board
-        for (let row = 0; row < TETRIS_ROWS; row++) {
-            for (let col = 0; col < TETRIS_COLS; col++) {
-                if (board[row][col] !== 0) {
-                    drawBlock(col, row, board[row][col]);
-                }
-            }
-        }
-
-        // Draw the current piece
-        if (currentPiece) {
-            currentPiece.shape.forEach((row, rIdx) => {
-                row.forEach((value, cIdx) => {
-                    if (value === 1) {
-                        drawBlock(currentPiece.x + cIdx, currentPiece.y + rIdx, currentPiece.colorIndex);
-                    }
-                });
-            });
-        }
-
-        // Draw score or game over message
-        tetrisCtx.fillStyle = '#FFF';
-        tetrisCtx.font = 'bold 20px Arial';
-        tetrisCtx.textAlign = 'left';
-        tetrisCtx.fillText('Score: ' + score, 10, 30);
-
-        if (gameOver) {
-            tetrisCtx.fillStyle = 'red';
-            tetrisCtx.font = 'bold 40px Arial';
-            tetrisCtx.textAlign = 'center';
-            tetrisCtx.fillText('GAME OVER', tetrisCanvas.width / 2, tetrisCanvas.height / 2);
-        }
-    }
-
-    function generateNewPiece() {
-        const pieceNames = Object.keys(PIECES);
-        const randomName = pieceNames[Math.floor(Math.random() * pieceNames.length)];
-        const shape = PIECES[randomName];
-        const colorIndex = pieceNames.indexOf(randomName) + 1; // +1 because 0 is background
-
-        return {
-            shape: shape,
-            x: Math.floor(TETRIS_COLS / 2) - Math.floor(shape[0].length / 2),
-            y: 0,
-            colorIndex: colorIndex
-        };
-    }
-
-    function checkCollision(piece, offsetX, offsetY, newShape = piece.shape) {
-        for (let row = 0; row < newShape.length; row++) {
-            for (let col = 0; col < newShape[row].length; col++) {
-                if (newShape[row][col] === 1) {
-                    const boardX = piece.x + col + offsetX;
-                    const boardY = piece.y + row + offsetY;
-
-                    // Check boundaries
-                    if (boardX < 0 || boardX >= TETRIS_COLS || boardY >= TETRIS_ROWS) {
-                        return true;
-                    }
-                    // Check collision with existing blocks on board (only if boardY is within bounds)
-                    if (boardY >= 0 && board[boardY][boardX] !== 0) {
-                        return true;
-                    }
-                }
-            }
-        }
-        return false;
-    }
-
-    function mergePiece() {
-        currentPiece.shape.forEach((row, rIdx) => {
-            row.forEach((value, cIdx) => {
-                if (value === 1) {
-                    board[currentPiece.y + rIdx][currentPiece.x + cIdx] = currentPiece.colorIndex;
-                }
-            });
-        });
-    }
-
-    function clearLines() {
-        let linesCleared = 0;
-        for (let row = TETRIS_ROWS - 1; row >= 0; row--) {
-            if (board[row].every(cell => cell !== 0)) {
-                // Line is full, remove it
-                board.splice(row, 1);
-                // Add a new empty row at the top
-                board.unshift(Array(TETRIS_COLS).fill(0));
-                linesCleared++;
-                row++; // Re-check the new row that just shifted down
-            }
-        }
-        if (linesCleared > 0) {
-            score += linesCleared * 100; // Simple scoring
-            // Increase difficulty
-            if (dropInterval > 100) { // Don't go below 100ms
-                dropInterval -= (linesCleared * 10);
-            }
-        }
-    }
-
-    function dropPiece() {
-        if (gameOver) return;
-
-        if (!checkCollision(currentPiece, 0, 1)) {
-            currentPiece.y++;
-        } else {
-            mergePiece();
-            clearLines();
-            currentPiece = nextPiece;
-            nextPiece = generateNewPiece();
-
-            if (checkCollision(currentPiece, 0, 0)) {
-                gameOver = true;
-                // clearInterval(tetrisGameLoopId); // Stop game loop if it was independent
-            }
-        }
-    }
-
-    function movePiece(dx, dy) {
-        if (gameOver) return;
-        if (!checkCollision(currentPiece, dx, dy)) {
-            currentPiece.x += dx;
-            currentPiece.y += dy;
-        } else if (dy === 1) { // If moving down and collided, merge
-            // This case handles a hard-drop or instant-drop more accurately
-            // where a move down operation results in collision and piece locking.
-            mergePiece();
-            clearLines();
-            currentPiece = nextPiece;
-            nextPiece = generateNewPiece();
-            if (checkCollision(currentPiece, 0, 0)) {
-                gameOver = true;
-            }
-        }
-        drawTetris(); // Redraw immediately after manual move
-        tetrisTexture.needsUpdate = true;
-    }
-
-    function rotatePiece() {
-        if (gameOver) return;
-        const oldShape = currentPiece.shape;
-        const newShape = oldShape[0].map((_, index) => oldShape.map(row => row[index]).reverse());
-
-        if (!checkCollision(currentPiece, 0, 0, newShape)) {
-            currentPiece.shape = newShape;
-        }
-        drawTetris(); // Redraw immediately after rotate
-        tetrisTexture.needsUpdate = true;
-    }
-
-    // You might want to map these to actual controller button presses
-    // document.addEventListener('keydown', (e) => {
-    //     if (gameOver) return;
-    //     switch (e.key) {
-    //         case 'ArrowLeft':
-    //             movePiece(-1, 0);
-    //             break;
-    //         case 'ArrowRight':
-    //             movePiece(1, 0);
-    //             break;
-    //         case 'ArrowDown':
-    //             movePiece(0, 1); // Soft drop
-    //             break;
-    //         case 'ArrowUp':
-    //             rotatePiece();
-    //             break;
-    //         case ' ': // Spacebar for hard drop
-    //             while (!checkCollision(currentPiece, 0, 1)) {
-    //                 currentPiece.y++;
-    //             }
-    //             mergePiece();
-    //             clearLines();
-    //             currentPiece = nextPiece;
-    //             nextPiece = generateNewPiece();
-    //             if (checkCollision(currentPiece, 0, 0)) {
-    //                 gameOver = true;
-    //             }
-    //             drawTetris();
-    //             tetrisTexture.needsUpdate = true;
-    //             break;
-    //     }
-    // });
   </script>
 </body>
 </html>
