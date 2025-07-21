@@ -40,7 +40,7 @@
   <script type="module">
     import * as THREE from 'three';
     import { ARButton } from 'three/addons/webxr/ARButton.js';
-    import { XRControllerModelFactory }s from 'three/addons/webxr/XRControllerModelFactory.js';
+    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
     let camera, scene, renderer;
     let retroHandheld;
@@ -142,9 +142,8 @@
       originalColors.set(buttonB, buttonMaterial.color.clone());
 
       // Positioned closer to the user for walk-around interaction
-      // Adjusted Y position to bring the top of the handheld down to roughly camera level.
-      // bodyHeight is 1.8. To have the top at around 1.6 (average eye level), we shift it down by 0.2.
-      retroHandheld.position.set(0, -2.0, -2.5); // Changed y from 0 to -0.2
+      // UPDATED LINE: Lowered the Game Boy to -2.0 on the Y-axis
+      retroHandheld.position.set(0, -2.0, -2.5);
       scene.add(retroHandheld);
     }
     
