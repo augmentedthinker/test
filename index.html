@@ -1,111 +1,18 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Interactive VR/AR Arcade - Tetris Iteration 1</title>
-    <script src="https://cdn.jsdelivr.net/npm/aframe@1.7.0/dist/aframe.min.js"></script>
+    <title>Quest 2 Minimal AR Passthrough</title>
+    <script src="https://unpkg.com/aframe@1.5.0/dist/aframe-master.min.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; }
+    </style>
 </head>
 <body>
     <a-scene
-        webxr="requiredFeatures: local-floor;"
-        renderer="antialias: true; colorManagement: true; highRefreshRate: true; foveationLevel: 1;"
+        webxr="requiredFeatures: [immersive-ar]; referenceSpaceType: 'local-floor';"
+        renderer="alpha: true;"
+        vr-mode-ui="enabled: true; enterAR: true;"
     >
-        <a-assets timeout="5000">
-            <canvas id="game-canvas" style="display: none;"></canvas>
-            </a-assets>
-
-        <a-entity id="rig" position="0 0 0">
-            <a-entity id="camera" camera position="0 1.6 0" look-controls></a-entity>
-            <a-entity id="leftHand" meta-touch-controls="hand: left;"></a-entity>
-            <a-entity id="rightHand" meta-touch-controls="hand: right;"></a-entity>
-        </a-entity>
-        <a-entity light="type: ambient; color: #BBBBBB"></a-entity>
-        <a-entity light="type: directional; color: #FFFFFF; intensity: 0.6" position="-1 1 1"></a-entity>
-
-        <a-plane
-            position="0 0 -4"
-            rotation="-90 0 0"
-            width="10"
-            height="10"
-            color="#333333"
-            shader="flat"
-        ></a-plane>
-
-        <a-plane
-            id="tetris-screen"
-            position="0 1.5 -3"
-            width="1.5"
-            height="3"
-            material="src: #game-canvas; shader: flat;"
-            class="game-screen"
-        ></a-plane>
-
-        <a-box position="0 1 -2" width="0.8" height="1.6" depth="0.1" material="shader: standard; color: #FF00FF; metalness: 0.8; roughness: 0.2;" ></a-box>
-
-    </a-scene>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            const canvas = document.getElementById('game-canvas');
-            const ctx = canvas.getContext('2d');
-
-            // Set canvas dimensions (Tetris board is typically taller than wide)
-            const boardWidth = 10;
-            const boardHeight = 20;
-            const cellSize = 30; // Pixels per cell
-
-            canvas.width = boardWidth * cellSize;
-            canvas.height = boardHeight * cellSize;
-
-            function drawTetrisBoard() {
-                // Clear the canvas
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-                // Draw background
-                ctx.fillStyle = '#000000'; // Black background for the game
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-                // Draw grid lines
-                ctx.strokeStyle = '#333333'; // Dark grey lines
-                ctx.lineWidth = 1;
-
-                // Draw vertical lines
-                for (let x = 0; x <= boardWidth; x++) {
-                    ctx.beginPath();
-                    ctx.moveTo(x * cellSize, 0);
-                    ctx.lineTo(x * cellSize, canvas.height);
-                    ctx.stroke();
-                }
-
-                // Draw horizontal lines
-                for (let y = 0; y <= boardHeight; y++) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y * cellSize);
-                    ctx.lineTo(canvas.width, y * cellSize);
-                    ctx.stroke();
-                }
-
-                // --- For demonstration: Draw a single static block (future Tetromino) ---
-                const blockColor = '#00FFFF'; // Cyan
-                const blockX = 4; // Column
-                const blockY = 0; // Row
-
-                ctx.fillStyle = blockColor;
-                ctx.fillRect(blockX * cellSize + 1, blockY * cellSize + 1, cellSize - 2, cellSize - 2);
-
-                // Important: Tell A-Frame to update the texture
-                // This is crucial when the canvas content changes.
-                const tetrisScreen = document.getElementById('tetris-screen');
-                if (tetrisScreen && tetrisScreen.object3D && tetrisScreen.object3D.children.length > 0) {
-                    const mesh = tetrisScreen.getObject3D('mesh');
-                    if (mesh && mesh.material && mesh.material.map) {
-                        mesh.material.map.needsUpdate = true;
-                    }
-                }
-            }
-
-            // Initial draw of the Tetris board
-            drawTetrisBoard();
-        });
-    </script>
+        </a-scene>
 </body>
 </html>
