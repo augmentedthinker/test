@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gemini's WebXR Falling Tetris Demo with Controllers</title>
+  <title>Gemini's WebXR Falling Tetris Demo with Oculus Controllers</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -26,14 +26,14 @@
 </head>
 <body>
   <div id="info">
-    A WebXR Falling Tetris Demo with Controllers by Christopher & Gemini
+    A WebXR Falling Tetris Demo with Oculus Controllers by Christopher & Gemini
   </div>
 
   <script type="importmap">
     {
       "imports": {
         "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/examples/jsm/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
       }
     }
   </script>
@@ -41,8 +41,8 @@
   <script type="module">
     // Import the main Three.js library
     import * as THREE from 'three';
-    // Import XRControllerModelFactory to load realistic controller models
-    import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js'; // [cite: 7]
+    // Import XRControllerModelFactory for loading controller models
+    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
     // --- Inlined ARButton.js from Three.js examples ---
     // This class creates the "Start AR" button and handles the WebXR session setup.
@@ -89,8 +89,6 @@
             button.textContent = 'STOP AR';
             sessionInit.domOverlay.root.style.display = '';
             currentSession = session;
-            // When session starts, set up controllers
-            setupControllers(session);
           }
 
           function onSessionEnded( /*event*/ ) {
@@ -98,8 +96,6 @@
             button.textContent = 'START AR';
             sessionInit.domOverlay.root.style.display = 'none';
             currentSession = null;
-            // Clean up controllers when session ends
-            cleanUpControllers();
           }
 
           button.style.display = '';
@@ -184,11 +180,6 @@
     const SPAWN_INTERVAL = 1500; // Spawn a new piece every 1.5 seconds (milliseconds)
     const FALL_SPEED = 0.01; // How much to decrease Y position per frame
 
-    // Controller related variables
-    const controllers = [];
-    const raycaster = new THREE.Raycaster();
-    const tempMatrix = new THREE.Matrix4(); // [cite: 109]
-
     // Define the Tetris piece configurations (relative positions of cubes)
     // Each element is an array of [x, y, z] offsets for 0.1m cubes
     const TETRIS_PIECES = {
@@ -207,8 +198,6 @@
       if (!pieceData) return null;
 
       const group = new THREE.Group();
-      // Use a MeshPhongMaterial if you want lighting to affect the colors
-      // For simplicity and consistency with MeshBasicMaterial in prior code, keeping Basic.
       const material = new THREE.MeshBasicMaterial({ color: pieceData.color });
 
       pieceData.shape.forEach(offset => {
@@ -218,9 +207,6 @@
         group.add(cube);
       });
 
-      // Add a property to the group to easily identify it as a Tetris piece
-      group.isTetrisPiece = true;
-
       return group;
     }
 
@@ -228,146 +214,51 @@
     animate();
 
     function init() {
+      // Create the main scene
       scene = new THREE.Scene();
+
+      // Create a camera. Its position will be updated by the WebXR device.
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: true
+        alpha: true // alpha: true is required for AR passthrough
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true;
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
       document.body.appendChild(renderer.domElement);
+
+      // Add the AR button to the body. It will handle session start/end.
+      // We pass the renderer and a session configuration object.
+      // 'local' is a good starting point for reference space.
       document.body.appendChild(ARButton.createButton(renderer, {
         requiredFeatures: ['local']
       }));
 
+      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
+      // it's good practice for when you use more advanced materials.
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
       scene.add(light);
 
+      // --- Oculus Quest 2 Controller Integration ---
+      [cite_start]const controllerModelFactory = new XRControllerModelFactory(); [cite: 39, 41]
+
+      // Iterate for each controller (index 0 for right, 1 for left)
+      for (let i = 0; i < 2; i++) {
+        [cite_start]const grip = renderer.xr.getControllerGrip(i); [cite: 42]
+        // Attach the hardware-accurate controller model to the grip space.
+        [cite_start]// The model will animate buttons and align correctly. [cite: 44]
+        [cite_start]grip.add(controllerModelFactory.createControllerModel(grip)); [cite: 43]
+        [cite_start]scene.add(grip); [cite: 43]
+      }
+      [cite_start]// The model automatically follows the real controller as the grip group's transform is updated by WebXR. [cite: 45]
+      [cite_start]// This attaches a hardware-accurate model to the controller's grip space. [cite: 44]
+
+
+      // Add a listener to handle window resizing, which is good practice.
       window.addEventListener('resize', onWindowResize, false);
-    }
-
-    // --- Controller Setup and Management ---
-    function setupControllers(session) {
-      const controllerModelFactory = new XRControllerModelFactory(); // [cite: 41]
-
-      for (let i = 0; i < 2; i++) { // For left and right controllers (index 0 and 1)
-        const controller = renderer.xr.getController(i); // [cite: 74]
-        controller.userData.currentHand = null; // To store which hand it is (left/right)
-        controller.userData.laser = null; // To store the laser line object
-
-        // Create and add the laser pointer
-        const laserGeometry = new THREE.BufferGeometry().setFromPoints([
-          new THREE.Vector3(0, 0, 0),
-          new THREE.Vector3(0, 0, -1) // Points along negative Z-axis (forward from controller) [cite: 101, 122]
-        ]);
-        const laserLine = new THREE.Line(laserGeometry, new THREE.LineBasicMaterial({ color: 0xffffff })); // [cite: 102]
-        laserLine.scale.z = 0; // Start hidden or very short [cite: 103]
-        controller.add(laserLine); // Attach to the target-ray space [cite: 104]
-        controller.userData.laser = laserLine;
-
-        // Add event listeners for button presses
-        controller.addEventListener('selectstart', onSelectStart); // Trigger pressed [cite: 75, 80]
-        controller.addEventListener('selectend', onSelectEnd);   // Trigger released [cite: 76, 80]
-        // You could add squeeze, etc., here:
-        // controller.addEventListener('squeezestart', onSqueezeStart); // [cite: 77]
-        // controller.addEventListener('squeezeend', onSqueezeEnd); // [cite: 78]
-
-        scene.add(controller); // Add controller target-ray group to the scene [cite: 79]
-        controllers.push(controller);
-
-        // Get the controller grip space and add the 3D model to it
-        const grip = renderer.xr.getControllerGrip(i); // [cite: 42, 49]
-        grip.add(controllerModelFactory.createControllerModel(grip)); // [cite: 43]
-        scene.add(grip); // Add grip group to the scene
-        controllers.push(grip); // Also track grip for cleanup
-      }
-
-      // Listen for changes in input sources to manage visibility [cite: 51, 65]
-      session.addEventListener('inputsourceschange', (event) => {
-        // Handle newly added controllers
-        for (const source of event.added) { // [cite: 54]
-          if (source.targetRayMode === 'tracked-pointer') { // [cite: 56]
-            const controller = renderer.xr.getController(source.gamepad.hand === 'right' ? 0 : 1);
-            const grip = renderer.xr.getControllerGrip(source.gamepad.hand === 'right' ? 0 : 1);
-            controller.userData.currentHand = source.gamepad.hand;
-            controller.visible = true;
-            if(controller.userData.laser) controller.userData.laser.scale.z = 10; // Default max length
-            grip.visible = true;
-            console.log(`Controller ${source.gamepad.hand} connected.`);
-          }
-        }
-
-        // Handle removed controllers
-        for (const source of event.removed) { // [cite: 60]
-          if (source.targetRayMode === 'tracked-pointer') { // [cite: 61]
-            const controller = renderer.xr.getController(source.gamepad.hand === 'right' ? 0 : 1);
-            const grip = renderer.xr.getControllerGrip(source.gamepad.hand === 'right' ? 0 : 1);
-            controller.visible = false; // Hide controller [cite: 63]
-            if(controller.userData.laser) controller.userData.laser.scale.z = 0; // Hide laser
-            grip.visible = false; // Hide grip model
-            console.log(`Controller ${source.gamepad.hand} disconnected.`);
-          }
-        }
-      });
-    }
-
-    function cleanUpControllers() {
-      controllers.forEach(obj => {
-        if (obj.parent) {
-          obj.parent.remove(obj);
-        }
-        obj.traverse(child => {
-            if (child.isMesh || child.isLine) {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(m => m.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
-            }
-        });
-      });
-      controllers.length = 0; // Clear the array
-    }
-
-    // --- Controller Input Event Handlers ---
-    function onSelectStart(event) {
-      // 'this' refers to the controller object that fired the event [cite: 81]
-      const controller = event.target; // event.target is also valid
-
-      // Perform raycast check on trigger press
-      const intersects = raycaster.intersectObjects(fallingPieces, true); // Intersect with only falling pieces 
-
-      if (intersects.length > 0) { // If something is hit
-        const hit = intersects[0];
-        // Find the actual Tetris piece group that was hit (might be a child cube)
-        let hitPiece = null;
-        hit.object.traverseAncestors((ancestor) => {
-          if (ancestor.isTetrisPiece) {
-            hitPiece = ancestor;
-            return; // Found the piece, stop traversing
-          }
-        });
-
-        if (hitPiece) {
-          // Change the color of the hit Tetris piece [cite: 129]
-          // Assuming all cubes in the group share the same material or we update each one.
-          // For simplicity, let's change the color of the first material found in the piece's children.
-          hitPiece.traverse(child => {
-            if (child.isMesh && child.material) {
-              child.material.color.setHex(Math.random() * 0xffffff); // Random color
-            }
-          });
-        }
-      }
-    }
-
-    function onSelectEnd(event) {
-      // Logic for when trigger is released (e.g., release object, stop laser if it was continuous)
     }
 
     function onWindowResize() {
@@ -377,7 +268,9 @@
     }
 
     function animate() {
-      renderer.setAnimationLoop(render); // [cite: 169]
+      // Use the renderer's built-in animation loop, which is XR-aware.
+      // This will call the 'render' function on every frame.
+      renderer.setAnimationLoop(render);
     }
 
     // This function is called every frame
@@ -389,6 +282,7 @@
         const newPiece = createTetrisPiece(randomType);
 
         if (newPiece) {
+          // Position the new piece "in the sky" (higher Y), slightly varied X and Z
           newPiece.position.set(
             (Math.random() - 0.5) * 0.8, // -0.4 to 0.4 meters X
             2,                           // 2 meters above the origin (user's initial position)
@@ -406,36 +300,16 @@
         piece.position.y -= FALL_SPEED;
 
         // Remove pieces that have fallen too far below the floor (e.g., -2 meters below origin)
+        // Adjust this threshold based on how far you want them to fall "through"
         if (piece.position.y < -2) {
           scene.remove(piece);
           fallingPieces.splice(i, 1);
         }
       }
-
-      // Update controllers and perform raycasting
-      // For each controller (target ray group)
-      renderer.xr.getControllers().forEach(controller => {
-        if (controller && controller.visible && controller.userData.laser) {
-          // Get controller's world position and direction [cite: 109, 111, 112]
-          tempMatrix.identity().extractRotation(controller.matrixWorld);
-          raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-          raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); // -Z is forward for controllers [cite: 122]
-
-          const intersects = raycaster.intersectObjects(fallingPieces, true); // 
-
-          if (intersects.length > 0) {
-            const hit = intersects[0];
-            // Shorten laser to hit distance [cite: 118]
-            controller.userData.laser.scale.z = hit.distance;
-            // You could also add highlight feedback here (e.g., emissive color) [cite: 127, 129]
-          } else {
-            // No intersection, extend laser to max length [cite: 121]
-            controller.userData.laser.scale.z = 10; // Max laser length
-          }
-        }
-      });
-
-
+      
+      // Render the scene with the camera.
+      // In an AR session, Three.js will automatically handle rendering
+      // for each eye and clearing the background for passthrough.
       renderer.render(scene, camera);
     }
   </script>
