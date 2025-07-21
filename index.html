@@ -25,7 +25,7 @@
 </head>
 <body>
   <div id="info">
-    Retro Handheld Gaming Device - WebXR AR Demo
+    Life-Size Arcade Cabinet - WebXR AR Demo
   </div>
 
   <script type="importmap">
@@ -168,96 +168,109 @@
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
-    let handheldDevice;
+    let arcadeCabinet;
 
     init();
     animate();
 
-    function createHandheldDevice() {
-      const deviceGroup = new THREE.Group();
+    function createArcadeCabinet() {
+      const cabinetGroup = new THREE.Group();
       
-      // Main body dimensions based on your sketch
-      const bodyWidth = 0.12;  // 2 units scaled down
-      const bodyHeight = 0.36; // 6 units scaled down  
-      const bodyDepth = 0.06;  // 1 unit scaled down
+      // Life-size arcade cabinet dimensions
+      const bodyWidth = 0.6;   // 60cm wide
+      const bodyHeight = 1.8;  // 180cm tall (6 feet)
+      const bodyDepth = 0.8;   // 80cm deep
       
-      // Main body
+      // Main cabinet body
       const bodyGeometry = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
-      const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
+      const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
       const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      deviceGroup.add(body);
+      body.position.y = bodyHeight / 2; // Lift cabinet so it sits on ground
+      cabinetGroup.add(body);
       
-      // Screen section (top part)
-      const screenSectionHeight = 0.18; // 3 units
-      const screenSectionGeometry = new THREE.BoxGeometry(bodyWidth + 0.01, screenSectionHeight, bodyDepth + 0.01);
-      const screenSectionMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-      const screenSection = new THREE.Mesh(screenSectionGeometry, screenSectionMaterial);
-      screenSection.position.y = (bodyHeight / 2) - (screenSectionHeight / 2);
-      deviceGroup.add(screenSection);
+      // Monitor section (upper part)
+      const monitorSectionHeight = 0.6; // 60cm
+      const monitorSectionGeometry = new THREE.BoxGeometry(bodyWidth - 0.1, monitorSectionHeight, 0.4);
+      const monitorSectionMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
+      const monitorSection = new THREE.Mesh(monitorSectionGeometry, monitorSectionMaterial);
+      monitorSection.position.y = bodyHeight - (monitorSectionHeight / 2) - 0.1;
+      monitorSection.position.z = 0.1;
+      cabinetGroup.add(monitorSection);
       
-      // Screen (dark rectangle)
-      const screenGeometry = new THREE.BoxGeometry(bodyWidth - 0.02, screenSectionHeight - 0.04, 0.005);
+      // Screen (large CRT-style)
+      const screenGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.05);
       const screenMaterial = new THREE.MeshLambertMaterial({ color: 0x001100 });
       const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-      screen.position.y = (bodyHeight / 2) - (screenSectionHeight / 2);
-      screen.position.z = (bodyDepth / 2) + 0.003;
-      deviceGroup.add(screen);
+      screen.position.y = bodyHeight - (monitorSectionHeight / 2) - 0.05;
+      screen.position.z = 0.3;
+      cabinetGroup.add(screen);
       
-      // D-pad (left side)
-      const dpadSize = 0.03;
-      const dpadMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
+      // Control panel (angled surface)
+      const controlPanelGeometry = new THREE.BoxGeometry(bodyWidth - 0.05, 0.15, 0.4);
+      const controlPanelMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
+      const controlPanel = new THREE.Mesh(controlPanelGeometry, controlPanelMaterial);
+      controlPanel.position.y = bodyHeight - monitorSectionHeight - 0.2;
+      controlPanel.position.z = 0.15;
+      controlPanel.rotation.x = -Math.PI / 8; // Angle the control panel
+      cabinetGroup.add(controlPanel);
       
-      // D-pad center
-      const dpadCenterGeometry = new THREE.BoxGeometry(dpadSize, dpadSize, 0.01);
-      const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
-      dpadCenter.position.x = -bodyWidth / 3;
-      dpadCenter.position.y = -bodyHeight / 4;
-      dpadCenter.position.z = (bodyDepth / 2) + 0.005;
-      deviceGroup.add(dpadCenter);
+      // Joystick (left side) - RED
+      const joystickStickGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8);
+      const joystickMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // RED
+      const joystickStick = new THREE.Mesh(joystickStickGeometry, joystickMaterial);
+      joystickStick.position.x = -bodyWidth / 4;
+      joystickStick.position.y = bodyHeight - monitorSectionHeight - 0.1;
+      joystickStick.position.z = 0.25;
+      cabinetGroup.add(joystickStick);
       
-      // D-pad arms
-      const dpadArmGeometry = new THREE.BoxGeometry(dpadSize * 0.4, dpadSize * 2, 0.01);
-      const dpadVerticalArm = new THREE.Mesh(dpadArmGeometry, dpadMaterial);
-      dpadVerticalArm.position.copy(dpadCenter.position);
-      deviceGroup.add(dpadVerticalArm);
+      // Joystick ball
+      const joystickBallGeometry = new THREE.SphereGeometry(0.04, 8, 8);
+      const joystickBall = new THREE.Mesh(joystickBallGeometry, joystickMaterial);
+      joystickBall.position.copy(joystickStick.position);
+      joystickBall.position.y += 0.08;
+      cabinetGroup.add(joystickBall);
       
-      const dpadHorizontalArm = new THREE.Mesh(dpadArmGeometry, dpadMaterial);
-      dpadHorizontalArm.rotation.z = Math.PI / 2;
-      dpadHorizontalArm.position.copy(dpadCenter.position);
-      deviceGroup.add(dpadHorizontalArm);
+      // Action buttons (right side) - RED
+      const buttonGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 8);
+      const buttonMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // RED
       
-      // Action buttons (right side)
-      const buttonGeometry = new THREE.CylinderGeometry(0.012, 0.012, 0.01, 8);
-      const buttonMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
-      
-      // Button positions
+      // Button layout (2x2 grid)
       const buttonPositions = [
-        { x: bodyWidth / 3, y: -bodyHeight / 6, label: 'A' },
-        { x: bodyWidth / 2.2, y: -bodyHeight / 3, label: 'B' }
+        { x: bodyWidth / 6, y: bodyHeight - monitorSectionHeight - 0.08, z: 0.3 },
+        { x: bodyWidth / 4, y: bodyHeight - monitorSectionHeight - 0.08, z: 0.3 },
+        { x: bodyWidth / 6, y: bodyHeight - monitorSectionHeight - 0.12, z: 0.3 },
+        { x: bodyWidth / 4, y: bodyHeight - monitorSectionHeight - 0.12, z: 0.3 }
       ];
       
       buttonPositions.forEach(pos => {
         const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
-        button.position.x = pos.x;
-        button.position.y = pos.y;
-        button.position.z = (bodyDepth / 2) + 0.005;
+        button.position.set(pos.x, pos.y, pos.z);
         button.rotation.x = Math.PI / 2;
-        deviceGroup.add(button);
+        cabinetGroup.add(button);
       });
       
-      // Add some edge details
-      const edgeGeometry = new THREE.BoxGeometry(bodyWidth + 0.005, 0.005, bodyDepth + 0.005);
-      const edgeMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+      // Base/pedestal
+      const baseGeometry = new THREE.BoxGeometry(bodyWidth + 0.1, 0.1, bodyDepth + 0.1);
+      const baseMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
+      const base = new THREE.Mesh(baseGeometry, baseMaterial);
+      base.position.y = 0.05;
+      cabinetGroup.add(base);
       
-      const topEdge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-      topEdge.position.y = bodyHeight / 2;
-      deviceGroup.add(topEdge);
+      // Side panels with retro styling
+      const sidePanelGeometry = new THREE.BoxGeometry(0.05, bodyHeight - 0.2, bodyDepth - 0.2);
+      const sidePanelMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
       
-      const bottomEdge = new THREE.Mesh(edgeGeometry, edgeMaterial);
-      bottomEdge.position.y = -bodyHeight / 2;
-      deviceGroup.add(bottomEdge);
+      const leftSidePanel = new THREE.Mesh(sidePanelGeometry, sidePanelMaterial);
+      leftSidePanel.position.x = -(bodyWidth / 2) - 0.025;
+      leftSidePanel.position.y = bodyHeight / 2;
+      cabinetGroup.add(leftSidePanel);
       
-      return deviceGroup;
+      const rightSidePanel = new THREE.Mesh(sidePanelGeometry, sidePanelMaterial);
+      rightSidePanel.position.x = (bodyWidth / 2) + 0.025;
+      rightSidePanel.position.y = bodyHeight / 2;
+      cabinetGroup.add(rightSidePanel);
+      
+      return cabinetGroup;
     }
 
     function init() {
@@ -278,10 +291,10 @@
         requiredFeatures: ['local']
       }));
 
-      // Create the handheld device
-      handheldDevice = createHandheldDevice();
-      handheldDevice.position.set(0, 0, -0.5); // Position it closer for better viewing
-      scene.add(handheldDevice);
+      // Create the arcade cabinet
+      arcadeCabinet = createArcadeCabinet();
+      arcadeCabinet.position.set(0, 0, -2); // Position in center, 2 meters away
+      scene.add(arcadeCabinet);
 
       // Enhanced lighting
       const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
@@ -308,12 +321,7 @@
     }
 
     function render(timestamp, frame) {
-      // Gentle rotation to show off the 3D model
-      if (handheldDevice) {
-        handheldDevice.rotation.y += 0.005;
-        handheldDevice.rotation.x = Math.sin(timestamp * 0.001) * 0.1;
-      }
-      
+      // Cabinet remains stationary - no rotation animation
       renderer.render(scene, camera);
     }
   </script>
