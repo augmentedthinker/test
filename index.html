@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebXR Giant Retro Handheld</title>
+  <title>WebXR Interactive Retro Handheld</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -21,237 +21,222 @@
       color: white;
       background-color: rgba(0,0,0,0.2);
     }
-    /* AR Button styles are handled by the ARButton script below */
   </style>
 </head>
 <body>
   <div id="info">
-    Giant Retro Handheld Demo
+    Interactive Retro Handheld Demo
   </div>
 
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
       }
     }
   </script>
 
   <script type="module">
-    // Import the main Three.js library
     import * as THREE from 'three';
+    import { ARButton } from 'three/addons/webxr/ARButton.js';
+    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-    // --- Inlined ARButton.js from Three.js examples ---
-    // This class creates the "Start AR" button and handles the WebXR session setup.
-    class ARButton {
-      static createButton(renderer, sessionInit = {}) {
-        const button = document.createElement('button');
-
-        function showStartAR( /*device*/ ) {
-          let currentSession = null;
-
-          async function onSessionStarted(session) {
-            session.addEventListener('end', onSessionEnded);
-            // Using 'local-floor' will place the origin at the user's feet,
-            // which is ideal for placing objects on the ground.
-            renderer.xr.setReferenceSpaceType('local-floor');
-            await renderer.xr.setSession(session);
-            button.textContent = 'STOP AR';
-            currentSession = session;
-          }
-
-          function onSessionEnded( /*event*/ ) {
-            currentSession.removeEventListener('end', onSessionEnded);
-            button.textContent = 'START AR';
-            currentSession = null;
-          }
-
-          button.style.display = '';
-          button.style.cursor = 'pointer';
-          button.style.left = 'calc(50% - 50px)';
-          button.style.width = '100px';
-          button.textContent = 'START AR';
-          
-          button.onclick = function() {
-            if (currentSession === null) {
-              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-            } else {
-              currentSession.end();
-            }
-          };
-        }
-
-        function disableButton() {
-          button.style.display = '';
-          button.style.cursor = 'auto';
-          button.style.left = 'calc(50% - 75px)';
-          button.style.width = '150px';
-          button.onmouseenter = null;
-          button.onmouseleave = null;
-          button.onclick = null;
-        }
-
-        function showARNotSupported() {
-          disableButton();
-          button.textContent = 'AR NOT SUPPORTED';
-        }
-
-        function stylizeElement(element) {
-          element.style.position = 'absolute';
-          element.style.bottom = '20px';
-          element.style.padding = '12px 6px';
-          element.style.border = '1px solid #fff';
-          element.style.borderRadius = '4px';
-          element.style.background = 'rgba(0,0,0,0.1)';
-          element.style.color = '#fff';
-          element.style.font = 'normal 13px sans-serif';
-          element.style.textAlign = 'center';
-          element.style.opacity = '0.9';
-          element.style.outline = 'none';
-          element.style.zIndex = '999';
-        }
-
-        if ('xr' in navigator) {
-          button.id = 'ARButton';
-          stylizeElement(button);
-          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
-            supported ? showStartAR() : showARNotSupported();
-          }).catch(showARNotSupported);
-          return button;
-        } else {
-          const message = document.createElement('a');
-          if (window.isSecureContext === false) {
-            message.href = document.location.href.replace(/^http:/, 'https:');
-            message.innerHTML = 'WEBXR NEEDS HTTPS';
-          } else {
-            message.href = 'https://immersiveweb.dev/';
-            message.innerHTML = 'WEBXR NOT AVAILABLE';
-          }
-          message.style.left = 'calc(50% - 90px)';
-          message.style.width = '180px';
-          message.style.textDecoration = 'none';
-          stylizeElement(message);
-          return message;
-        }
-      }
-    }
-
-    // --- Main Application Logic ---
     let camera, scene, renderer;
     let retroHandheld;
+    const interactiveButtons = [];
+    let hoveredObject = null;
+    const raycaster = new THREE.Raycaster();
+    const tempMatrix = new THREE.Matrix4();
+
+    // Store original colors to revert highlights
+    const originalColors = new Map();
+    const highlightColor = new THREE.Color(0xFFFF88);
+    const clickColor = new THREE.Color(0xFFFFFF);
 
     init();
     animate();
 
     function init() {
-      // Create the main scene
       scene = new THREE.Scene();
-
-      // Create a camera. Its position will be updated by the WebXR device.
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
-
-      // Create the WebGL renderer and configure it for XR.
-      renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        alpha: true // alpha: true is required for AR passthrough
-      });
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
       document.body.appendChild(renderer.domElement);
+      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] }));
 
-      // Add the AR button to the body.
-      document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['local-floor']
-      }));
+      setupLights();
+      createHandheld();
+      setupControllers();
 
-      // --- Create the Giant Retro Handheld ---
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function setupLights() {
+      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+      dirLight.position.set(-2, 2, -1);
+      scene.add(dirLight);
+    }
+
+    function createHandheld() {
       retroHandheld = new THREE.Group();
 
-      // Define materials
       const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x9E9E9E, roughness: 0.7 });
       const bezelMaterial = new THREE.MeshStandardMaterial({ color: 0x424242, roughness: 0.6 });
-      const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x2E4230 }); // Classic green-ish screen
-      const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0x880E4F, roughness: 0.5 }); // Magenta-ish
+      const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x2E4230 });
+      const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0x880E4F, roughness: 0.5 });
       const dpadMaterial = new THREE.MeshStandardMaterial({ color: 0x212121, roughness: 0.5 });
-      
-      const bodyWidth = 2.5;
-      const bodyHeight = 4.0;
-      const bodyDepth = 0.4;
-      
-      // 1. Main Body
+
+      const bodyWidth = 2.5, bodyHeight = 4.0, bodyDepth = 0.4;
+
+      // --- Main Body (now with depth) ---
       const bodyGeom = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
       const mainBody = new THREE.Mesh(bodyGeom, bodyMaterial);
-      mainBody.position.y = bodyHeight / 2; // Sit on the ground
+      mainBody.position.y = bodyHeight / 2;
       retroHandheld.add(mainBody);
 
-      // 2. Screen Bezel
-      const bezelWidth = bodyWidth * 0.8;
-      const bezelHeight = bodyHeight * 0.4;
-      const bezelDepth = 0.1;
+      // --- Enlarged Screen ---
+      const bezelWidth = bodyWidth * 0.9;
+      const bezelHeight = bodyHeight * 0.5;
+      const bezelDepth = 0.05;
       const bezelGeom = new THREE.BoxGeometry(bezelWidth, bezelHeight, bezelDepth);
       const screenBezel = new THREE.Mesh(bezelGeom, bezelMaterial);
-      screenBezel.position.set(0, 2.7, bodyDepth / 2);
+      screenBezel.position.set(0, 2.6, bodyDepth / 2 + 0.01);
       retroHandheld.add(screenBezel);
-      
-      // 3. Screen
-      const screenWidth = bezelWidth * 0.9;
-      const screenHeight = bezelHeight * 0.8;
+
+      const screenWidth = bezelWidth * 0.95;
+      const screenHeight = bezelHeight * 0.9;
       const screenGeom = new THREE.BoxGeometry(screenWidth, screenHeight, 0.01);
       const screen = new THREE.Mesh(screenGeom, screenMaterial);
-      // Position it inside the bezel
-      screen.position.set(0, 2.7, (bodyDepth / 2) + (bezelDepth / 2) + 0.01);
+      screen.position.set(0, 2.6, bodyDepth / 2 + bezelDepth / 2 + 0.005);
       retroHandheld.add(screen);
 
-      // 4. D-Pad (Directional Pad)
+      // --- D-Pad (now a single mesh group) ---
       const dpadGroup = new THREE.Group();
-      const dpadArmWidth = 0.5;
-      const dpadArmHeight = 0.18;
-      const dpadArmDepth = 0.1;
-
-      const dpadHGeom = new THREE.BoxGeometry(dpadArmWidth, dpadArmHeight, dpadArmDepth);
-      const dpadH = new THREE.Mesh(dpadHGeom, dpadMaterial);
-      
-      const dpadVGeom = new THREE.BoxGeometry(dpadArmHeight, dpadArmWidth, dpadArmDepth);
-      const dpadV = new THREE.Mesh(dpadVGeom, dpadMaterial);
-      
-      dpadGroup.add(dpadH);
-      dpadGroup.add(dpadV);
-      dpadGroup.position.set(-0.7, 1.2, (bodyDepth / 2) + 0.01);
+      const dpadArmWidth = 0.5, dpadArmHeight = 0.18, dpadArmDepth = 0.1;
+      const dpadH = new THREE.Mesh(new THREE.BoxGeometry(dpadArmWidth, dpadArmHeight, dpadArmDepth), dpadMaterial.clone());
+      const dpadV = new THREE.Mesh(new THREE.BoxGeometry(dpadArmHeight, dpadArmWidth, dpadArmDepth), dpadMaterial.clone());
+      dpadGroup.add(dpadH, dpadV);
+      dpadGroup.position.set(-0.7, 1.0, bodyDepth / 2 + 0.01);
       retroHandheld.add(dpadGroup);
+      interactiveButtons.push(dpadGroup);
+      originalColors.set(dpadGroup, dpadMaterial.color.getHex());
 
-      // 5. A & B Buttons
-      const buttonRadius = 0.2;
-      const buttonHeight = 0.1;
+      // --- A & B Buttons ---
+      const buttonRadius = 0.2, buttonHeight = 0.1;
       const buttonGeom = new THREE.CylinderGeometry(buttonRadius, buttonRadius, buttonHeight, 32);
       
-      const buttonA = new THREE.Mesh(buttonGeom, buttonMaterial);
-      buttonA.position.set(0.8, 1.3, (bodyDepth / 2) + (buttonHeight / 2));
+      const buttonA = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
+      buttonA.position.set(0.8, 1.1, bodyDepth / 2 + buttonHeight / 2);
       buttonA.rotation.x = Math.PI / 2;
       retroHandheld.add(buttonA);
-      
-      const buttonB = new THREE.Mesh(buttonGeom, buttonMaterial);
-      buttonB.position.set(0.3, 1.0, (bodyDepth / 2) + (buttonHeight / 2));
+      interactiveButtons.push(buttonA);
+      originalColors.set(buttonA, buttonMaterial.color.getHex());
+
+      const buttonB = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
+      buttonB.position.set(0.3, 0.8, bodyDepth / 2 + buttonHeight / 2);
       buttonB.rotation.x = Math.PI / 2;
       retroHandheld.add(buttonB);
-      
-      // --- Final Placement ---
-      // Position the entire handheld 5 meters in front of the user.
-      // Y position is 0 because 'local-floor' reference space puts the origin on the floor.
+      interactiveButtons.push(buttonB);
+      originalColors.set(buttonB, buttonMaterial.color.getHex());
+
       retroHandheld.position.set(0, 0, -5);
-      
-      // Add the final grouped object to the scene.
       scene.add(retroHandheld);
+    }
+    
+    function setupControllers() {
+      const controllerModelFactory = new XRControllerModelFactory();
 
-      // Add lights to the scene.
-      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-      scene.add(ambientLight);
-      
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
-      directionalLight.position.set(-2, 2, -1);
-      scene.add(directionalLight);
+      for (let i = 0; i < 2; i++) {
+        // --- Controller Pointer & Ray ---
+        const controller = renderer.xr.getController(i);
+        scene.add(controller);
+        controller.addEventListener('selectstart', onSelectStart);
+        controller.addEventListener('selectend', onSelectEnd);
 
-      // Add a listener to handle window resizing.
-      window.addEventListener('resize', onWindowResize, false);
+        const laserGeom = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+        const laser = new THREE.Line(laserGeom);
+        laser.name = 'laser';
+        laser.scale.z = 5;
+        controller.add(laser);
+
+        // --- Controller 3D Model ---
+        const grip = renderer.xr.getControllerGrip(i);
+        grip.add(controllerModelFactory.createControllerModel(grip));
+        scene.add(grip);
+      }
+    }
+
+    function onSelectStart(event) {
+        if (hoveredObject) {
+            // If the hovered object is a group (like the D-pad), apply color to children
+            if (hoveredObject.isGroup) {
+                hoveredObject.children.forEach(child => child.material.color.set(clickColor));
+            } else {
+                hoveredObject.material.color.set(clickColor);
+            }
+        }
+    }
+
+    function onSelectEnd(event) {
+        if (hoveredObject) {
+            // Revert to the highlight color on release
+            if (hoveredObject.isGroup) {
+                hoveredObject.children.forEach(child => child.material.color.set(highlightColor));
+            } else {
+                hoveredObject.material.color.set(highlightColor);
+            }
+        }
+    }
+    
+    function handleInteractions() {
+        // Reset previously hovered object
+        if (hoveredObject) {
+            const originalColor = originalColors.get(hoveredObject);
+            if (hoveredObject.isGroup) {
+                hoveredObject.children.forEach(child => child.material.color.set(originalColor));
+            } else {
+                hoveredObject.material.color.set(originalColor);
+            }
+            hoveredObject = null;
+        }
+
+        // Check for new intersections from both controllers
+        for (let i = 0; i < 2; i++) {
+            const controller = renderer.xr.getController(i);
+            const laser = controller.getObjectByName('laser');
+
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const intersects = raycaster.intersectObjects(interactiveButtons, true);
+
+            if (intersects.length > 0) {
+                const intersection = intersects[0];
+                let object = intersection.object;
+                
+                // If part of a group is hit (like D-pad), treat the whole group as the object
+                if (object.parent.isGroup && interactiveButtons.includes(object.parent)) {
+                    object = object.parent;
+                }
+
+                hoveredObject = object;
+                laser.scale.z = intersection.distance;
+
+                // Apply highlight
+                if (hoveredObject.isGroup) {
+                   hoveredObject.children.forEach(child => child.material.color.set(highlightColor));
+                } else {
+                   hoveredObject.material.color.set(highlightColor);
+                }
+
+            } else {
+                laser.scale.z = 5; // Default laser length
+            }
+        }
     }
 
     function onWindowResize() {
@@ -261,13 +246,11 @@
     }
 
     function animate() {
-      // Use the renderer's built-in animation loop, which is XR-aware.
       renderer.setAnimationLoop(render);
     }
 
-    // This function is called every frame
-    function render(timestamp, frame) {
-      // The object is stationary, so no animation is needed here.
+    function render() {
+      handleInteractions();
       renderer.render(scene, camera);
     }
   </script>
