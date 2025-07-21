@@ -1,19 +1,55 @@
+<!-- ar_passthrough_minimal.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <title>Minimal ARButton Passthrough (Quest 2)</title>
+  <!--
+    Load Three.js core library and ARButton utility.
+    - three.min.js: Needed for the renderer and WebXR support.
+    - ARButton.js: Provides the official "Enter AR" button for WebXR.
+    Both from unpkg CDN for direct HTML use.
+  -->
   <script src="https://unpkg.com/three@0.150.1/build/three.min.js"></script>
   <script src="https://unpkg.com/three@0.150.1/examples/jsm/webxr/ARButton.js"></script>
   <style>
+    /* Simple centering for the AR button */
     body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #111; }
   </style>
 </head>
 <body>
 <script>
+  // --- Minimal Three.js setup for WebXR ARButton only ---
+
+  // 1. Create the renderer. Required for WebXR.
+  //    - alpha: true makes the background transparent for passthrough.
+  //    - antialias: optional, for smooth AR button rendering.
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+  // Not added to the DOM: we do not display a canvas, as no 3D scene is rendered.
+
+  // 2. Enable WebXR support. Required for ARButton.
   renderer.xr.enabled = true;
+
+  // 3. Create the ARButton.
+  //    - Pass 'renderer' so ARButton can trigger XR sessions.
+  //    - Pass options with 'requiredFeatures: ["hit-test"]' if you plan to do surface detection.
+  //      For passthrough only, can omit or just specify mode: 'immersive-ar'.
+  //    - ARButton automatically inserts a button into the page.
+  //    - It handles HTTPS, XR support, and error messages for you.
   document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor'], optionalFeatures: ['dom-overlay'], domOverlay: { root: document.body }, sessionInit: { optionalFeatures: ['dom-overlay'] }, mode: 'immersive-ar' }));
+
+  // 4. No scene, camera, or animation loop is set up.
+  //    - We don't call renderer.setAnimationLoop or renderer.render.
+  //    - No objects, no background, no lights, nothing.
+  //    - The entire experience is: click Enter AR → passthrough starts → nothing else happens.
+
+  // --- Explanations for inclusion ---
+  // - three.min.js: Required by ARButton and renderer.
+  // - ARButton.js: Only way to create the WebXR AR "Enter AR" button in Three.js.
+  // - renderer: Needed because ARButton expects a Three.js renderer.
+  // - renderer.xr.enabled = true: WebXR API requires this to be set for any XR mode.
+  // - ARButton.createButton: Handles all button UI and AR session creation.
+  // - No THREE.Scene, THREE.Camera, or animation loop: not needed unless you want to draw something.
 </script>
 </body>
 </html>
