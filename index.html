@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>WebXR Interactive Retro Handheld</title>
+  <title>WebXR Interactive Retro Handheld (V2)</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -25,7 +25,7 @@
 </head>
 <body>
   <div id="info">
-    Interactive Retro Handheld Demo
+    Interactive Retro Handheld Demo - V2
   </div>
 
   <script type="importmap">
@@ -51,8 +51,8 @@
 
     // Store original colors to revert highlights
     const originalColors = new Map();
-    const highlightColor = new THREE.Color(0xFFFF88);
-    const clickColor = new THREE.Color(0xFFFFFF);
+    const highlightColor = new THREE.Color(0xFFFF88); // Yellow for hover
+    const clickColor = new THREE.Color(0x00FF00); // Green for click
 
     init();
     animate();
@@ -64,7 +64,7 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
       document.body.appendChild(renderer.domElement);
-      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] }));
+      document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor'] }));
 
       setupLights();
       createHandheld();
@@ -74,8 +74,8 @@
     }
 
     function setupLights() {
-      scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-      const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
+      scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
       dirLight.position.set(-2, 2, -1);
       scene.add(dirLight);
     }
@@ -89,68 +89,66 @@
       const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0x880E4F, roughness: 0.5 });
       const dpadMaterial = new THREE.MeshStandardMaterial({ color: 0x212121, roughness: 0.5 });
 
-      const bodyWidth = 2.5, bodyHeight = 4.0, bodyDepth = 0.4;
+      // Adjusted to be person-sized, sitting on the floor
+      const bodyWidth = 1.2;
+      const bodyHeight = 1.8; // Approx 6ft tall
+      const bodyDepth = 0.25;
 
-      // --- Main Body (now with depth) ---
+      // --- Main Body ---
       const bodyGeom = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
       const mainBody = new THREE.Mesh(bodyGeom, bodyMaterial);
-      mainBody.position.y = bodyHeight / 2;
+      mainBody.position.y = bodyHeight / 2; // Bottom of the model is at y=0 (the floor)
       retroHandheld.add(mainBody);
 
-      // --- Enlarged Screen ---
+      // --- Screen at eye-level ---
       const bezelWidth = bodyWidth * 0.9;
-      const bezelHeight = bodyHeight * 0.5;
+      const bezelHeight = bodyHeight * 0.4;
       const bezelDepth = 0.05;
-      const bezelGeom = new THREE.BoxGeometry(bezelWidth, bezelHeight, bezelDepth);
-      const screenBezel = new THREE.Mesh(bezelGeom, bezelMaterial);
-      screenBezel.position.set(0, 2.6, bodyDepth / 2 + 0.01);
+      const screenBezel = new THREE.Mesh(new THREE.BoxGeometry(bezelWidth, bezelHeight, bezelDepth), bezelMaterial);
+      screenBezel.position.set(0, 1.3, bodyDepth / 2 + 0.01); // Positioned in the upper half
       retroHandheld.add(screenBezel);
 
-      const screenWidth = bezelWidth * 0.95;
-      const screenHeight = bezelHeight * 0.9;
-      const screenGeom = new THREE.BoxGeometry(screenWidth, screenHeight, 0.01);
+      const screenGeom = new THREE.BoxGeometry(bezelWidth * 0.95, bezelHeight * 0.9, 0.01);
       const screen = new THREE.Mesh(screenGeom, screenMaterial);
-      screen.position.set(0, 2.6, bodyDepth / 2 + bezelDepth / 2 + 0.005);
+      screen.position.set(0, 1.3, bodyDepth / 2 + bezelDepth / 2 + 0.005);
       retroHandheld.add(screen);
 
-      // --- D-Pad (now a single mesh group) ---
+      // --- Controls positioned lower down ---
       const dpadGroup = new THREE.Group();
-      const dpadArmWidth = 0.5, dpadArmHeight = 0.18, dpadArmDepth = 0.1;
+      const dpadArmWidth = 0.25, dpadArmHeight = 0.09, dpadArmDepth = 0.05;
       const dpadH = new THREE.Mesh(new THREE.BoxGeometry(dpadArmWidth, dpadArmHeight, dpadArmDepth), dpadMaterial.clone());
       const dpadV = new THREE.Mesh(new THREE.BoxGeometry(dpadArmHeight, dpadArmWidth, dpadArmDepth), dpadMaterial.clone());
       dpadGroup.add(dpadH, dpadV);
-      dpadGroup.position.set(-0.7, 1.0, bodyDepth / 2 + 0.01);
+      dpadGroup.position.set(-0.3, 0.6, bodyDepth / 2 + 0.01);
       retroHandheld.add(dpadGroup);
       interactiveButtons.push(dpadGroup);
-      originalColors.set(dpadGroup, dpadMaterial.color.getHex());
+      originalColors.set(dpadGroup, dpadMaterial.color.clone());
 
-      // --- A & B Buttons ---
-      const buttonRadius = 0.2, buttonHeight = 0.1;
+      const buttonRadius = 0.1, buttonHeight = 0.05;
       const buttonGeom = new THREE.CylinderGeometry(buttonRadius, buttonRadius, buttonHeight, 32);
       
       const buttonA = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
-      buttonA.position.set(0.8, 1.1, bodyDepth / 2 + buttonHeight / 2);
+      buttonA.position.set(0.35, 0.65, bodyDepth / 2 + buttonHeight / 2);
       buttonA.rotation.x = Math.PI / 2;
       retroHandheld.add(buttonA);
       interactiveButtons.push(buttonA);
-      originalColors.set(buttonA, buttonMaterial.color.getHex());
-
+      originalColors.set(buttonA, buttonMaterial.color.clone());
+      
       const buttonB = new THREE.Mesh(buttonGeom, buttonMaterial.clone());
-      buttonB.position.set(0.3, 0.8, bodyDepth / 2 + buttonHeight / 2);
+      buttonB.position.set(0.15, 0.5, bodyDepth / 2 + buttonHeight / 2);
       buttonB.rotation.x = Math.PI / 2;
       retroHandheld.add(buttonB);
       interactiveButtons.push(buttonB);
-      originalColors.set(buttonB, buttonMaterial.color.getHex());
+      originalColors.set(buttonB, buttonMaterial.color.clone());
 
-      retroHandheld.position.set(0, 0, -5);
+      // Positioned closer to the user for walk-around interaction
+      retroHandheld.position.set(0, 0, -2.5);
       scene.add(retroHandheld);
     }
     
     function setupControllers() {
       const controllerModelFactory = new XRControllerModelFactory();
-
       for (let i = 0; i < 2; i++) {
-        // --- Controller Pointer & Ray ---
         const controller = renderer.xr.getController(i);
         scene.add(controller);
         controller.addEventListener('selectstart', onSelectStart);
@@ -162,7 +160,6 @@
         laser.scale.z = 5;
         controller.add(laser);
 
-        // --- Controller 3D Model ---
         const grip = renderer.xr.getControllerGrip(i);
         grip.add(controllerModelFactory.createControllerModel(grip));
         scene.add(grip);
@@ -170,43 +167,31 @@
     }
 
     function onSelectStart(event) {
+        // On trigger press, change color to the 'click' color if hovering
         if (hoveredObject) {
-            // If the hovered object is a group (like the D-pad), apply color to children
-            if (hoveredObject.isGroup) {
-                hoveredObject.children.forEach(child => child.material.color.set(clickColor));
-            } else {
-                hoveredObject.material.color.set(clickColor);
-            }
+            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
+            material.color.set(clickColor);
+            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(clickColor);
         }
     }
 
     function onSelectEnd(event) {
+        // On trigger release, change color back to the 'highlight' color
         if (hoveredObject) {
-            // Revert to the highlight color on release
-            if (hoveredObject.isGroup) {
-                hoveredObject.children.forEach(child => child.material.color.set(highlightColor));
-            } else {
-                hoveredObject.material.color.set(highlightColor);
-            }
+            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
+            material.color.set(highlightColor);
+            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(highlightColor);
         }
     }
     
     function handleInteractions() {
-        // Reset previously hovered object
-        if (hoveredObject) {
-            const originalColor = originalColors.get(hoveredObject);
-            if (hoveredObject.isGroup) {
-                hoveredObject.children.forEach(child => child.material.color.set(originalColor));
-            } else {
-                hoveredObject.material.color.set(originalColor);
-            }
-            hoveredObject = null;
-        }
+        let currentlyHovered = null;
 
-        // Check for new intersections from both controllers
+        // Check for intersections from both controllers
         for (let i = 0; i < 2; i++) {
             const controller = renderer.xr.getController(i);
             const laser = controller.getObjectByName('laser');
+            if (!controller.visible) continue;
 
             tempMatrix.identity().extractRotation(controller.matrixWorld);
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -218,23 +203,35 @@
                 const intersection = intersects[0];
                 let object = intersection.object;
                 
-                // If part of a group is hit (like D-pad), treat the whole group as the object
                 if (object.parent.isGroup && interactiveButtons.includes(object.parent)) {
                     object = object.parent;
                 }
-
-                hoveredObject = object;
-                laser.scale.z = intersection.distance;
-
-                // Apply highlight
-                if (hoveredObject.isGroup) {
-                   hoveredObject.children.forEach(child => child.material.color.set(highlightColor));
-                } else {
-                   hoveredObject.material.color.set(highlightColor);
+                
+                if (!currentlyHovered) { // Only take the first controller that hits something
+                    currentlyHovered = object;
+                    laser.scale.z = intersection.distance;
                 }
-
             } else {
-                laser.scale.z = 5; // Default laser length
+                 if (!currentlyHovered) laser.scale.z = 5;
+            }
+        }
+
+        // Update colors based on hover state
+        if (hoveredObject && hoveredObject !== currentlyHovered) {
+            // Object is no longer hovered
+            const originalColor = originalColors.get(hoveredObject);
+            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
+            material.color.copy(originalColor);
+            if (hoveredObject.isGroup) hoveredObject.children[1].material.color.copy(originalColor);
+        }
+
+        hoveredObject = currentlyHovered;
+        if (hoveredObject) {
+            // New object is hovered, apply highlight (if not being clicked)
+            const material = hoveredObject.isGroup ? hoveredObject.children[0].material : hoveredObject.material;
+            if (!material.color.equals(clickColor)) {
+                material.color.set(highlightColor);
+                if (hoveredObject.isGroup) hoveredObject.children[1].material.color.set(highlightColor);
             }
         }
     }
