@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gemini's WebXR Falling Tetris Demo with Controllers</title>
+  <title>Gemini's WebXR AR Tetris Game with Controllers</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -50,12 +50,21 @@
         transform: translateX(-50%) scale(0.98);
         box-shadow: 0 0 50px rgba(255, 0, 0, 0.9);
       }
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 2em;
+      color: white;
+      z-index: 101;
+    }
   </style>
 </head>
 <body>
   <div id="info">
-    A WebXR Falling Tetris Demo by Christopher & Gemini
+    A WebXR AR Tetris Game by Christopher & Gemini
   </div>
+  <div id="score">Score: 0</div>
 
   <script type="importmap">
     {
@@ -68,18 +77,37 @@
   <script type="module">
     // Import the main Three.js library
     import * as THREE from 'three';
-    // Import ARButton from Three.js examples (this replaces the inlined one)
+    // Import ARButton from Three.js examples
     import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
-    let fallingPieces = []; // Array to hold all currently falling Tetris pieces
-    let lastPieceSpawnTime = 0;
-    const SPAWN_INTERVAL = 1500; // Spawn a new piece every 1.5 seconds (milliseconds)
-    const FALL_SPEED = 0.01; // How much to decrease Y position per frame
+    let currentPiece = null; // The piece currently controlled by the player
+    let placedBlocks = []; // Array to hold all cubes that are part of the settled grid
+    let score = 0;
+    let scoreElement;
+
+    // Game state variables
+    let lastFallTime = 0;
+    const FALL_INTERVAL = 1000; // Time for a piece to fall one unit (milliseconds)
+    const CUBE_SIZE = 0.1; // Size of individual cubes making up the Tetris pieces and grid units
+
+    // Tetris Grid Dimensions (in terms of CUBE_SIZE units)
+    const GRID_WIDTH = 10;
+    const GRID_HEIGHT = 20;
+    const GRID_DEPTH = 10; // For a 3D Tetris or if you want pieces to move in Z
+    // Offset to center the grid visually in front of the user
+    const GRID_OFFSET_X = -(GRID_WIDTH / 2) * CUBE_SIZE;
+    const GRID_OFFSET_Y = 0; // The bottom of the grid will be at Y=0 initially
+    const GRID_OFFSET_Z = -2; // Position the grid 2 meters in front of the camera
+
+    // The game grid itself, storing references to the cubes
+    // grid[x][y][z] will store a reference to the Mesh if occupied, or null if empty
+    let gameGrid;
 
     // Define the Tetris piece configurations (relative positions of cubes)
     // Each element is an array of [x, y, z] offsets for 0.1m cubes
+    // We'll define them relative to the piece's origin [0,0,0]
     const TETRIS_PIECES = {
       'I': { color: 0x00ffff, shape: [[0,0,0], [0,1,0], [0,2,0], [0,3,0]] }, // Cyan
       'O': { color: 0xffff00, shape: [[0,0,0], [0,1,0], [1,0,0], [1,1,0]] }, // Yellow
@@ -89,48 +117,50 @@
       'J': { color: 0x0000ff, shape: [[0,1,0], [0,0,0], [1,0,0], [2,0,0]] }, // Blue
       'L': { color: 0xffa500, shape: [[2,1,0], [0,0,0], [1,0,0], [2,0,0]] }  // Orange
     };
-    const CUBE_SIZE = 0.1; // Size of individual cubes making up the Tetris pieces
+    // Array of piece types for random selection
+    const PIECE_TYPES = Object.keys(TETRIS_PIECES);
 
     // --- Controller and Interaction Variables ---
     let controller1, controller2;
     let laser1, laser2;
     let tempMatrix = new THREE.Matrix4();
+    let tempVector = new THREE.Vector3(); // For general vector operations
     let raycaster = new THREE.Raycaster();
-    let intersectedPiece1 = null; // Stores the piece intersected by controller 1's laser
-    let intersectedPiece2 = null; // Stores the piece intersected by controller 2's laser
 
-    // Color palette for changing Tetris piece colors
+    // Controller states for debouncing button presses
+    let controller1SelectPressed = false;
+    let controller2SelectPressed = false;
+    let controller1SqueezePressed = false; // For movement/rotation
+    let controller2SqueezePressed = false; // For movement/rotation
+
+    // Color palette for changing Tetris piece colors (retained for potential future use)
     const pieceChangeColors = [
-        0xffffff, // White
-        0x00ffff, // Cyan
-        0xffff00, // Yellow
-        0x800080, // Purple
-        0x00ff00, // Green
-        0xff0000, // Red
-        0x0000ff, // Blue
-        0xffa500  // Orange
+        0xffffff, 0x00ffff, 0xffff00, 0x800080, 0x00ff00, 0xff0000, 0x0000ff, 0xffa500
     ];
-    // Keep track of the current color index for each piece to cycle through
-    const pieceColorIndices = new Map(); // Maps piece (THREE.Group) to its current color index
+    const pieceColorIndices = new Map();
 
-    // Laser color management variables
-    const laserColors = [
-        0xff0000, // Red
-        0x00ff00, // Green
-        0x0000ff, // Blue
-        0xffff00  // Yellow
-    ];
+    // Laser color management variables (retained for controller feedback)
+    const laserColors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
     let currentColorIndex1 = 0;
     let currentColorIndex2 = 0;
 
+    // Initialize the game grid with nulls
+    function initializeGameGrid() {
+        gameGrid = Array(GRID_WIDTH).fill(null).map(() =>
+            Array(GRID_HEIGHT).fill(null).map(() =>
+                Array(GRID_DEPTH).fill(null)
+            )
+        );
+    }
+
+    // Creates a new Tetris piece (a THREE.Group of cubes)
     function createTetrisPiece(type) {
       const pieceData = TETRIS_PIECES[type];
       if (!pieceData) return null;
 
       const group = new THREE.Group();
-      // Use MeshPhongMaterial for better lighting interaction if we add more lights later
-      // For now, MeshBasicMaterial is fine, but we'll still change the color property.
-      const material = new THREE.MeshBasicMaterial({ color: pieceData.color });
+      // Use MeshPhongMaterial for better lighting interaction
+      const material = new THREE.MeshPhongMaterial({ color: pieceData.color });
 
       pieceData.shape.forEach(offset => {
         const geometry = new THREE.BoxGeometry(CUBE_SIZE, CUBE_SIZE, CUBE_SIZE);
@@ -138,15 +168,241 @@
         cube.position.set(offset[0] * CUBE_SIZE, offset[1] * CUBE_SIZE, offset[2] * CUBE_SIZE);
         group.add(cube);
       });
+
+      // Store piece type and shape for collision detection
+      group.userData.pieceType = type;
+      group.userData.shape = pieceData.shape; // Store original shape relative to piece origin
+
       // Store the initial color index for this piece
       pieceColorIndices.set(group, pieceChangeColors.indexOf(pieceData.color) !== -1 ? pieceChangeColors.indexOf(pieceData.color) : 0);
       return group;
+    }
+
+    // Function to spawn a new Tetris piece
+    function spawnNewPiece() {
+        if (currentPiece) {
+            // This should not happen if game flow is correct, but a safeguard
+            scene.remove(currentPiece);
+        }
+
+        const randomType = PIECE_TYPES[Math.floor(Math.random() * PIECE_TYPES.length)];
+        currentPiece = createTetrisPiece(randomType);
+
+        if (currentPiece) {
+            // Position the new piece at the top-center of the grid
+            currentPiece.position.set(
+                GRID_OFFSET_X + (GRID_WIDTH / 2) * CUBE_SIZE,
+                GRID_OFFSET_Y + (GRID_HEIGHT - 1) * CUBE_SIZE, // Start near the top
+                GRID_OFFSET_Z
+            );
+            scene.add(currentPiece);
+            lastFallTime = performance.now(); // Reset fall timer for the new piece
+
+            if (checkCollision(currentPiece, 0, 0, 0)) {
+                // Game over condition: New piece spawns into existing blocks
+                console.log("GAME OVER!");
+                // Implement game over logic here (e.g., display message, stop game)
+                alert("Game Over! Your score: " + score);
+                resetGame();
+            }
+        }
+    }
+
+    // Resets the game state
+    function resetGame() {
+        // Clear all placed blocks from the scene and grid
+        placedBlocks.forEach(block => scene.remove(block));
+        placedBlocks = [];
+        initializeGameGrid(); // Re-initialize the grid
+        score = 0;
+        updateScoreDisplay();
+        currentPiece = null; // Ensure no piece is active
+        spawnNewPiece(); // Start a new game
+    }
+
+
+    // Checks for collision of a given piece with the grid boundaries or other placed blocks
+    // dx, dy, dz represent the intended movement in grid units (e.g., -1 for down)
+    function checkCollision(piece, dx, dy, dz, newRotationMatrix = null) {
+        if (!piece) return false;
+
+        // Get the proposed position in world coordinates
+        const proposedWorldPos = piece.position.clone().add(
+            new THREE.Vector3(dx * CUBE_SIZE, dy * CUBE_SIZE, dz * CUBE_SIZE)
+        );
+
+        // Iterate through each cube of the piece
+        for (const cube of piece.children) {
+            if (!cube.isMesh) continue;
+
+            // Get the cube's position relative to its parent piece
+            const cubeRelativePos = cube.position.clone();
+
+            // Apply the new rotation if provided
+            if (newRotationMatrix) {
+                cubeRelativePos.applyMatrix4(newRotationMatrix);
+            }
+
+            // Calculate the proposed absolute world position of the cube
+            const cubeWorldPos = new THREE.Vector3()
+                .copy(cubeRelativePos)
+                .add(proposedWorldPos);
+
+            // Convert world position to grid coordinates (integer indices)
+            const gridX = Math.round((cubeWorldPos.x - GRID_OFFSET_X) / CUBE_SIZE);
+            const gridY = Math.round((cubeWorldPos.y - GRID_OFFSET_Y) / CUBE_SIZE);
+            const gridZ = Math.round((cubeWorldPos.z - GRID_OFFSET_Z) / CUBE_SIZE);
+
+            // Check for collision with grid boundaries
+            if (gridX < 0 || gridX >= GRID_WIDTH ||
+                gridY < 0 || gridY >= GRID_HEIGHT ||
+                gridZ < 0 || gridZ >= GRID_DEPTH) {
+                return true; // Collision with boundary
+            }
+
+            // Check for collision with existing blocks in the grid
+            // Ensure gridY is within bounds before accessing
+            if (gameGrid[gridX] && gameGrid[gridX][gridY] && gameGrid[gridX][gridY][gridZ] !== null) {
+                return true; // Collision with an occupied grid cell
+            }
+        }
+        return false; // No collision detected
+    }
+
+    // Locks the current piece into the game grid
+    function lockPiece() {
+        if (!currentPiece) return;
+
+        currentPiece.children.forEach(cube => {
+            if (cube.isMesh) {
+                // Convert cube's world position to grid coordinates
+                cube.updateMatrixWorld(true); // Ensure world matrix is up to date
+                const worldPos = new THREE.Vector3();
+                cube.getWorldPosition(worldPos);
+
+                const gridX = Math.round((worldPos.x - GRID_OFFSET_X) / CUBE_SIZE);
+                const gridY = Math.round((worldPos.y - GRID_OFFSET_Y) / CUBE_SIZE);
+                const gridZ = Math.round((worldPos.z - GRID_OFFSET_Z) / CUBE_SIZE);
+
+                // Ensure the cube is placed correctly in the scene's root
+                // Remove from currentPiece group and add directly to scene
+                currentPiece.remove(cube);
+                scene.add(cube);
+                placedBlocks.push(cube);
+
+                // Set its position directly based on grid coordinates for precision
+                cube.position.set(
+                    gridX * CUBE_SIZE + GRID_OFFSET_X,
+                    gridY * CUBE_SIZE + GRID_OFFSET_Y,
+                    gridZ * CUBE_SIZE + GRID_OFFSET_Z
+                );
+
+                // Store reference in the game grid
+                if (gridX >= 0 && gridX < GRID_WIDTH &&
+                    gridY >= 0 && gridY < GRID_HEIGHT &&
+                    gridZ >= 0 && gridZ < GRID_DEPTH) {
+                    gameGrid[gridX][gridY][gridZ] = cube;
+                }
+            }
+        });
+        scene.remove(currentPiece); // Remove the empty group
+        currentPiece = null; // No current piece until a new one spawns
+        clearLines(); // Check for and clear completed lines
+        spawnNewPiece(); // Spawn the next piece
+    }
+
+    // Checks for and clears completed lines
+    function clearLines() {
+        let linesClearedThisTurn = 0;
+
+        // Iterate through each layer (Y-level) from bottom to top
+        for (let y = 0; y < GRID_HEIGHT; y++) {
+            let isLineFull = true;
+            // For 3D Tetris, we might check full planes, but for classic, it's a 2D slice
+            // Let's assume a 2D plane for now (ignore Z-dimension for line clearing)
+            // Or, for 3D, check if a full XZ plane at this Y is complete.
+            // For now, let's simplify to 2D for classic Tetris feel.
+            // A full 'plane' in 3D would mean all gridX and gridZ at a given gridY are filled.
+
+            // Simplification: Check if a horizontal "slice" is full
+            // (meaning all cells at this Y level are occupied across X and Z)
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                for (let z = 0; z < GRID_DEPTH; z++) {
+                    if (gameGrid[x][y][z] === null) {
+                        isLineFull = false;
+                        break; // Not a full slice, move to next Y
+                    }
+                }
+                if (!isLineFull) break;
+            }
+
+            if (isLineFull) {
+                linesClearedThisTurn++;
+                // Remove all blocks in this full layer from scene and grid
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    for (let z = 0; z < GRID_DEPTH; z++) {
+                        const cubeToRemove = gameGrid[x][y][z];
+                        if (cubeToRemove) {
+                            scene.remove(cubeToRemove);
+                            // Also remove from placedBlocks array
+                            const index = placedBlocks.indexOf(cubeToRemove);
+                            if (index > -1) {
+                                placedBlocks.splice(index, 1);
+                            }
+                            gameGrid[x][y][z] = null;
+                        }
+                    }
+                }
+
+                // Move all blocks above this cleared line down by one unit
+                for (let yy = y + 1; yy < GRID_HEIGHT; yy++) {
+                    for (let x = 0; x < GRID_WIDTH; x++) {
+                        for (let z = 0; z < GRID_DEPTH; z++) {
+                            const block = gameGrid[x][yy][z];
+                            if (block) {
+                                gameGrid[x][yy][z] = null; // Clear old position
+                                gameGrid[x][yy - 1][z] = block; // Move to new position in grid
+                                block.position.y -= CUBE_SIZE; // Move block down visually
+                            }
+                        }
+                    }
+                }
+                // Decrement y to re-check the now-lower layer (as blocks have shifted down)
+                y--;
+            }
+        }
+        if (linesClearedThisTurn > 0) {
+            updateScore(linesClearedThisTurn);
+        }
+    }
+
+    function updateScore(lines) {
+        let points = 0;
+        switch(lines) {
+            case 1: points = 100; break;
+            case 2: points = 300; break;
+            case 3: points = 500; break;
+            case 4: points = 800; break; // "Tetris!"
+            default: points = lines * 50; // For more than 4, or odd cases
+        }
+        score += points;
+        updateScoreDisplay();
+    }
+
+    function updateScoreDisplay() {
+        if (scoreElement) {
+            scoreElement.textContent = `Score: ${score}`;
+        }
     }
 
     init();
     animate();
 
     function init() {
+      // Get score display element
+      scoreElement = document.getElementById('score');
+      updateScoreDisplay();
+
       // Create the main scene
       scene = new THREE.Scene();
 
@@ -164,13 +420,11 @@
       document.body.appendChild(renderer.domElement);
 
       // Add the AR button to the body. It will handle session start/end.
-      // We pass the renderer and a session configuration object.
-      // 'local-floor' and 'hit-test' are required for controller interaction and placement.
       const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
       arButton.id = 'arButton'; // Assign ID for custom styling
       document.body.appendChild(arButton);
 
-      // Add lights to the scene (from index-AR-matrix-spheres-lasers.html)
+      // Add lights to the scene
       const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
       scene.add(ambientLight);
       const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -208,11 +462,23 @@
       laser2 = new THREE.Line(laserGeometry, laserMaterial2);
       controller2.add(laser2);
 
-      // Add event listeners for controller 'selectend' (trigger/click)
+      // Add event listeners for controller 'select' and 'squeeze' actions
+      controller1.addEventListener('selectstart', onSelectStart1);
       controller1.addEventListener('selectend', onSelectEnd1);
-      controller2.addEventListener('selectend', onSelectEnd2);
+      controller1.addEventListener('squeezestart', onSqueezeStart1);
+      controller1.addEventListener('squeezeend', onSqueezeEnd1);
 
-      // Add a listener to handle window resizing, which is good practice.
+      controller2.addEventListener('selectstart', onSelectStart2);
+      controller2.addEventListener('selectend', onSelectEnd2);
+      controller2.addEventListener('squeezestart', onSqueezeStart2);
+      controller2.addEventListener('squeezeend', onSqueezeEnd2);
+
+      // Initialize the game grid
+      initializeGameGrid();
+      // Spawn the first piece
+      spawnNewPiece();
+
+      // Add a listener to handle window resizing.
       window.addEventListener('resize', onWindowResize, false);
     }
 
@@ -222,166 +488,206 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
-    // Function to change the color of a Tetris piece
-    function changeTetrisPieceColor(piece) {
-        if (!piece || piece.children.length === 0) return;
-
-        let currentMaterial = piece.children[0].material;
-        let currentIndex = pieceColorIndices.get(piece);
-
-        if (typeof currentIndex === 'undefined' || currentIndex === -1) {
-            // If the piece's current color isn't in our palette, start from 0
-            currentIndex = 0;
-        } else {
-            currentIndex = (currentIndex + 1) % pieceChangeColors.length;
-        }
-
-        const newColor = pieceChangeColors[currentIndex];
-        // Apply the new color to all cubes within the piece group
-        piece.children.forEach(cube => {
-            if (cube.isMesh) {
-                // Ensure we're updating the correct type of material if it changes
-                if (cube.material.isMeshBasicMaterial) {
-                    cube.material.color.setHex(newColor);
-                } else if (cube.material.isMeshStandardMaterial) {
-                    cube.material.color.setHex(newColor);
-                }
-                // If you use MeshPhongMaterial etc., add similar logic here
-            }
-        });
-        pieceColorIndices.set(piece, currentIndex); // Update the stored index
-    }
-
-
+    // --- Controller Event Handlers ---
+    function onSelectStart1() { controller1SelectPressed = true; }
     function onSelectEnd1() {
-        // Change laser color on selection
-        currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
-        laser1.material.color.setHex(laserColors[currentColorIndex1]);
-        laser1.material.opacity = 1;
-        laser1.scale.z = 1; // Reset scale for selection feedback
+        if (controller1SelectPressed) {
+            // Cycle laser color (original demo functionality)
+            currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
+            laser1.material.color.setHex(laserColors[currentColorIndex1]);
 
-        // If a piece was intersected, change its color
-        if (intersectedPiece1) {
-            changeTetrisPieceColor(intersectedPiece1);
+            // Attempt to rotate the current piece
+            rotatePiece(currentPiece);
+            controller1SelectPressed = false;
         }
     }
 
+    function onSqueezeStart1() { controller1SqueezePressed = true; }
+    function onSqueezeEnd1() {
+        if (controller1SqueezePressed) {
+            // Attempt to move piece down quickly ("soft drop")
+            movePiece(currentPiece, 0, -1, 0);
+            controller1SqueezePressed = false;
+        }
+    }
+
+    function onSelectStart2() { controller2SelectPressed = true; }
     function onSelectEnd2() {
-        // Change laser color on selection
-        currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
-        laser2.material.color.setHex(laserColors[currentColorIndex2]);
-        laser2.material.opacity = 1;
-        laser2.scale.z = 1; // Reset scale for selection feedback
+        if (controller2SelectPressed) {
+            // Cycle laser color (original demo functionality)
+            currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
+            laser2.material.color.setHex(laserColors[currentColorIndex2]);
 
-        // If a piece was intersected, change its color
-        if (intersectedPiece2) {
-            changeTetrisPieceColor(intersectedPiece2);
+            // Attempt to hard drop the piece (move to bottom instantly)
+            hardDropPiece(currentPiece);
+            controller2SelectPressed = false;
         }
     }
 
+    function onSqueezeStart2() { controller2SqueezePressed = true; }
+    function onSqueezeEnd2() {
+        if (controller2SqueezePressed) {
+            // Attempt to move piece right
+            movePiece(currentPiece, 1, 0, 0);
+            controller2SqueezePressed = false;
+        }
+    }
+
+
+    // Function to rotate a Tetris piece
+    function rotatePiece(piece) {
+        if (!piece) return;
+
+        // Store current rotation and position
+        const currentQuaternion = piece.quaternion.clone();
+        const currentPosition = piece.position.clone();
+
+        // Apply a test rotation (e.g., 90 degrees around Y axis)
+        const rotationAmount = Math.PI / 2; // 90 degrees in radians
+        piece.rotateOnAxis(new THREE.Vector3(0, 1, 0), rotationAmount); // Rotate around Y-axis
+
+        // To check for collisions after rotation, we need to apply the rotation to the *cube's local positions*
+        // relative to the piece's origin, and then check against the grid.
+        // It's tricky to get this perfect without a proper "wall kick" system for Tetris,
+        // but for a basic version, we can check based on the new world positions of the cubes.
+
+        // Simpler collision check for rotation:
+        // Temporarily apply the rotation to a clone or reconstruct world positions for collision check
+        // For simplicity, let's just use a collision check function that *can* take a new rotation matrix.
+        // This is a simplified approach and might not match official Tetris wall kicks.
+
+        // Get the proposed transformation matrix for collision check
+        const newRotationMatrix = new THREE.Matrix4().makeRotationFromQuaternion(piece.quaternion);
+
+        if (checkCollision(piece, 0, 0, 0, newRotationMatrix)) {
+            // Collision detected, revert rotation
+            piece.quaternion.copy(currentQuaternion);
+        } else {
+            // No collision, rotation is valid
+            // The piece is already rotated, so nothing more to do here.
+            // If you wanted a more complex system where a "ghost" piece is rotated and then applied,
+            // you'd do that here.
+        }
+    }
+
+
+    // Function to move a Tetris piece by dx, dy, dz grid units
+    function movePiece(piece, dx, dy, dz) {
+        if (!piece) return;
+
+        if (!checkCollision(piece, dx, dy, dz)) {
+            piece.position.x += dx * CUBE_SIZE;
+            piece.position.y += dy * CUBE_SIZE;
+            piece.position.z += dz * CUBE_SIZE;
+            return true; // Move successful
+        }
+        return false; // Collision prevented move
+    }
+
+    // Function to "hard drop" a piece
+    function hardDropPiece(piece) {
+        if (!piece) return;
+
+        let moved = true;
+        while (moved) {
+            moved = movePiece(piece, 0, -1, 0); // Keep moving down until collision
+        }
+        lockPiece(); // Lock the piece once it can't move down anymore
+    }
 
     function animate() {
       // Use the renderer's built-in animation loop, which is XR-aware.
-      // This will call the 'render' function on every frame.
       renderer.setAnimationLoop(render);
     }
 
     // This function is called every frame
     function render(timestamp, frame) {
-      // Spawn a new piece if enough time has passed
-      if (timestamp - lastPieceSpawnTime > SPAWN_INTERVAL) {
-        const pieceTypes = Object.keys(TETRIS_PIECES);
-        const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
-        const newPiece = createTetrisPiece(randomType);
-
-        if (newPiece) {
-          // Position the new piece "in the sky" (higher Y), slightly varied X and Z
-          // Adjusted spawning to be within a narrower, more central range
-          newPiece.position.set(
-            (Math.random() - 0.5) * 0.5, // -0.25 to 0.25 meters X
-            2.5 + (Math.random() * 0.5), // 2.5 to 3 meters above the origin
-            -1.5 - (Math.random() * 0.5) // 1.5 to 2 meters in front of the user
-          );
-          scene.add(newPiece);
-          fallingPieces.push(newPiece);
-          lastPieceSpawnTime = timestamp;
+      // Automatic piece falling (gravity)
+      if (currentPiece && (timestamp - lastFallTime > FALL_INTERVAL)) {
+        if (!movePiece(currentPiece, 0, -1, 0)) { // Attempt to move down
+          // If move failed (collision), lock the piece
+          lockPiece();
         }
+        lastFallTime = timestamp; // Reset fall timer
       }
 
-      // Update positions of all falling pieces
-      for (let i = fallingPieces.length - 1; i >= 0; i--) {
-        const piece = fallingPieces[i];
-        piece.position.y -= FALL_SPEED;
-
-        // Remove pieces that have fallen too far below the floor (e.g., -2 meters below origin)
-        // Adjust this threshold based on how far you want them to fall "through"
-        if (piece.position.y < -2) {
-          scene.remove(piece);
-          fallingPieces.splice(i, 1);
-          pieceColorIndices.delete(piece); // Clean up color index map
-        }
-      }
-
-      // --- Controller Laser and Raycasting Logic ---
+      // --- Controller Laser Logic (original demo functionality) ---
       const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
-      const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0; // Base pulsing length
+      const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0;
 
-      // Apply pulsing to lasers (will be overridden if hit by raycaster)
       laser1.material.opacity = opacityPulse;
       laser2.material.opacity = opacityPulse;
       laser1.scale.z = lengthPulse;
       laser2.scale.z = lengthPulse;
 
-      // Get all individual cubes from all falling pieces for raycasting
-      const interactiveObjects = [];
-      fallingPieces.forEach(pieceGroup => {
-          pieceGroup.children.forEach(cube => {
-              if (cube.isMesh) {
-                  interactiveObjects.push(cube);
+      // Update controllers (needed for raycasting)
+      if (renderer.xr.isPresenting) {
+          const session = renderer.xr.getSession();
+          if (session) {
+              for (const source of session.inputSources) {
+                  if (source.hand) {
+                      // Handle hand tracking if needed, otherwise skip
+                      continue;
+                  }
+                  const controller = renderer.xr.getController(source.gamepad.index);
+                  if (controller) {
+                      // Get current state of buttons for continuous movement
+                      const gamepad = source.gamepad;
+                      // Primary button (e.g., A/X on Oculus, Trigger on Vive) is index 0
+                      // Squeeze button (grip) is often index 1 or 2, depending on controller
+                      // Joystick/thumbstick is usually gamepad.axes array
+                      if (gamepad && gamepad.axes && currentPiece) {
+                          // Assuming axis 2 is X-axis for joystick/thumbstick
+                          const xMovement = gamepad.axes[2]; // Typically -1 (left) to 1 (right)
+                          // Assuming axis 3 is Y-axis for joystick/thumbstick
+                          const yMovement = gamepad.axes[3]; // Typically -1 (up) to 1 (down)
+
+                          // Implement horizontal movement with a threshold and debouncing
+                          const moveThreshold = 0.7; // Sensitivity for joystick movement
+                          const moveDebounceTime = 150; // Milliseconds to wait between moves
+                          const now = performance.now();
+
+                          // For simplicity, we'll map controller 1 to left/right movement
+                          // and controller 2 to forward/backward (Z) movement,
+                          // or you can pick one controller for all movement.
+                          // Let's use controller 1 for horizontal (X) and controller 2 for Z.
+
+                          if (controller === controller1) {
+                              if (xMovement < -moveThreshold) { // Move left
+                                  if (!controller1.userData.lastMoveTime || now - controller1.userData.lastMoveTime > moveDebounceTime) {
+                                      movePiece(currentPiece, -1, 0, 0);
+                                      controller1.userData.lastMoveTime = now;
+                                  }
+                              } else if (xMovement > moveThreshold) { // Move right
+                                  if (!controller1.userData.lastMoveTime || now - controller1.userData.lastMoveTime > moveDebounceTime) {
+                                      movePiece(currentPiece, 1, 0, 0);
+                                      controller1.userData.lastMoveTime = now;
+                                  }
+                              } else {
+                                  controller1.userData.lastMoveTime = 0; // Reset debounce if joystick is central
+                              }
+                          } else if (controller === controller2) {
+                              if (yMovement < -moveThreshold) { // Move forward (towards -Z)
+                                  if (!controller2.userData.lastMoveTime || now - controller2.userData.lastMoveTime > moveDebounceTime) {
+                                      movePiece(currentPiece, 0, 0, -1);
+                                      controller2.userData.lastMoveTime = now;
+                                  }
+                              } else if (yMovement > moveThreshold) { // Move backward (towards +Z)
+                                  if (!controller2.userData.lastMoveTime || now - controller2.userData.lastMoveTime > moveDebounceTime) {
+                                      movePiece(currentPiece, 0, 0, 1);
+                                      controller2.userData.lastMoveTime = now;
+                                  }
+                              } else {
+                                  controller2.userData.lastMoveTime = 0; // Reset debounce
+                              }
+                          }
+                      }
+                  }
               }
-          });
-      });
-
-      // Raycasting for controller 1
-      tempMatrix.identity().extractRotation(controller1.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-      const intersects1 = raycaster.intersectObjects(interactiveObjects, false); // No recursion needed, cubes are direct children
-
-      if (intersects1.length > 0) {
-          // If intersected, find the parent Tetris piece group
-          intersectedPiece1 = intersects1[0].object.parent;
-          // Shorten the laser to the hit point
-          const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller1.matrixWorld);
-          const distance = controllerWorldPos.distanceTo(intersects1[0].point);
-          laser1.scale.z = distance / 5; // Original laser length is 5
-      } else {
-          intersectedPiece1 = null;
-          // Reset laser length to pulsing default if no intersection
-          laser1.scale.z = lengthPulse;
-      }
-
-      // Raycasting for controller 2
-      tempMatrix.identity().extractRotation(controller2.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-      const intersects2 = raycaster.intersectObjects(interactiveObjects, false); // No recursion needed
-
-      if (intersects2.length > 0) {
-          intersectedPiece2 = intersects2[0].object.parent;
-          // Shorten the laser to the hit point
-          const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
-          const distance = controllerWorldPos.distanceTo(intersects2[0].point);
-          laser2.scale.z = distance / 5; // Original laser length is 5
-      } else {
-          intersectedPiece2 = null;
-          // Reset laser length to pulsing default if no intersection
-          laser2.scale.z = lengthPulse;
+          }
       }
 
       // Render the scene with the camera.
-      // In an AR session, Three.js will automatically handle rendering
-      // for each eye and clearing the background for passthrough.
       renderer.render(scene, camera);
     }
   </script>
