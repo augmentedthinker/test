@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Retro Handheld AR Demo</title>
+  <title>WebXR AR Arcade Cabinet</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -9,8 +9,6 @@
       margin: 0;
       padding: 0;
       font-family: sans-serif;
-      background-color: #111;
-      color: #fff;
     }
     #info {
       position: absolute;
@@ -20,14 +18,18 @@
       z-index: 100;
       display: block;
       padding: 10px 0;
+      color: white;
+      background-color: rgba(0,0,0,0.2);
     }
+    /* AR Button styles are handled by the ARButton script below */
   </style>
 </head>
 <body>
   <div id="info">
-    Life-Size Arcade Cabinet - WebXR AR Demo
+    WebXR Arcade Cabinet Demo
   </div>
 
+  <!-- Using an import map is a modern way to define module locations -->
   <script type="importmap">
     {
       "imports": {
@@ -37,57 +39,31 @@
   </script>
 
   <script type="module">
+    // Import the main Three.js library
     import * as THREE from 'three';
 
-    // --- Inlined ARButton.js ---
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
     class ARButton {
       static createButton(renderer, sessionInit = {}) {
         const button = document.createElement('button');
 
         function showStartAR( /*device*/ ) {
-          if (sessionInit.domOverlay === undefined) {
-            const overlay = document.createElement('div');
-            overlay.style.display = 'none';
-            document.body.appendChild(overlay);
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', 38);
-            svg.setAttribute('height', 38);
-            svg.style.position = 'absolute';
-            svg.style.right = '20px';
-            svg.style.top = '20px';
-            svg.addEventListener('click', function() {
-              currentSession.end();
-            });
-            overlay.appendChild(svg);
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
-            path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', 2);
-            svg.appendChild(path);
-            if (sessionInit.optionalFeatures === undefined) {
-              sessionInit.optionalFeatures = [];
-            }
-            sessionInit.optionalFeatures.push('dom-overlay');
-            sessionInit.domOverlay = {
-              root: overlay
-            };
-          }
-
           let currentSession = null;
 
           async function onSessionStarted(session) {
             session.addEventListener('end', onSessionEnded);
-            renderer.xr.setReferenceSpaceType('local');
+            // Using 'local-floor' will place the origin at the user's feet,
+            // which is ideal for placing objects on the ground.
+            renderer.xr.setReferenceSpaceType('local-floor');
             await renderer.xr.setSession(session);
             button.textContent = 'STOP AR';
-            sessionInit.domOverlay.root.style.display = '';
             currentSession = session;
           }
 
           function onSessionEnded( /*event*/ ) {
             currentSession.removeEventListener('end', onSessionEnded);
             button.textContent = 'START AR';
-            sessionInit.domOverlay.root.style.display = 'none';
             currentSession = null;
           }
 
@@ -96,12 +72,7 @@
           button.style.left = 'calc(50% - 50px)';
           button.style.width = '100px';
           button.textContent = 'START AR';
-          button.onmouseenter = function() {
-            button.style.opacity = '1.0';
-          };
-          button.onmouseleave = function() {
-            button.style.opacity = '0.5';
-          };
+          
           button.onclick = function() {
             if (currentSession === null) {
               navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
@@ -136,7 +107,7 @@
           element.style.color = '#fff';
           element.style.font = 'normal 13px sans-serif';
           element.style.textAlign = 'center';
-          element.style.opacity = '0.5';
+          element.style.opacity = '0.9';
           element.style.outline = 'none';
           element.style.zIndex = '999';
         }
@@ -173,140 +144,133 @@
     init();
     animate();
 
-    function createArcadeCabinet() {
-      const cabinetGroup = new THREE.Group();
-      
-      // Life-size arcade cabinet dimensions
-      const bodyWidth = 0.6;   // 60cm wide
-      const bodyHeight = 1.8;  // 180cm tall (6 feet)
-      const bodyDepth = 0.8;   // 80cm deep
-      
-      // Main cabinet body
-      const bodyGeometry = new THREE.BoxGeometry(bodyWidth, bodyHeight, bodyDepth);
-      const bodyMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-      const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
-      body.position.y = bodyHeight / 2; // Lift cabinet so it sits on ground
-      cabinetGroup.add(body);
-      
-      // Monitor section (upper part)
-      const monitorSectionHeight = 0.6; // 60cm
-      const monitorSectionGeometry = new THREE.BoxGeometry(bodyWidth - 0.1, monitorSectionHeight, 0.4);
-      const monitorSectionMaterial = new THREE.MeshLambertMaterial({ color: 0x222222 });
-      const monitorSection = new THREE.Mesh(monitorSectionGeometry, monitorSectionMaterial);
-      monitorSection.position.y = bodyHeight - (monitorSectionHeight / 2) - 0.1;
-      monitorSection.position.z = 0.1;
-      cabinetGroup.add(monitorSection);
-      
-      // Screen (large CRT-style)
-      const screenGeometry = new THREE.BoxGeometry(0.4, 0.3, 0.05);
-      const screenMaterial = new THREE.MeshLambertMaterial({ color: 0x001100 });
-      const screen = new THREE.Mesh(screenGeometry, screenMaterial);
-      screen.position.y = bodyHeight - (monitorSectionHeight / 2) - 0.05;
-      screen.position.z = 0.3;
-      cabinetGroup.add(screen);
-      
-      // Control panel (angled surface)
-      const controlPanelGeometry = new THREE.BoxGeometry(bodyWidth - 0.05, 0.15, 0.4);
-      const controlPanelMaterial = new THREE.MeshLambertMaterial({ color: 0x444444 });
-      const controlPanel = new THREE.Mesh(controlPanelGeometry, controlPanelMaterial);
-      controlPanel.position.y = bodyHeight - monitorSectionHeight - 0.2;
-      controlPanel.position.z = 0.15;
-      controlPanel.rotation.x = -Math.PI / 8; // Angle the control panel
-      cabinetGroup.add(controlPanel);
-      
-      // Joystick (left side) - RED
-      const joystickStickGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.15, 8);
-      const joystickMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // RED
-      const joystickStick = new THREE.Mesh(joystickStickGeometry, joystickMaterial);
-      joystickStick.position.x = -bodyWidth / 4;
-      joystickStick.position.y = bodyHeight - monitorSectionHeight - 0.1;
-      joystickStick.position.z = 0.25;
-      cabinetGroup.add(joystickStick);
-      
-      // Joystick ball
-      const joystickBallGeometry = new THREE.SphereGeometry(0.04, 8, 8);
-      const joystickBall = new THREE.Mesh(joystickBallGeometry, joystickMaterial);
-      joystickBall.position.copy(joystickStick.position);
-      joystickBall.position.y += 0.08;
-      cabinetGroup.add(joystickBall);
-      
-      // Action buttons (right side) - RED
-      const buttonGeometry = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 8);
-      const buttonMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 }); // RED
-      
-      // Button layout (2x2 grid)
-      const buttonPositions = [
-        { x: bodyWidth / 6, y: bodyHeight - monitorSectionHeight - 0.08, z: 0.3 },
-        { x: bodyWidth / 4, y: bodyHeight - monitorSectionHeight - 0.08, z: 0.3 },
-        { x: bodyWidth / 6, y: bodyHeight - monitorSectionHeight - 0.12, z: 0.3 },
-        { x: bodyWidth / 4, y: bodyHeight - monitorSectionHeight - 0.12, z: 0.3 }
-      ];
-      
-      buttonPositions.forEach(pos => {
-        const button = new THREE.Mesh(buttonGeometry, buttonMaterial);
-        button.position.set(pos.x, pos.y, pos.z);
-        button.rotation.x = Math.PI / 2;
-        cabinetGroup.add(button);
-      });
-      
-      // Base/pedestal
-      const baseGeometry = new THREE.BoxGeometry(bodyWidth + 0.1, 0.1, bodyDepth + 0.1);
-      const baseMaterial = new THREE.MeshLambertMaterial({ color: 0x555555 });
-      const base = new THREE.Mesh(baseGeometry, baseMaterial);
-      base.position.y = 0.05;
-      cabinetGroup.add(base);
-      
-      // Side panels with retro styling
-      const sidePanelGeometry = new THREE.BoxGeometry(0.05, bodyHeight - 0.2, bodyDepth - 0.2);
-      const sidePanelMaterial = new THREE.MeshLambertMaterial({ color: 0x666666 });
-      
-      const leftSidePanel = new THREE.Mesh(sidePanelGeometry, sidePanelMaterial);
-      leftSidePanel.position.x = -(bodyWidth / 2) - 0.025;
-      leftSidePanel.position.y = bodyHeight / 2;
-      cabinetGroup.add(leftSidePanel);
-      
-      const rightSidePanel = new THREE.Mesh(sidePanelGeometry, sidePanelMaterial);
-      rightSidePanel.position.x = (bodyWidth / 2) + 0.025;
-      rightSidePanel.position.y = bodyHeight / 2;
-      cabinetGroup.add(rightSidePanel);
-      
-      return cabinetGroup;
-    }
-
     function init() {
+      // Create the main scene
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 40);
+
+      // Create the WebGL renderer and configure it for XR.
       renderer = new THREE.WebGLRenderer({
         antialias: true,
-        alpha: true
+        alpha: true // alpha: true is required for AR passthrough
       });
       renderer.setSize(window.innerWidth, window.innerHeight);
       renderer.xr.enabled = true;
-      renderer.shadowMap.enabled = true;
-      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       document.body.appendChild(renderer.domElement);
 
+      // Add the AR button to the body.
+      // We request 'local-floor' to make placing the cabinet on the real-world floor easier.
       document.body.appendChild(ARButton.createButton(renderer, {
-        requiredFeatures: ['local']
+        requiredFeatures: ['local-floor']
       }));
 
-      // Create the arcade cabinet
-      arcadeCabinet = createArcadeCabinet();
-      arcadeCabinet.position.set(0, 0, -2); // Position in center, 2 meters away
+      // --- Create the Arcade Cabinet ---
+      // We will build the cabinet from several parts and group them together.
+      // Dimensions are converted from feet to meters (1 foot = 0.3048 meters).
+      
+      arcadeCabinet = new THREE.Group();
+
+      // Define materials
+      const bodyMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 });
+      const screenMaterial = new THREE.MeshBasicMaterial({ color: 0x1a1a1a });
+      const controlMaterial = new THREE.MeshStandardMaterial({ color: 0x444444, roughness: 0.6 });
+      const buttonMaterial = new THREE.MeshStandardMaterial({ color: 0xdd4444, roughness: 0.5 });
+      const dpadMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
+
+
+      // Dimensions in meters
+      const cabinetWidth = 2 * 0.3048; // 0.6096
+      const cabinetDepth = 4 * 0.3048; // 1.2192
+      const cabinetHeight = 6 * 0.3048; // 1.8288
+      const lowerBodyHeight = 3 * 0.3048; // 0.9144
+      const controlPanelDepth = 2 * 0.3048; // 0.6096
+
+      // 1. Main lower body
+      const lowerBodyGeom = new THREE.BoxGeometry(cabinetWidth, lowerBodyHeight, cabinetDepth);
+      const lowerBody = new THREE.Mesh(lowerBodyGeom, bodyMaterial);
+      lowerBody.position.set(0, lowerBodyHeight / 2, 0);
+      arcadeCabinet.add(lowerBody);
+
+      // 2. Upper marquee/screen area
+      // This part is slanted. We can create it with a custom shape.
+      const upperHeight = cabinetHeight - lowerBodyHeight;
+      const upperBackDepth = 2 * 0.3048; // 0.6096
+      
+      const shape = new THREE.Shape();
+      shape.moveTo(0, 0);
+      shape.lineTo(cabinetDepth, 0);
+      shape.lineTo(upperBackDepth, upperHeight);
+      shape.lineTo(0, upperHeight);
+      shape.lineTo(0, 0);
+
+      const extrudeSettings = {
+          steps: 2,
+          depth: cabinetWidth,
+          bevelEnabled: false,
+      };
+
+      const upperBodyGeom = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+      const upperBody = new THREE.Mesh(upperBodyGeom, bodyMaterial);
+      // Position it correctly relative to the lower body
+      upperBody.position.set(-cabinetWidth / 2, lowerBodyHeight, -cabinetDepth / 2);
+      upperBody.rotation.y = -Math.PI / 2;
+      arcadeCabinet.add(upperBody);
+
+
+      // 3. Screen
+      const screenGeom = new THREE.BoxGeometry(cabinetWidth * 0.8, upperHeight * 0.5, 0.02);
+      const screen = new THREE.Mesh(screenGeom, screenMaterial);
+      screen.position.set(0, 1.3, -0.45);
+      screen.rotation.x = 0.4; // Tilt the screen back slightly
+      arcadeCabinet.add(screen);
+
+      // 4. Control Panel
+      const controlPanelGeom = new THREE.BoxGeometry(cabinetWidth, 0.1, controlPanelDepth);
+      const controlPanel = new THREE.Mesh(controlPanelGeom, controlMaterial);
+      controlPanel.position.set(0, lowerBodyHeight, -(cabinetDepth - controlPanelDepth) / 2);
+      arcadeCabinet.add(controlPanel);
+
+      // 5. Buttons and D-Pad (as simple shapes)
+      const buttonGeom = new THREE.CylinderGeometry(0.04, 0.04, 0.02, 16);
+      const button1 = new THREE.Mesh(buttonGeom, buttonMaterial);
+      button1.position.set(0.15, lowerBodyHeight + 0.06, -0.7);
+      button1.rotation.x = Math.PI / 2;
+      arcadeCabinet.add(button1);
+
+      const button2 = new THREE.Mesh(buttonGeom, buttonMaterial);
+      button2.position.set(0.25, lowerBodyHeight + 0.06, -0.8);
+      button2.rotation.x = Math.PI / 2;
+      arcadeCabinet.add(button2);
+      
+      const dpadCrossGeom = new THREE.BoxGeometry(0.05, 0.15, 0.02);
+      const dpadH = new THREE.Mesh(dpadCrossGeom, dpadMaterial);
+      dpadH.position.set(-0.15, lowerBodyHeight + 0.06, -0.8);
+      
+      const dpadV = new THREE.Mesh(dpadCrossGeom, dpadMaterial);
+      dpadV.rotation.z = Math.PI/2;
+      dpadH.add(dpadV); // Add vertical part to horizontal part
+      arcadeCabinet.add(dpadH);
+
+
+      // Position the entire cabinet 2.5 meters in front of the user.
+      // The Y position is 0 because 'local-floor' reference space puts the origin on the floor.
+      arcadeCabinet.position.set(0, 0, -2.5);
+      
+      // Add the final grouped cabinet to the scene.
       scene.add(arcadeCabinet);
 
-      // Enhanced lighting
-      const ambientLight = new THREE.AmbientLight(0x404040, 0.3);
-      scene.add(ambientLight);
+      // Add a light to the scene to see the MeshStandardMaterial.
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
       
-      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-      directionalLight.position.set(5, 5, 5);
-      directionalLight.castShadow = true;
-      directionalLight.shadow.mapSize.width = 2048;
-      directionalLight.shadow.mapSize.height = 2048;
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 2);
+      directionalLight.position.set(0, 1.5, -1);
       scene.add(directionalLight);
 
+      // Add a listener to handle window resizing.
       window.addEventListener('resize', onWindowResize, false);
     }
 
@@ -317,11 +281,18 @@
     }
 
     function animate() {
+      // Use the renderer's built-in animation loop, which is XR-aware.
       renderer.setAnimationLoop(render);
     }
 
+    // This function is called every frame
     function render(timestamp, frame) {
-      // Cabinet remains stationary - no rotation animation
+      // The 'frame' object is available if an XR session is active.
+      // Three.js's WebXRManager handles the camera updates automatically.
+      
+      // The arcade cabinet is stationary, so no rotation is applied here.
+      
+      // Render the scene with the camera.
       renderer.render(scene, camera);
     }
   </script>
