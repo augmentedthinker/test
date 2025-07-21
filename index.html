@@ -1,80 +1,187 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Quest 2 AR with Controllers (Three.js)</title>
-
-  <!-- Load Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.min.js"></script>
-
-  <!-- Load ARButton for entering AR mode -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/webxr/ARButton.js"></script>
-
-  <!-- Load XRControllerModelFactory for controller visuals -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/webxr/XRControllerModelFactory.js"></script>
-
-  <style>
-    body, html {
-      margin: 0;
-      overflow: hidden;
-      width: 100%;
-      height: 100%;
-      background-color: #000;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR AR with Passthrough and Controllers</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #arButton {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            font-size: 1.2em;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+    </style>
 </head>
 <body>
-<script>
-  // Set up basic Three.js elements: scene, camera, renderer
-  const scene = new THREE.Scene();
+    <button id="arButton">Enter AR</button>
 
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/examples/jsm/webxr/ARButton.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/examples/jsm/webxr/XRControllerModelFactory.js"></script>
+    <script>
+        let camera, scene, renderer;
+        let controller1, controller2;
+        let controllerGrip1, controllerGrip2;
+        let laser1, laser2;
 
-  const renderer = new THREE.WebGLRenderer({ alpha: true }); // alpha:true allows passthrough
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  document.body.appendChild(renderer.domElement);
+        const XRControllerModelFactory = new THREE.XRControllerModelFactory();
 
-  // Add ARButton to enter AR mode
-  document.body.appendChild(ARButton.createButton(renderer, {
-    requiredFeatures: ['local-floor']
-  }));
+        init();
+        animate();
 
-  // Controller setup
-  const controllerModelFactory = new THREE.XRControllerModelFactory();
+        function init() {
+            scene = new THREE.Scene();
 
-  // Function to set up a controller
-  function setupController(index) {
-    const controller = renderer.xr.getController(index);
-    scene.add(controller);
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            camera.position.set(0, 1.6, 0); // Standard height for user
 
-    const controllerGrip = renderer.xr.getControllerGrip(index);
-    const model = controllerModelFactory.createControllerModel(controllerGrip);
-    controllerGrip.add(model);
-    scene.add(controllerGrip);
-  }
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true; // Enable XR for the renderer
+            renderer.setClearAlpha(0); // Make the background transparent for passthrough
+            document.body.appendChild(renderer.domElement);
 
-  // Set up both controllers (left and right)
-  setupController(0); // First controller (right)
-  setupController(1); // Second controller (left)
+            // Add an AR button to the DOM
+            const arButton = document.getElementById('arButton');
+            arButton.addEventListener('click', onEnterAR);
 
-  // Render loop
-  function animate() {
-    renderer.setAnimationLoop(render);
-  }
+            // Setup controllers
+            setupControllers();
 
-  function render() {
-    renderer.render(scene, camera);
-  }
+            window.addEventListener('resize', onWindowResize);
+        }
 
-  animate();
+        function onEnterAR() {
+            if (navigator.xr) {
+                navigator.xr.isSessionSupported('immersive-ar')
+                    .then((supported) => {
+                        if (supported) {
+                            const options = {
+                                requiredFeatures: ['local-floor', 'hit-test', 'hand-tracking'] // Include required features
+                            };
+                            navigator.xr.requestSession('immersive-ar', options)
+                                .then(onSessionStarted)
+                                .catch((error) => {
+                                    console.error('Failed to start AR session', error);
+                                    alert('Failed to start AR session: ' + error.message);
+                                });
+                        } else {
+                            alert('Immersive AR not supported on this device/browser.');
+                        }
+                    })
+                    .catch((error) => {
+                        console.error('Error checking AR session support', error);
+                        alert('Error checking AR session support: ' + error.message);
+                    });
+            } else {
+                alert('WebXR not available in this browser.');
+            }
+        }
 
-  // Resize handling
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-</script>
+        function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setSession(session);
+            document.getElementById('arButton').style.display = 'none'; // Hide button when in AR
+
+            // Optionally, add a light source if you plan to have virtual objects later
+            scene.add(new THREE.HemisphereLight(0x888877, 0x777788));
+
+            console.log("AR Session started.");
+        }
+
+        function onSessionEnded() {
+            document.getElementById('arButton').style.display = 'block'; // Show button when out of AR
+            console.log("AR Session ended.");
+        }
+
+        function setupControllers() {
+            // Controller 1 (Right)
+            controller1 = renderer.xr.getController(0);
+            scene.add(controller1);
+
+            controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrip1.add(XRControllerModelFactory.createControllerModel(controllerGrip1));
+            scene.add(controllerGrip1);
+
+            // Laser pointer for Controller 1
+            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+            laser1 = new THREE.Line(geometry);
+            laser1.name = 'laser1';
+            laser1.scale.z = 5; // Length of the laser
+            controller1.add(laser1);
+            laser1.visible = false; // Initially hide the laser
+
+            controller1.addEventListener('selectstart', () => laser1.visible = true);
+            controller1.addEventListener('selectend', () => laser1.visible = false);
+            controller1.addEventListener('inputsourceschange', onInputSourcesChange); // Handle controller connect/disconnect
+
+            // Controller 2 (Left)
+            controller2 = renderer.xr.getController(1);
+            scene.add(controller2);
+
+            controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerGrip2.add(XRControllerModelFactory.createControllerModel(controllerGrip2));
+            scene.add(controllerGrip2);
+
+            // Laser pointer for Controller 2
+            laser2 = new THREE.Line(geometry.clone());
+            laser2.name = 'laser2';
+            laser2.scale.z = 5;
+            controller2.add(laser2);
+            laser2.visible = false; // Initially hide the laser
+
+            controller2.addEventListener('selectstart', () => laser2.visible = true);
+            controller2.addEventListener('selectend', () => laser2.visible = false);
+            controller2.addEventListener('inputsourceschange', onInputSourcesChange); // Handle controller connect/disconnect
+        }
+
+        function onInputSourcesChange() {
+            // Check if controllers are connected and show/hide their models
+            // The XRControllerModelFactory handles hiding/showing based on connection state
+            // through the renderer.xr.getControllerGrip(index) which is added to the scene.
+            // The lasers are handled by selectstart/selectend, but we can also set initial visibility here
+            // based on controller connection status if needed.
+            if (controller1.inputSource) {
+                controllerGrip1.visible = true;
+            } else {
+                controllerGrip1.visible = false;
+                laser1.visible = false;
+            }
+            if (controller2.inputSource) {
+                controllerGrip2.visible = true;
+            } else {
+                controllerGrip2.visible = false;
+                laser2.visible = false;
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        function render() {
+            // Update controller transforms (handled automatically by Three.js WebXR)
+            // Perform any other scene updates here if needed
+
+            renderer.render(scene, camera);
+        }
+    </script>
 </body>
 </html>
