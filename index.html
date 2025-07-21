@@ -21,7 +21,35 @@
       display: block;
       padding: 10px 0;
     }
-    /* AR Button styles are handled by the ARButton script below */
+    /* AR Button styles from index-AR-matrix-spheres-lasers.html */
+    #arButton {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 75px 150px;
+        font-size: 90px;
+        background-color: #000080; /* Dark blue */
+        color: white;
+        border: 10px solid #000050;
+        border-radius: 25px;
+        font-weight: bold;
+        text-shadow: 3px 3px 6px rgba(0, 0, 0, 0.7);
+        box-shadow: 0 0 60px rgba(0, 0, 128, 0.8);
+        cursor: pointer;
+        z-index: 1000;
+        transition: all 0.2s ease-in-out;
+      }
+      #arButton:hover {
+        background-color: #FF0000; /* Fiery red on hover */
+        box-shadow: 0 0 90px rgba(255, 0, 0, 0.9);
+        transform: translateX(-50%) scale(1.03);
+      }
+      #arButton:active {
+        background-color: #CC0000; /* Darker red when pressed */
+        transform: translateX(-50%) scale(0.98);
+        box-shadow: 0 0 50px rgba(255, 0, 0, 0.9);
+      }
   </style>
 </head>
 <body>
@@ -32,8 +60,7 @@
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
       }
     }
   </script>
@@ -41,143 +68,8 @@
   <script type="module">
     // Import the main Three.js library
     import * as THREE from 'three';
-    [cite_start]// Import XRControllerModelFactory for loading controller models [cite: 7]
-    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-
-    // --- Inlined ARButton.js from Three.js examples ---
-    // This class creates the "Start AR" button and handles the WebXR session setup.
-    // Inlining it here keeps everything in a single file as requested.
-    class ARButton {
-      static createButton(renderer, sessionInit = {}) {
-        const button = document.createElement('button');
-
-        function showStartAR( /*device*/ ) {
-          if (sessionInit.domOverlay === undefined) {
-            const overlay = document.createElement('div');
-            overlay.style.display = 'none';
-            document.body.appendChild(overlay);
-            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-            svg.setAttribute('width', 38);
-            svg.setAttribute('height', 38);
-            svg.style.position = 'absolute';
-            svg.style.right = '20px';
-            svg.style.top = '20px';
-            svg.addEventListener('click', function() {
-              currentSession.end();
-            });
-            overlay.appendChild(svg);
-            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
-            path.setAttribute('stroke', '#fff');
-            path.setAttribute('stroke-width', 2);
-            svg.appendChild(path);
-            if (sessionInit.optionalFeatures === undefined) {
-              sessionInit.optionalFeatures = [];
-            }
-            sessionInit.optionalFeatures.push('dom-overlay');
-            sessionInit.domOverlay = {
-              root: overlay
-            };
-          }
-
-          let currentSession = null;
-
-          async function onSessionStarted(session) {
-            session.addEventListener('end', onSessionEnded);
-            renderer.xr.setReferenceSpaceType('local');
-            await renderer.xr.setSession(session);
-            button.textContent = 'STOP AR';
-            sessionInit.domOverlay.root.style.display = '';
-            currentSession = session;
-
-            // Trigger controller setup after session starts
-            [cite_start]setupControllers(session); [cite: 5]
-          }
-
-          function onSessionEnded( /*event*/ ) {
-            currentSession.removeEventListener('end', onSessionEnded);
-            button.textContent = 'START AR';
-            sessionInit.domOverlay.root.style.display = 'none';
-            currentSession = null;
-
-            // Clean up controllers when session ends
-            clearControllers();
-          }
-
-          button.style.display = '';
-          button.style.cursor = 'pointer';
-          button.style.left = 'calc(50% - 50px)';
-          button.style.width = '100px';
-          button.textContent = 'START AR';
-          button.onmouseenter = function() {
-            button.style.opacity = '1.0';
-          };
-          button.onmouseleave = function() {
-            button.style.opacity = '0.5';
-          };
-          button.onclick = function() {
-            if (currentSession === null) {
-              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-            } else {
-              currentSession.end();
-            }
-          };
-        }
-
-        function disableButton() {
-          button.style.display = '';
-          button.style.cursor = 'auto';
-          button.style.left = 'calc(50% - 75px)';
-          button.style.width = '150px';
-          button.onmouseenter = null;
-          button.onmouseleave = null;
-          button.onclick = null;
-        }
-
-        function showARNotSupported() {
-          disableButton();
-          button.textContent = 'AR NOT SUPPORTED';
-        }
-
-        function stylizeElement(element) {
-          element.style.position = 'absolute';
-          element.style.bottom = '20px';
-          element.style.padding = '12px 6px';
-          element.style.border = '1px solid #fff';
-          element.style.borderRadius = '4px';
-          element.style.background = 'rgba(0,0,0,0.1)';
-          element.style.color = '#fff';
-          element.style.font = 'normal 13px sans-serif';
-          element.style.textAlign = 'center';
-          element.style.opacity = '0.5';
-          element.style.outline = 'none';
-          element.style.zIndex = '999';
-        }
-
-        if ('xr' in navigator) {
-          button.id = 'ARButton';
-          stylizeElement(button);
-          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
-            supported ? showStartAR() : showARNotSupported();
-          }).catch(showARNotSupported);
-          return button;
-        } else {
-          const message = document.createElement('a');
-          if (window.isSecureContext === false) {
-            message.href = document.location.href.replace(/^http:/, 'https:');
-            message.innerHTML = 'WEBXR NEEDS HTTPS';
-          } else {
-            message.href = 'https://immersiveweb.dev/';
-            message.innerHTML = 'WEBXR NOT AVAILABLE';
-          }
-          message.style.left = 'calc(50% - 90px)';
-          message.style.width = '180px';
-          message.style.textDecoration = 'none';
-          stylizeElement(message);
-          return message;
-        }
-      }
-    }
+    // Import ARButton from Three.js examples (this replaces the inlined one)
+    import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/webxr/ARButton.js';
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
@@ -185,16 +77,6 @@
     let lastPieceSpawnTime = 0;
     const SPAWN_INTERVAL = 1500; // Spawn a new piece every 1.5 seconds (milliseconds)
     const FALL_SPEED = 0.01; // How much to decrease Y position per frame
-
-    let controller1, controller2; [cite_start]// Three.js controller objects [cite: 46]
-    let controllerGrip1, controllerGrip2; [cite_start]// Three.js controller grip objects [cite: 49]
-    let laserPointer1, laserPointer2; [cite_start]// Visual laser pointers [cite: 97]
-    let raycaster; [cite_start]// For detecting intersections [cite: 107]
-
-    let selectedObject = null; [cite_start]// The object currently being grabbed [cite: 147]
-    let selectedDistance = 0; [cite_start]// The distance of the grabbed object from the controller [cite: 148, 156]
-
-    [cite_start]const controllerModelFactory = new XRControllerModelFactory(); [cite: 39]
 
     // Define the Tetris piece configurations (relative positions of cubes)
     // Each element is an array of [x, y, z] offsets for 0.1m cubes
@@ -208,14 +90,46 @@
       'L': { color: 0xffa500, shape: [[2,1,0], [0,0,0], [1,0,0], [2,0,0]] }  // Orange
     };
     const CUBE_SIZE = 0.1; // Size of individual cubes making up the Tetris pieces
-    const HIGHLIGHT_COLOR = 0x444444; [cite_start]// Color for object highlighting [cite: 129]
-    const ORIGINAL_MATERIAL_COLORS = new Map(); // Store original colors for highlighting reset
+
+    // --- Controller and Interaction Variables ---
+    let controller1, controller2;
+    let laser1, laser2;
+    let tempMatrix = new THREE.Matrix4();
+    let raycaster = new THREE.Raycaster();
+    let intersectedPiece1 = null; // Stores the piece intersected by controller 1's laser
+    let intersectedPiece2 = null; // Stores the piece intersected by controller 2's laser
+
+    // Color palette for changing Tetris piece colors
+    const pieceChangeColors = [
+        0xffffff, // White
+        0x00ffff, // Cyan
+        0xffff00, // Yellow
+        0x800080, // Purple
+        0x00ff00, // Green
+        0xff0000, // Red
+        0x0000ff, // Blue
+        0xffa500  // Orange
+    ];
+    // Keep track of the current color index for each piece to cycle through
+    const pieceColorIndices = new Map(); // Maps piece (THREE.Group) to its current color index
+
+    // Laser color management variables
+    const laserColors = [
+        0xff0000, // Red
+        0x00ff00, // Green
+        0x0000ff, // Blue
+        0xffff00  // Yellow
+    ];
+    let currentColorIndex1 = 0;
+    let currentColorIndex2 = 0;
 
     function createTetrisPiece(type) {
       const pieceData = TETRIS_PIECES[type];
       if (!pieceData) return null;
 
       const group = new THREE.Group();
+      // Use MeshPhongMaterial for better lighting interaction if we add more lights later
+      // For now, MeshBasicMaterial is fine, but we'll still change the color property.
       const material = new THREE.MeshBasicMaterial({ color: pieceData.color });
 
       pieceData.shape.forEach(offset => {
@@ -223,11 +137,9 @@
         const cube = new THREE.Mesh(geometry, material);
         cube.position.set(offset[0] * CUBE_SIZE, offset[1] * CUBE_SIZE, offset[2] * CUBE_SIZE);
         group.add(cube);
-        // Store the original color of each sub-cube for resetting
-        ORIGINAL_MATERIAL_COLORS.set(cube, material.color.getHex());
       });
-
-      group.userData.type = 'tetrisPiece'; // Custom property to identify Tetris pieces for raycasting
+      // Store the initial color index for this piece
+      pieceColorIndices.set(group, pieceChangeColors.indexOf(pieceData.color) !== -1 ? pieceChangeColors.indexOf(pieceData.color) : 0);
       return group;
     }
 
@@ -246,203 +158,62 @@
         antialias: true,
         alpha: true // alpha: true is required for AR passthrough
       });
+      renderer.setPixelRatio(window.devicePixelRatio); // Set pixel ratio for better quality
       renderer.setSize(window.innerWidth, window.innerHeight);
-      renderer.xr.enabled = true; [cite_start]// This is the key to enabling WebXR! [cite: 174]
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
       document.body.appendChild(renderer.domElement);
 
       // Add the AR button to the body. It will handle session start/end.
       // We pass the renderer and a session configuration object.
-      // 'local' is a good starting point for reference space.
-      document.body.appendChild(ARButton.createButton(renderer, {
-        [cite_start]requiredFeatures: ['local', 'hit-test'], // 'hit-test' is needed for object placement [cite: 195]
-        optionalFeatures: ['hand-tracking', 'dom-overlay'] // Optional features
-      }));
+      // 'local-floor' and 'hit-test' are required for controller interaction and placement.
+      const arButton = ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] });
+      arButton.id = 'arButton'; // Assign ID for custom styling
+      document.body.appendChild(arButton);
 
-      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
-      // it's good practice for when you use more advanced materials.
-      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-      light.position.set(0.5, 1, 0.25);
-      scene.add(light);
+      // Add lights to the scene (from index-AR-matrix-spheres-lasers.html)
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambientLight);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      directionalLight.position.set(0, 5, 5);
+      scene.add(directionalLight);
 
-      [cite_start]// Initialize Raycaster [cite: 107]
-      raycaster = new THREE.Raycaster();
+      // --- Controllers Setup ---
+      controller1 = renderer.xr.getController(0);
+      scene.add(controller1);
+
+      controller2 = renderer.xr.getController(1);
+      scene.add(controller2);
+
+      const laserGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -5) // Original length 5 units
+      ]);
+
+      const laserMaterial1 = new THREE.LineBasicMaterial({
+        color: laserColors[currentColorIndex1],
+        linewidth: 3,
+        transparent: true,
+        opacity: 1
+      });
+      const laserMaterial2 = new THREE.LineBasicMaterial({
+        color: laserColors[currentColorIndex2],
+        linewidth: 3,
+        transparent: true,
+        opacity: 1
+      });
+
+      laser1 = new THREE.Line(laserGeometry, laserMaterial1);
+      controller1.add(laser1);
+
+      laser2 = new THREE.Line(laserGeometry, laserMaterial2);
+      controller2.add(laser2);
+
+      // Add event listeners for controller 'selectend' (trigger/click)
+      controller1.addEventListener('selectend', onSelectEnd1);
+      controller2.addEventListener('selectend', onSelectEnd2);
 
       // Add a listener to handle window resizing, which is good practice.
       window.addEventListener('resize', onWindowResize, false);
-    }
-
-    [cite_start]// Function to set up controllers once an XR session is active [cite: 5]
-    function setupControllers(session) {
-      // Controller 1 (right hand)
-      [cite_start]controller1 = renderer.xr.getController(0); [cite: 74]
-      [cite_start]controller1.addEventListener('selectstart', onSelectStart); [cite: 75]
-      [cite_start]controller1.addEventListener('selectend', onSelectEnd); [cite: 76]
-      [cite_start]controller1.addEventListener('squeezestart', onSqueezeStart); [cite: 77]
-      [cite_start]controller1.addEventListener('squeezeend', onSqueezeEnd); [cite: 78]
-      [cite_start]scene.add(controller1); [cite: 79]
-
-      [cite_start]controllerGrip1 = renderer.xr.getControllerGrip(0); [cite: 42]
-      [cite_start]controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1)); [cite: 43]
-      [cite_start]scene.add(controllerGrip1); [cite: 43]
-
-      [cite_start]// Add laser pointer for controller 1 [cite: 97]
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -1)
-      ]);
-      laserPointer1 = new THREE.Line(geometry, new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 }));
-      laserPointer1.scale.z = 0; [cite_start]// Start hidden [cite: 103]
-      [cite_start]controller1.add(laserPointer1); [cite: 104]
-
-      // Controller 2 (left hand)
-      controller2 = renderer.xr.getController(1);
-      controller2.addEventListener('selectstart', onSelectStart);
-      controller2.addEventListener('selectend', onSelectEnd);
-      controller2.addEventListener('squeezestart', onSqueezeStart);
-      controller2.addEventListener('squeezeend', onSqueezeEnd);
-      scene.add(controller2);
-
-      controllerGrip2 = renderer.xr.getControllerGrip(1);
-      controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-      scene.add(controllerGrip2);
-
-      // Add laser pointer for controller 2
-      laserPointer2 = new THREE.Line(geometry.clone(), new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 }));
-      laserPointer2.scale.z = 0;
-      controller2.add(laserPointer2);
-
-      [cite_start]// Listen for controller connect/disconnect events [cite: 51]
-      [cite_start]session.addEventListener('inputsourceschange', onInputSourcesChange); [cite: 53]
-    }
-
-    // Function to clean up controllers
-    function clearControllers() {
-        if (controller1) {
-            scene.remove(controller1);
-            controller1.removeEventListener('selectstart', onSelectStart);
-            controller1.removeEventListener('selectend', onSelectEnd);
-            controller1.removeEventListener('squeezestart', onSqueezeStart);
-            controller1.removeEventListener('squeezeend', onSqueezeEnd);
-            controller1 = null;
-        }
-        if (controllerGrip1) {
-            scene.remove(controllerGrip1);
-            controllerGrip1 = null;
-        }
-        if (controller2) {
-            scene.remove(controller2);
-            controller2.removeEventListener('selectstart', onSelectStart);
-            controller2.removeEventListener('selectend', onSelectEnd);
-            controller2.removeEventListener('squeezestart', onSqueezeStart);
-            controller2.removeEventListener('squeezeend', onSqueezeEnd);
-            controller2 = null;
-        }
-        if (controllerGrip2) {
-            scene.remove(controllerGrip2);
-            controllerGrip2 = null;
-        }
-    }
-
-
-    [cite_start]function onInputSourcesChange(event) { [cite: 51]
-      [cite_start]for (const source of event.added) { [cite: 54]
-        [cite_start]if (source.targetRayMode === 'tracked-pointer') { [cite: 56]
-          // Controller connected: ensure model is visible
-          // The XRControllerModelFactory automatically adds the model to the grip,
-          // and the grip is added to the scene in setupControllers.
-          // We can ensure visibility by setting its 'visible' property if it was hidden.
-          if (source.hand === 'right' && controllerGrip1) controllerGrip1.visible = true;
-          if (source.hand === 'left' && controllerGrip2) controllerGrip2.visible = true;
-          console.log(`Controller connected: ${source.hand}`);
-        }
-      }
-
-      [cite_start]for (const source of event.removed) { [cite: 60]
-        [cite_start]if (source.targetRayMode === 'tracked-pointer') { [cite: 61]
-          [cite_start]// Controller disconnected: hide model [cite: 62]
-          if (source.hand === 'right' && controllerGrip1) controllerGrip1.visible = false;
-          if (source.hand === 'left' && controllerGrip2) controllerGrip2.visible = false;
-          console.log(`Controller disconnected: ${source.hand}`);
-        }
-      }
-    }
-
-    [cite_start]function onSelectStart(event) { [cite: 75, 80]
-      const controller = event.target;
-      const laserPointer = (controller === controller1) ? laserPointer1 : laserPointer2;
-
-      laserPointer.scale.z = 10; [cite_start]// Show laser pointer [cite: 106, 121]
-
-      [cite_start]// Haptic feedback on trigger press [cite: 172]
-      [cite_start]if (event.data && event.data.gamepad && event.data.gamepad.hapticActuators && event.data.gamepad.hapticActuators.length > 0) { [cite: 95]
-        event.data.gamepad.hapticActuators[0].pulse(0.5, 100); // Intensity 0.5, duration 100ms
-      }
-
-      [cite_start]// Check for intersections to grab an object [cite: 146]
-      const intersects = raycaster.intersectObjects(fallingPieces.flatMap(p => p.children), true);
-      if (intersects.length > 0) {
-        const hit = intersects[0];
-        let intersectedPiece = hit.object;
-        // Find the top-level Tetris piece group
-        while (intersectedPiece && intersectedPiece.userData.type !== 'tetrisPiece') {
-          intersectedPiece = intersectedPiece.parent;
-        }
-
-        if (intersectedPiece) {
-          [cite_start]selectedObject = intersectedPiece; [cite: 155]
-          // Store the original material color for resetting
-          selectedObject.children.forEach(child => {
-            if (child.isMesh && ORIGINAL_MATERIAL_COLORS.has(child)) {
-                [cite_start]child.material.emissive.setHex(HIGHLIGHT_COLOR); [cite: 129]
-            }
-          });
-
-          // Calculate distance from controller to grabbed object
-          [cite_start]// Use controller.matrixWorld for world position [cite: 156]
-          const controllerWorldPos = new THREE.Vector3();
-          controller.getWorldPosition(controllerWorldPos);
-          [cite_start]selectedDistance = selectedObject.position.distanceTo(controllerWorldPos); [cite: 156]
-
-          [cite_start]// Alternatively, attach object to controller: [cite: 157]
-          // controller.attach(selectedObject);
-        }
-      }
-    }
-
-    [cite_start]function onSelectEnd(event) { [cite: 76, 80]
-      const controller = event.target;
-      const laserPointer = (controller === controller1) ? laserPointer1 : laserPointer2;
-
-      laserPointer.scale.z = 0; // Hide laser pointer
-
-      [cite_start]// Release grabbed object [cite: 33]
-      if (selectedObject) {
-        // Reset original material colors
-        selectedObject.children.forEach(child => {
-          if (child.isMesh && ORIGINAL_MATERIAL_COLORS.has(child)) {
-              child.material.emissive.setHex(0); // Remove emissive highlight
-              child.material.color.setHex(ORIGINAL_MATERIAL_COLORS.get(child)); // Restore original color
-          }
-        });
-        selectedObject = null;
-        selectedDistance = 0;
-
-        // If using attach/detach:
-        // scene.attach(selectedObject);
-      }
-    }
-
-    [cite_start]function onSqueezeStart(event) { [cite: 77, 80]
-      [cite_start]// For future use: e.g., open a menu or pick up a tool [cite: 34, 158]
-      console.log('Squeeze Start');
-       // Haptic feedback on grip press
-      [cite_start]if (event.data && event.data.gamepad && event.data.gamepad.hapticActuators && event.data.gamepad.hapticActuators.length > 0) { [cite: 95]
-        event.data.gamepad.hapticActuators[0].pulse(0.7, 50); // Stronger, shorter pulse
-      }
-    }
-
-    [cite_start]function onSqueezeEnd(event) { [cite: 78, 80]
-      console.log('Squeeze End');
     }
 
     function onWindowResize() {
@@ -451,14 +222,69 @@
       renderer.setSize(window.innerWidth, window.innerHeight);
     }
 
+    // Function to change the color of a Tetris piece
+    function changeTetrisPieceColor(piece) {
+        if (!piece || piece.children.length === 0) return;
+
+        let currentMaterial = piece.children[0].material;
+        let currentIndex = pieceColorIndices.get(piece);
+
+        if (typeof currentIndex === 'undefined' || currentIndex === -1) {
+            // If the piece's current color isn't in our palette, start from 0
+            currentIndex = 0;
+        } else {
+            currentIndex = (currentIndex + 1) % pieceChangeColors.length;
+        }
+
+        const newColor = pieceChangeColors[currentIndex];
+        // Apply the new color to all cubes within the piece group
+        piece.children.forEach(cube => {
+            if (cube.isMesh) {
+                // Ensure we're updating the correct type of material if it changes
+                if (cube.material.isMeshBasicMaterial) {
+                    cube.material.color.setHex(newColor);
+                } else if (cube.material.isMeshStandardMaterial) {
+                    cube.material.color.setHex(newColor);
+                }
+                // If you use MeshPhongMaterial etc., add similar logic here
+            }
+        });
+        pieceColorIndices.set(piece, currentIndex); // Update the stored index
+    }
+
+
+    function onSelectEnd1() {
+        // Change laser color on selection
+        currentColorIndex1 = (currentColorIndex1 + 1) % laserColors.length;
+        laser1.material.color.setHex(laserColors[currentColorIndex1]);
+        laser1.material.opacity = 1;
+        laser1.scale.z = 1; // Reset scale for selection feedback
+
+        // If a piece was intersected, change its color
+        if (intersectedPiece1) {
+            changeTetrisPieceColor(intersectedPiece1);
+        }
+    }
+
+    function onSelectEnd2() {
+        // Change laser color on selection
+        currentColorIndex2 = (currentColorIndex2 + 1) % laserColors.length;
+        laser2.material.color.setHex(laserColors[currentColorIndex2]);
+        laser2.material.opacity = 1;
+        laser2.scale.z = 1; // Reset scale for selection feedback
+
+        // If a piece was intersected, change its color
+        if (intersectedPiece2) {
+            changeTetrisPieceColor(intersectedPiece2);
+        }
+    }
+
+
     function animate() {
       // Use the renderer's built-in animation loop, which is XR-aware.
       // This will call the 'render' function on every frame.
       renderer.setAnimationLoop(render);
     }
-
-    const tempMatrix = new THREE.Matrix4(); [cite_start]// Re-use for performance [cite: 109]
-    const tempVector = new THREE.Vector3();
 
     // This function is called every frame
     function render(timestamp, frame) {
@@ -470,9 +296,10 @@
 
         if (newPiece) {
           // Position the new piece "in the sky" (higher Y), slightly varied X and Z
+          // Adjusted spawning to be within a narrower, more central range
           newPiece.position.set(
-            (Math.random() - 0.5) * 0.8, // -0.4 to 0.4 meters X
-            2,                           // 2 meters above the origin (user's initial position)
+            (Math.random() - 0.5) * 0.5, // -0.25 to 0.25 meters X
+            2.5 + (Math.random() * 0.5), // 2.5 to 3 meters above the origin
             -1.5 - (Math.random() * 0.5) // 1.5 to 2 meters in front of the user
           );
           scene.add(newPiece);
@@ -484,83 +311,78 @@
       // Update positions of all falling pieces
       for (let i = fallingPieces.length - 1; i >= 0; i--) {
         const piece = fallingPieces[i];
-        if (piece !== selectedObject) { // Don't fall if grabbed
-            piece.position.y -= FALL_SPEED;
-        }
+        piece.position.y -= FALL_SPEED;
 
         // Remove pieces that have fallen too far below the floor (e.g., -2 meters below origin)
         // Adjust this threshold based on how far you want them to fall "through"
         if (piece.position.y < -2) {
           scene.remove(piece);
           fallingPieces.splice(i, 1);
-          // Also remove from ORIGINAL_MATERIAL_COLORS map
-          piece.children.forEach(child => ORIGINAL_MATERIAL_COLORS.delete(child));
+          pieceColorIndices.delete(piece); // Clean up color index map
         }
       }
 
-      [cite_start]// Handle controller input and raycasting [cite: 107]
-      handleController(controller1, laserPointer1);
-      handleController(controller2, laserPointer2);
+      // --- Controller Laser and Raycasting Logic ---
+      const opacityPulse = Math.sin(timestamp / 200) * 0.4 + 0.6;
+      const lengthPulse = Math.sin(timestamp / 150) * 0.05 + 1.0; // Base pulsing length
+
+      // Apply pulsing to lasers (will be overridden if hit by raycaster)
+      laser1.material.opacity = opacityPulse;
+      laser2.material.opacity = opacityPulse;
+      laser1.scale.z = lengthPulse;
+      laser2.scale.z = lengthPulse;
+
+      // Get all individual cubes from all falling pieces for raycasting
+      const interactiveObjects = [];
+      fallingPieces.forEach(pieceGroup => {
+          pieceGroup.children.forEach(cube => {
+              if (cube.isMesh) {
+                  interactiveObjects.push(cube);
+              }
+          });
+      });
+
+      // Raycasting for controller 1
+      tempMatrix.identity().extractRotation(controller1.matrixWorld);
+      raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
+      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+      const intersects1 = raycaster.intersectObjects(interactiveObjects, false); // No recursion needed, cubes are direct children
+
+      if (intersects1.length > 0) {
+          // If intersected, find the parent Tetris piece group
+          intersectedPiece1 = intersects1[0].object.parent;
+          // Shorten the laser to the hit point
+          const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller1.matrixWorld);
+          const distance = controllerWorldPos.distanceTo(intersects1[0].point);
+          laser1.scale.z = distance / 5; // Original laser length is 5
+      } else {
+          intersectedPiece1 = null;
+          // Reset laser length to pulsing default if no intersection
+          laser1.scale.z = lengthPulse;
+      }
+
+      // Raycasting for controller 2
+      tempMatrix.identity().extractRotation(controller2.matrixWorld);
+      raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
+      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+      const intersects2 = raycaster.intersectObjects(interactiveObjects, false); // No recursion needed
+
+      if (intersects2.length > 0) {
+          intersectedPiece2 = intersects2[0].object.parent;
+          // Shorten the laser to the hit point
+          const controllerWorldPos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
+          const distance = controllerWorldPos.distanceTo(intersects2[0].point);
+          laser2.scale.z = distance / 5; // Original laser length is 5
+      } else {
+          intersectedPiece2 = null;
+          // Reset laser length to pulsing default if no intersection
+          laser2.scale.z = lengthPulse;
+      }
 
       // Render the scene with the camera.
       // In an AR session, Three.js will automatically handle rendering
       // for each eye and clearing the background for passthrough.
       renderer.render(scene, camera);
-    }
-
-    function handleController(controller, laserPointer) {
-      if (!controller || !controller.parent) return; // Ensure controller is active in scene
-
-      // Reset highlights from previous frame
-      fallingPieces.forEach(piece => {
-        piece.children.forEach(child => {
-          if (child.isMesh && ORIGINAL_MATERIAL_COLORS.has(child) && child.material.emissive.getHex() === HIGHLIGHT_COLOR) {
-            // Only reset if it was highlighted by a controller, and not the currently selected object
-            if (selectedObject !== piece) {
-                child.material.emissive.setHex(0); // Remove emissive highlight
-            }
-          }
-        });
-      });
-
-      // Update grabbed object's position
-      if (selectedObject && (controller === controller1 || controller === controller2)) { // Check which controller holds the object
-        [cite_start]// Move it to remain at original distance in front of controller [cite: 151]
-        controller.getWorldDirection(tempVector).multiplyScalar(selectedDistance).negate();
-        selectedObject.position.copy(controller.position).add(tempVector);
-        selectedObject.quaternion.copy(controller.quaternion); // Optionally rotate with controller
-      }
-
-
-      [cite_start]// Set raycaster position and direction from controller [cite: 111, 112]
-      tempMatrix.identity().extractRotation(controller.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix); [cite_start]// -Z is forward for controllers [cite: 122]
-
-      const interactableObjects = fallingPieces.flatMap(p => p.children); // Flatten array of cubes for raycasting
-      [cite_start]const intersects = raycaster.intersectObjects(interactableObjects, true); [cite: 113]
-
-      if (intersects.length > 0) {
-        [cite_start]const hit = intersects[0]; [cite: 115]
-        laserPointer.scale.z = hit.distance; [cite_start]// Shorten pointer to hit point [cite: 118, 171]
-
-        let intersectedPiece = hit.object;
-        // Find the top-level Tetris piece group
-        while (intersectedPiece && intersectedPiece.userData.type !== 'tetrisPiece') {
-          intersectedPiece = intersectedPiece.parent;
-        }
-
-        if (intersectedPiece && intersectedPiece !== selectedObject) {
-          [cite_start]// Highlight the intersected object [cite: 128]
-          intersectedPiece.children.forEach(child => {
-            if (child.isMesh && ORIGINAL_MATERIAL_COLORS.has(child)) {
-                [cite_start]child.material.emissive.setHex(HIGHLIGHT_COLOR); [cite: 129]
-            }
-          });
-        }
-      } else {
-        laserPointer.scale.z = 10; [cite_start]// Default max length when not hitting anything [cite: 121]
-      }
     }
   </script>
 </body>
