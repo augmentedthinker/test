@@ -1,18 +1,74 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Quest 2 Minimal AR Passthrough</title>
-    <script src="https://unpkg.com/aframe@1.5.0/dist/aframe-master.min.js"></script>
+    <title>Minimal Three.js Quest 2 AR Passthrough</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { margin: 0; overflow: hidden; }
+        body { margin: 0; overflow: hidden; } /* Ensure the canvas fills the entire screen */
     </style>
 </head>
 <body>
-    <a-scene
-        webxr="requiredFeatures: [immersive-ar]; referenceSpaceType: 'local-floor';"
-        renderer="alpha: true;"
-        vr-mode-ui="enabled: true; enterAR: true;"
-    >
-        </a-scene>
+    <script type="module">
+        // Import the core Three.js library and the ARButton utility from CDNs.
+        // We are using version 0.165.0, which is the latest stable version as of this coding session.
+        import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+        import { ARButton } from 'https://unpkg.com/three@0.165.0/examples/jsm/webxr/ARButton.js';
+
+        let camera, scene, renderer; // Declare variables for our Three.js components
+
+        init();    // Initialize the scene and renderer
+        animate(); // Start the animation loop
+
+        function init() {
+            // 1. Scene Setup: Create a basic scene. Even though we won't add objects,
+            //    a scene is required for the renderer to operate.
+            scene = new THREE.Scene();
+
+            // 2. Camera Setup: Create a perspective camera.
+            //    Its specific position isn't critical for passthrough-only AR,
+            //    but a camera is necessary for the renderer to function.
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            camera.position.set(0, 1.6, 0); // A common default, roughly eye-level
+
+            // 3. Renderer Setup: Configure the WebGL renderer.
+            renderer = new THREE.WebGLRenderer({
+                antialias: true, // Smooths edges of 3D objects (though none here)
+                alpha: true      // CRUCIAL: Enables transparency for the canvas, allowing passthrough to show
+            });
+            renderer.setPixelRatio(window.devicePixelRatio); // Adjust for high-DPI displays
+            renderer.setSize(window.innerWidth, window.innerHeight); // Set renderer size to full window
+            renderer.xr.enabled = true; // Enable the WebXR module for this renderer
+            document.body.appendChild(renderer.domElement); // Add the renderer's canvas to the document
+
+            // 4. AR Button Integration: Add the "Enter AR" button.
+            //    ARButton.createButton handles the WebXR session request and button UI.
+            //    'requiredFeatures: ['immersive-ar']' is key: it tells the browser we need an AR session,
+            //    which on Quest 2 will trigger the passthrough camera.
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['immersive-ar'] }));
+
+            // 5. Window Resize Listener: Make the scene responsive to window size changes.
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight; // Update camera aspect ratio
+            camera.updateProjectionMatrix(); // Recalculate camera's projection matrix
+            renderer.setSize(window.innerWidth, window.innerHeight); // Resize the renderer canvas
+        }
+
+        function animate() {
+            // This function registers the 'render' function to be called by the WebXR module
+            // whenever a new frame is available. This is the core of the XR render loop.
+            renderer.setAnimationLoop(render);
+        }
+
+        function render() {
+            // This function is called every frame.
+            // It renders the scene using the camera. Since 'alpha: true' is set on the renderer,
+            // the real-world passthrough from the Quest's cameras will be visible behind our (empty) scene.
+            renderer.render(scene, camera);
+        }
+    </script>
 </body>
 </html>
