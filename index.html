@@ -1,29 +1,27 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>VR Tetris Environment</title>
+    <title>Interactive VR Arcade</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-    <script src="components.js"></script> </head>
+    <script src="components.js"></script>
+</head>
 <body>
     <a-scene>
         <a-assets>
-            </a-assets>
+            <a-asset-item id="arcadeCabinet" src="https://raw.githubusercontent.com/augmentedthinker/test/main/arcade_cabinet.glb"></a-asset-item>
+        </a-assets>
 
         <a-entity id="cameraRig" position="0 1.6 0" movement-controls="speed: 0.1">
             <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
-            <a-entity id="leftHand" meta-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .interactable; far: 10; showLine: true; lineColor: blue; lineOpacity: 0.5"></a-entity>
-            <a-entity id="rightHand" meta-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .interactable; far: 10; showLine: true; lineColor: red; lineOpacity: 0.5"></a-entity>
+            <a-entity id="leftHand" meta-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .arcade-cabinet-model; far: 10; showLine: true; lineColor: blue; lineOpacity: 0.5"></a-entity>
+            <a-entity id="rightHand" meta-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .arcade-cabinet-model; far: 10; showLine: true; lineColor: red; lineOpacity: 0.5"></a-entity>
         </a-entity>
 
         <a-sky color="#ECECEC"></a-sky>
         <a-plane color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
 
-        <a-entity id="tetris-grid" position="0 1 -5">
-            <a-box color="#AAAAAA" opacity="0.1" width="2.2" height="4.2" depth="2.2" wireframe="true"></a-box>
-            <a-text value="3D Tetris Grid" align="center" position="0 2.5 0" color="black" width="5"></a-text>
-        </a-entity>
-
-        </a-scene>
+        <a-entity class="arcade-cabinet-model" gltf-model="#arcadeCabinet" position="0 0 -3" rotation="0 180 0" scale="1 1 1" click-color-change></a-entity>
+    </a-scene>
 </body>
 </html>
