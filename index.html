@@ -1,28 +1,67 @@
+<!-- index.html – drop this at your site’s root -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Interactive VR Arcade</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-    <script src="components.js"></script>
+  <meta charset="utf-8">
+  <title>10×10×10 Cube Room Sandbox</title>
+
+  <!-- Core A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- Movement-controls (handles Quest joysticks) -->
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script>
+
+  <!-- One-liner component that randomises a surface’s color on click -->
+  <script>
+    AFRAME.registerComponent('color-changer', {
+      init() {
+        this.el.addEventListener('click', () => {
+          const newColor = '#' + (Math.random() * 0xffffff << 0)
+            .toString(16).padStart(6, '0');           // random hex
+          this.el.setAttribute('material', 'color', newColor);
+        });
+      }
+    });
+  </script>
 </head>
+
 <body>
-    <a-scene>
-        <a-assets>
-            <a-asset-item id="arcadeCabinet" src="https://raw.githubusercontent.com/augmentedthinker/test/main/arcade_cabinet.glb"></a-asset-item>
-        </a-assets>
+  <a-scene background="color: #ECECEC">
 
-        <a-entity id="cameraRig" position="0 1.6 0" movement-controls="speed: 0.1">
-            <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
-            <a-entity id="leftHand" meta-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .arcade-cabinet-model; far: 10; showLine: true; lineColor: blue; lineOpacity: 0.5"></a-entity>
-            <a-entity id="rightHand" meta-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .arcade-cabinet-model; far: 10; showLine: true; lineColor: red; lineOpacity: 0.5"></a-entity>
-        </a-entity>
+    <!-- Camera rig with joystick/keyboard movement -->
+    <a-entity id="rig" position="0 1.6 4" movement-controls>
+      <a-camera look-controls wasd-controls></a-camera>
+    </a-entity>
 
-        <a-sky color="#ECECEC"></a-sky>
+    <!-- Left & right VR controllers with built-in laser pointer -->
+    <a-entity laser-controls="hand: left"  raycaster="objects: .interactive"></a-entity>
+    <a-entity laser-controls="hand: right" raycaster="objects: .interactive"></a-entity>
 
-        <a-entity class="arcade-cabinet-model" gltf-model="#arcadeCabinet"
-                  position="0 1.83 -1.5"  rotation="0 180 0"  scale="0.02 0.02 0.02" click-color-change>
-        </a-entity>
-    </a-scene>
+    <!-- Cube-room panels (each tagged .interactive + color-changer) -->
+    <!-- Floor -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             rotation="-90 0 0" position="0 0 0" color-changer></a-plane>
+
+    <!-- Ceiling -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             rotation="90 0 0"  position="0 10 0" color-changer></a-plane>
+
+    <!-- Back wall -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             position="0 5 -5"  color-changer></a-plane>
+
+    <!-- Front wall -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             rotation="0 180 0" position="0 5 5" color-changer></a-plane>
+
+    <!-- Left wall -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             rotation="0 90 0"  position="-5 5 0" color-changer></a-plane>
+
+    <!-- Right wall -->
+    <a-plane class="interactive" color="#ffffff" width="10" height="10"
+             rotation="0 -90 0" position="5 5 0" color-changer></a-plane>
+
+  </a-scene>
 </body>
 </html>
