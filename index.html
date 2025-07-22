@@ -1,11 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Interactive VR Environment</title>
+    <title>VR Tetris Environment</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
     <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-    <script src="components.js"></script>
-</head>
+    <script src="components.js"></script> </head>
 <body>
     <a-scene>
         <a-assets>
@@ -20,9 +19,11 @@
         <a-sky color="#ECECEC"></a-sky>
         <a-plane color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
 
-        <a-box class="interactable" position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9" click-color-change></a-box>
-        <a-sphere class="interactable" position="0 1.25 -5" radius="1.25" color="#EF2D5E" click-color-change></a-sphere>
-        <a-cylinder class="interactable" position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D" click-color-change></a-cylinder>
-    </a-scene>
+        <a-entity id="tetris-grid" position="0 1 -5">
+            <a-box color="#AAAAAA" opacity="0.1" width="2.2" height="4.2" depth="2.2" wireframe="true"></a-box>
+            <a-text value="3D Tetris Grid" align="center" position="0 2.5 0" color="black" width="5"></a-text>
+        </a-entity>
+
+        </a-scene>
 </body>
 </html>
