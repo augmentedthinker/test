@@ -14,9 +14,10 @@
     <!-- Player rig: camera + Quest controllers + thumbstick movement -->
     <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
       <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
-      <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-      <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
-    </a-entity>
+        <!-- Show Quest controller models (LEFT and RIGHT hands) -->
+  <a-entity id="leftHand" meta-touch-controls="hand: left; model: true"></a-entity>
+  <a-entity id="rightHand" meta-touch-controls="hand: right; model: true"></a-entity>
+</a-entity>
 
     <!-- Simple environment: sky and ground -->
     <a-sky color="#ECECEC"></a-sky>
