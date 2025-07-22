@@ -1,26 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Basic VR Environment</title>
+    <title>Interactive VR Environment</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    </head>
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
+    <script src="components.js"></script>
+</head>
 <body>
     <a-scene>
         <a-assets>
             </a-assets>
 
-        <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
+        <a-entity id="cameraRig" position="0 1.6 0" movement-controls="speed: 0.1">
             <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
-            <a-entity id="leftHand" meta-touch-controls="hand: left"></a-entity>
-            <a-entity id="rightHand" meta-touch-controls="hand: right"></a-entity>
+            <a-entity id="leftHand" meta-touch-controls="hand: left" laser-controls="hand: left" raycaster="objects: .interactable; far: 10; showLine: true; lineColor: blue; lineOpacity: 0.5"></a-entity>
+            <a-entity id="rightHand" meta-touch-controls="hand: right" laser-controls="hand: right" raycaster="objects: .interactable; far: 10; showLine: true; lineColor: red; lineOpacity: 0.5"></a-entity>
         </a-entity>
 
         <a-sky color="#ECECEC"></a-sky>
         <a-plane color="#7BC8A4" rotation="-90 0 0" width="20" height="20"></a-plane>
 
-        <a-box position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
-        <a-sphere position="0 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
-        <a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
+        <a-box class="interactable" position="-1 0.5 -3" rotation="0 45 0" color="#4CC3D9" click-color-change></a-box>
+        <a-sphere class="interactable" position="0 1.25 -5" radius="1.25" color="#EF2D5E" click-color-change></a-sphere>
+        <a-cylinder class="interactable" position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D" click-color-change></a-cylinder>
     </a-scene>
 </body>
 </html>
