@@ -1,61 +1,124 @@
-<!-- index.html -->
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="utf-8">
-  <title>AR Plane Interaction</title>
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.153.0/build/three.module.js';                      // three.js core
-    import { ARButton } from 'https://unpkg.com/three@0.153.0/examples/jsm/webxr/ARButton.js';        // AR entry button
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebXR Environment and Controller Test</title>
+    <!-- A-Frame library for WebXR development -->
+    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
+    <!-- A-Frame Environment Component for easy scene creation -->
+    <script src="https://unpkg.com/aframe-environment-component@1.5.3/dist/aframe-environment-component.min.js"></script>
+    <!-- A-Frame Extras for movement controls -->
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
 
-    // 1. Scene & Camera
-    const scene    = new THREE.Scene();
-    const camera   = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 20);
-
-    // 2. Renderer with alpha for passthrough AR
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(innerWidth, innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    // 3. AR Button (requests immersive-ar with hit-test)
-    document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-    // 4. Plane (4 ft×6 ft → 1.22 m×1.83 m)
-    const geo  = new THREE.PlaneGeometry(1.22, 1.83);
-    const mat  = new THREE.MeshBasicMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
-    const plane= new THREE.Mesh(geo, mat);
-    // [UNVERIFIED_ASSUMPTION] place plane 2 m in front at eye height (~1.6 m)
-    plane.position.set(0, camera.position.y, -2);
-    scene.add(plane);
-
-    // 5. Raycaster + Controller
-    const raycaster = new THREE.Raycaster();
-    const controller= renderer.xr.getController(0);
-    controller.addEventListener('selectstart', () => {
-      // cast a ray along controller’s -Z axis
-      const tempMat = new THREE.Matrix4().extractRotation(controller.matrixWorld);
-      raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-      raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMat);
-      const hits = raycaster.intersectObject(plane);
-      if (hits.length) mat.color.setHex(Math.random() * 0xffffff);
-    });
-    scene.add(controller);
-
-    // 6. Render loop
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
-
-    // 7. Handle resize
-    window.addEventListener('resize', () => {
-      camera.aspect = innerWidth/innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
-    });
-  </script>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    canvas { display: block; }
-  </style>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        /* Ensure the canvas fills the screen */
+        .a-canvas {
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
 </head>
-<body></body>
+<body>
+    <a-scene
+        webxr="requiredFeatures: local-floor; optionalFeatures: hit-test;"
+        renderer="colorManagement: true; antialias: true;"
+        cursor="rayOrigin: mouse"
+    >
+        <!-- Assets section (currently empty, but good practice for future models/textures) -->
+        <a-assets>
+            <!-- No assets needed for this basic setup, but this is where they would go -->
+        </a-assets>
+
+        <!-- Player Camera Rig: Handles user movement and head tracking -->
+        <!--
+            'movement-controls': Enables locomotion using thumbsticks or WASD keys.
+            'speed': Sets the movement speed.
+            'position': Initial position of the player in the scene.
+        -->
+        <a-entity id="playerRig" movement-controls="speed: 0.1" position="0 1.6 0">
+            <!-- Camera: Represents the user's head and view -->
+            <!--
+                'look-controls': Enables head rotation for looking around.
+            -->
+            <a-entity camera look-controls></a-entity>
+
+            <!-- Left VR Controller: Visual model, raycaster for interaction, and laser pointer -->
+            <!--
+                'meta-touch-controls': Loads the Quest controller model and handles its input.
+                'hand: left': Specifies it's the left controller.
+                'raycaster': Enables raycasting from the controller for interactions.
+                    'objects: .clickable': Only objects with the 'clickable' class will be detected.
+                    'far: 10': The maximum distance the raycast will extend (10 meters).
+                'line': Visualizes the raycaster as a line (laser pointer).
+                    'color': Color of the laser pointer.
+                    'opacity': Transparency of the laser pointer.
+            -->
+            <a-entity
+                meta-touch-controls="hand: left"
+                raycaster="objects: .clickable; far: 10;"
+                line="color: blue; opacity: 0.7"
+            ></a-entity>
+
+            <!-- Right VR Controller: Same setup as the left controller -->
+            <a-entity
+                meta-touch-controls="hand: right"
+                raycaster="objects: .clickable; far: 10;"
+                line="color: red; opacity: 0.7"
+            ></a-entity>
+        </a-entity>
+
+        <!-- Environment: Created using the aframe-environment-component -->
+        <!--
+            'preset: forest': Uses a built-in forest theme.
+            'dressing': Adds decorative objects like trees.
+            'dressingAmount': Number of decorative objects.
+            'groundColor', 'groundColor2': Colors for the ground texture.
+        -->
+        <a-entity
+            environment="preset: forest; dressing: 50; dressingAmount: 200; groundColor: #6B8E23; groundColor2: #228B22;"
+        ></a-entity>
+
+        <!-- Test Object: A box that changes color when clicked -->
+        <!--
+            'id': Unique identifier for the object.
+            'position': Placement in the 3D scene (X Y Z).
+            'rotation': Initial rotation (degrees).
+            'color': Initial color of the box.
+            'scale': Size of the box.
+            'class="clickable"': Marks the object as interactable by the raycaster.
+            'change-color-on-click': Custom component to handle color change on click.
+        -->
+        <a-box
+            id="testObject"
+            position="0 1 -3"
+            rotation="0 45 0"
+            color="#4CC3D9"
+            scale="0.5 0.5 0.5"
+            class="clickable"
+            change-color-on-click
+        ></a-box>
+
+        <!-- A-Frame component to change the color of an entity on click -->
+        <script>
+            AFRAME.registerComponent('change-color-on-click', {
+                init: function () {
+                    var el = this.el; // Reference to the entity this component is attached to
+
+                    // Add an event listener for the 'click' event
+                    el.addEventListener('click', function () {
+                        // Generate a random color in hexadecimal format
+                        var randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+
+                        // Set the entity's color attribute to the new random color
+                        // This updates the material of the box
+                        el.setAttribute('color', randomColor);
+
+                        console.log('Box clicked! New color: ' + randomColor);
+                    });
+                }
+            });
+        </script>
+    </a-scene>
+</body>
 </html>
