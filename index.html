@@ -1,124 +1,1034 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebXR Environment and Controller Test</title>
-    <!-- A-Frame library for WebXR development -->
-    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-    <!-- A-Frame Environment Component for easy scene creation -->
-    <script src="https://unpkg.com/aframe-environment-component@1.5.3/dist/aframe-environment-component.min.js"></script>
-    <!-- A-Frame Extras for movement controls -->
-    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
-
+    <title>3D VR Tetris</title>
     <style>
-        body { margin: 0; overflow: hidden; }
-        /* Ensure the canvas fills the screen */
-        .a-canvas {
-            width: 100% !important;
-            height: 100% !important;
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            background-color: #000000; /* Dark background for the game */
+        }
+        #vr-button {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            z-index: 100;
+        }
+        #vr-button:hover {
+            background-color: #45a049;
+            transform: translateX(-50%) scale(1.05);
+        }
+        #game-info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 1.1em;
+            line-height: 1.6;
+            z-index: 10;
+        }
+        #game-info p {
+            margin: 5px 0;
+        }
+        #game-over-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(178, 34, 34, 0.8); /* Firebrick red */
+            padding: 30px 40px;
+            border-radius: 12px;
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
+            z-index: 200;
+        }
+        #game-over-message button {
+            margin-top: 20px;
+            padding: 10px 25px;
+            background-color: #f0f0f0;
+            color: #b22222;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #game-over-message button:hover {
+            background-color: #e0e0e0;
         }
     </style>
 </head>
 <body>
-    <a-scene
-        webxr="requiredFeatures: local-floor; optionalFeatures: hit-test;"
-        renderer="colorManagement: true; antialias: true;"
-        cursor="rayOrigin: mouse"
-    >
-        <!-- Assets section (currently empty, but good practice for future models/textures) -->
-        <a-assets>
-            <!-- No assets needed for this basic setup, but this is where they would go -->
-        </a-assets>
+    <div id="game-info">
+        <p>Score: <span id="score">0</span></p>
+        <p>Level: <span id="level">1</span></p>
+        <p>Lines: <span id="lines">0</span></p>
+        <p>Next: <span id="next-piece-display"></span></p>
+    </div>
 
-        <!-- Player Camera Rig: Handles user movement and head tracking -->
-        <!--
-            'movement-controls': Enables locomotion using thumbsticks or WASD keys.
-            'speed': Sets the movement speed.
-            'position': Initial position of the player in the scene.
-        -->
-        <a-entity id="playerRig" movement-controls="speed: 0.1" position="0 1.6 0">
-            <!-- Camera: Represents the user's head and view -->
-            <!--
-                'look-controls': Enables head rotation for looking around.
-            -->
-            <a-entity camera look-controls></a-entity>
+    <div id="game-over-message">
+        GAME OVER!
+        <button onclick="location.reload()">Restart</button>
+    </div>
 
-            <!-- Left VR Controller: Visual model, raycaster for interaction, and laser pointer -->
-            <!--
-                'meta-touch-controls': Loads the Quest controller model and handles its input.
-                'hand: left': Specifies it's the left controller.
-                'raycaster': Enables raycasting from the controller for interactions.
-                    'objects: .clickable': Only objects with the 'clickable' class will be detected.
-                    'far: 10': The maximum distance the raycast will extend (10 meters).
-                'line': Visualizes the raycaster as a line (laser pointer).
-                    'color': Color of the laser pointer.
-                    'opacity': Transparency of the laser pointer.
-            -->
-            <a-entity
-                meta-touch-controls="hand: left"
-                raycaster="objects: .clickable; far: 10;"
-                line="color: blue; opacity: 0.7"
-            ></a-entity>
+    <script type="module">
+        // Import necessary Three.js modules from CDN
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
+        import { VRButton } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/VRButton.js';
+        import { XRControllerModelFactory } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/XRControllerModelFactory.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
 
-            <!-- Right VR Controller: Same setup as the left controller -->
-            <a-entity
-                meta-touch-controls="hand: right"
-                raycaster="objects: .clickable; far: 10;"
-                line="color: red; opacity: 0.7"
-            ></a-entity>
-        </a-entity>
+        // --- Global Variables ---
+        let scene, camera, renderer;
+        let controls; // For OrbitControls on desktop
+        let game; // Game logic instance
+        let tickManager; // Manages game ticks
+        let controllers = []; // Array to hold VR controllers
+        const controllerModelFactory = new XRControllerModelFactory();
+        const raycaster = new THREE.Raycaster();
+        let intersected = []; // Keep track of intersected objects for raycasting feedback
 
-        <!-- Environment: Created using the aframe-environment-component -->
-        <!--
-            'preset: forest': Uses a built-in forest theme.
-            'dressing': Adds decorative objects like trees.
-            'dressingAmount': Number of decorative objects.
-            'groundColor', 'groundColor2': Colors for the ground texture.
-        -->
-        <a-entity
-            environment="preset: forest; dressing: 50; dressingAmount: 200; groundColor: #6B8E23; groundColor2: #228B22;"
-        ></a-entity>
+        // Game constants
+        const BLOCK_SIZE = 0.9; // Size of individual Tetris blocks
+        const GRID_WIDTH = 10;
+        const GRID_HEIGHT = 20; // Visible height
+        const GRID_DEPTH = 10;
+        const HIDDEN_ROWS = 4; // Rows above visible playfield
+        const TOTAL_GRID_HEIGHT = GRID_HEIGHT + HIDDEN_ROWS;
 
-        <!-- Test Object: A box that changes color when clicked -->
-        <!--
-            'id': Unique identifier for the object.
-            'position': Placement in the 3D scene (X Y Z).
-            'rotation': Initial rotation (degrees).
-            'color': Initial color of the box.
-            'scale': Size of the box.
-            'class="clickable"': Marks the object as interactable by the raycaster.
-            'change-color-on-click': Custom component to handle color change on click.
-        -->
-        <a-box
-            id="testObject"
-            position="0 1 -3"
-            rotation="0 45 0"
-            color="#4CC3D9"
-            scale="0.5 0.5 0.5"
-            class="clickable"
-            change-color-on-click
-        ></a-box>
+        // Colors for Tetrominoes (using hex values)
+        const COLORS = {
+            I: 0x00ffff, // Cyan
+            J: 0x0000ff, // Blue
+            L: 0xffa500, // Orange
+            O: 0xffff00, // Yellow
+            S: 0x00ff00, // Green
+            T: 0x800080, // Purple
+            Z: 0xff0000, // Red
+            landed: 0x888888, // Grey for landed blocks
+            clearing: 0xffd700, // Gold for clearing lines
+            grid: 0x333333, // Dark grey for grid lines
+        };
 
-        <!-- A-Frame component to change the color of an entity on click -->
-        <script>
-            AFRAME.registerComponent('change-color-on-click', {
-                init: function () {
-                    var el = this.el; // Reference to the entity this component is attached to
+        // Tetromino shapes and their initial rotations (relative coordinates)
+        // Each shape is defined by a 3D array representing its blocks
+        const TETROMINOES = {
+            I: {
+                color: COLORS.I,
+                shapes: [
+                    [[[1,1,1,1]]], // 1x4 line
+                    [[[1],[1],[1],[1]]] // 4x1 line
+                ]
+            },
+            J: {
+                color: COLORS.J,
+                shapes: [
+                    [[[1,0,0],[1,1,1]]],
+                    [[[1,1],[1,0],[1,0]]],
+                    [[[1,1,1],[0,0,1]]],
+                    [[[0,1],[0,1],[1,1]]]
+                ]
+            },
+            L: {
+                color: COLORS.L,
+                shapes: [
+                    [[[0,0,1],[1,1,1]]],
+                    [[[1,0],[1,0],[1,1]]],
+                    [[[1,1,1],[1,0,0]]],
+                    [[[1,1],[0,1],[0,1]]]
+                ]
+            },
+            O: {
+                color: COLORS.O,
+                shapes: [
+                    [[[1,1],[1,1]]]
+                ]
+            },
+            S: {
+                color: COLORS.S,
+                shapes: [
+                    [[[0,1,1],[1,1,0]]],
+                    [[[1,0],[1,1],[0,1]]]
+                ]
+            },
+            T: {
+                color: COLORS.T,
+                shapes: [
+                    [[[0,1,0],[1,1,1]]],
+                    [[[1,0],[1,1],[1,0]]],
+                    [[[1,1,1],[0,1,0]]],
+                    [[[0,1],[1,1],[0,1]]]
+                ]
+            },
+            Z: {
+                color: COLORS.Z,
+                shapes: [
+                    [[[1,1,0],[0,1,1]]],
+                    [[[0,1],[1,1],[1,0]]]
+                ]
+            }
+        };
 
-                    // Add an event listener for the 'click' event
-                    el.addEventListener('click', function () {
-                        // Generate a random color in hexadecimal format
-                        var randomColor = '#' + Math.floor(Math.random()*16777215).toString(16);
+        // --- Utility Functions ---
 
-                        // Set the entity's color attribute to the new random color
-                        // This updates the material of the box
-                        el.setAttribute('color', randomColor);
+        /**
+         * Creates a single cube (block) mesh with rounded corners.
+         * @param {number} color - Hex color for the block.
+         * @returns {THREE.Mesh} The created block mesh.
+         */
+        function createBlock(color) {
+            const geometry = new THREE.BoxGeometry(BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, 2, 2, 2); // Add segments for rounding
+            const material = new THREE.MeshStandardMaterial({ color: color, flatShading: false }); // Use MeshStandardMaterial for lighting
+            const block = new THREE.Mesh(geometry, material);
+            block.castShadow = true;
+            block.receiveShadow = true;
+            return block;
+        }
 
-                        console.log('Box clicked! New color: ' + randomColor);
-                    });
+        /**
+         * Adjusts the camera's position and far clipping plane to optimally frame the game field.
+         */
+        function adjustPerspectiveCamera() {
+            // Calculate the center and dimensions of the game grid
+            const gridCenter = new THREE.Vector3(
+                (GRID_WIDTH * BLOCK_SIZE) / 2 - BLOCK_SIZE / 2,
+                (GRID_HEIGHT * BLOCK_SIZE) / 2 - BLOCK_SIZE / 2,
+                (GRID_DEPTH * BLOCK_SIZE) / 2 - BLOCK_SIZE / 2
+            );
+
+            // Position the camera to look at the center of the grid
+            // This is a fixed position relative to the grid for a good overview
+            camera.position.set(
+                gridCenter.x + GRID_WIDTH * BLOCK_SIZE * 0.8, // Slightly to the right
+                gridCenter.y + GRID_HEIGHT * BLOCK_SIZE * 0.8, // Slightly above
+                gridCenter.z + GRID_DEPTH * BLOCK_SIZE * 0.8 // Slightly in front
+            );
+            camera.lookAt(gridCenter);
+
+            // Adjust far clipping plane based on the scene's bounding box
+            // This ensures all game elements are visible without clipping
+            const box = new THREE.Box3().setFromObject(scene);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+            cameraZ *= 1.5; // Add some buffer
+            camera.far = cameraZ * 2; // Ensure far plane covers everything
+            camera.updateProjectionMatrix();
+        }
+
+        /**
+         * Handles the 'selectstart' event for VR controllers (trigger press).
+         * @param {Object} event - The event object.
+         */
+        function onSelectStart(event) {
+            const controller = event.target;
+            // Map trigger press to hard drop
+            game.hardDrop();
+
+            // Haptic feedback (if supported)
+            if (controller.gamepad && controller.gamepad.hapticActuators && controller.gamepad.hapticActuators.length > 0) {
+                controller.gamepad.hapticActuators[0].pulse(0.5, 100); // Intensity, duration
+            }
+        }
+
+        /**
+         * Handles the 'selectend' event for VR controllers (trigger release).
+         * @param {Object} event - The event object.
+         */
+        function onSelectEnd(event) {
+            // Currently no action for select end
+        }
+
+        /**
+         * Handles the 'squeezestart' event for VR controllers (grip press).
+         * @param {Object} event - The event object.
+         */
+        function onSqueezeStart(event) {
+            // Map grip press to rotate piece
+            game.rotatePiece();
+
+            // Haptic feedback (if supported)
+            const controller = event.target;
+            if (controller.gamepad && controller.gamepad.hapticActuators && controller.gamepad.hapticActuators.length > 0) {
+                controller.gamepad.hapticActuators[0].pulse(0.3, 50); // Intensity, duration
+            }
+        }
+
+        /**
+         * Handles the 'squeezeend' event for VR controllers (grip release).
+         * @param {Object} event - The event object.
+         */
+        function onSqueezeEnd(event) {
+            // Currently no action for squeeze end
+        }
+
+        /**
+         * Sets up a single VR controller: adds its model and event listeners.
+         * @param {THREE.Group} controller - The Three.js controller group.
+         * @param {number} index - The controller index (0 for right, 1 for left).
+         */
+        function setupController(controller, index) {
+            // Add controller model to the grip space
+            const grip = renderer.xr.getControllerGrip(index);
+            grip.add(controllerModelFactory.createControllerModel(grip));
+            scene.add(grip);
+
+            // Add event listeners for button presses
+            controller.addEventListener('selectstart', onSelectStart);
+            controller.addEventListener('selectend', onSelectEnd);
+            controller.addEventListener('squeezestart', onSqueezeStart);
+            controller.addEventListener('squeezeend', onSqueezeEnd);
+
+            // Create a laser pointer visualization
+            const geometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, -1) // Points forward along the controller's Z-axis
+            ]);
+            const material = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 0; // Start hidden
+            controller.add(line); // Attach to target-ray space
+
+            controllers.push({ controller, grip, line });
+        }
+
+        /**
+         * Handles the 'gamepadconnected' event for WebXR.
+         * @param {Object} event - The event object.
+         */
+        function onGamepadConnected(event) {
+            console.log('Gamepad connected:', event.gamepad);
+            // WebXR controllers are typically handled by renderer.xr.getController
+            // and inputsourceschange, but this can be a fallback for general gamepad support.
+        }
+
+        /**
+         * Handles the 'gamepaddisconnected' event for WebXR.
+         * @param {Object} event - The event object.
+         */
+        function onGamepadDisconnected(event) {
+            console.log('Gamepad disconnected:', event.gamepad);
+        }
+
+        /**
+         * Clears the intersected objects array and resets their emissive color.
+         */
+        function cleanIntersected() {
+            while (intersected.length) {
+                const object = intersected.pop();
+                if (object.material && object.material.emissive) {
+                    object.material.emissive.setHex(0x000000); // Reset emissive color
                 }
-            });
-        </script>
-    </a-scene>
+            }
+        }
+
+        /**
+         * Handles raycasting from controllers and provides visual feedback.
+         */
+        function handleControllerRaycasting() {
+            cleanIntersected(); // Clear previous intersections
+
+            for (let i = 0; i < controllers.length; i++) {
+                const { controller, line } = controllers[i];
+
+                if (controller.children.length > 0) {
+                    // Get controller's world position and direction
+                    controller.getWorldDirection(raycaster.ray.direction);
+                    raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+
+                    // WebXR controller's forward direction is typically -Z
+                    raycaster.ray.direction.multiplyScalar(-1);
+
+                    // Perform raycast
+                    const intersects = raycaster.intersectObjects(scene.children, true);
+
+                    if (intersects.length > 0) {
+                        const hit = intersects[0];
+                        // Shorten the laser pointer to the hit distance
+                        line.scale.z = hit.distance;
+
+                        // Highlight the intersected object
+                        if (hit.object.material && hit.object.material.emissive) {
+                            hit.object.material.emissive.setHex(0x444444);
+                            intersected.push(hit.object);
+                        }
+                    } else {
+                        // Extend laser pointer to a default max length if no intersection
+                        line.scale.z = 10;
+                    }
+                }
+            }
+        }
+
+        /**
+         * Processes gamepad input for continuous movement (thumbstick).
+         * @param {THREE.Group} controller - The Three.js controller group.
+         */
+        function processGamepadInput(controller) {
+            if (controller.gamepad) {
+                const axes = controller.gamepad.axes;
+                // Axes [0] is X-axis (left/right), Axes [1] is Y-axis (up/down) for thumbstick
+                const threshold = 0.5; // Dead zone threshold
+
+                // Horizontal movement (X-axis)
+                if (axes[2] < -threshold) { // Left
+                    game.movePiece('left');
+                } else if (axes[2] > threshold) { // Right
+                    game.movePiece('right');
+                }
+
+                // Vertical movement (Y-axis) - for soft drop or rotation
+                if (axes[3] > threshold) { // Down
+                    game.softDrop();
+                }
+                // No specific mapping for axes[3] < -threshold (up) for now, could be used for rotation
+            }
+        }
+
+        // --- Game Classes ---
+
+        /**
+         * Represents a Tetromino piece.
+         */
+        class Tetromino {
+            /**
+             * @param {string} type - The type of tetromino (e.g., 'I', 'J').
+             * @param {number} x - Initial X position.
+             * @param {number} y - Initial Y position.
+             * @param {number} z - Initial Z position.
+             */
+            constructor(type, x = 0, y = TOTAL_GRID_HEIGHT - 1, z = 0) {
+                this.type = type;
+                this.color = TETROMINOES[type].color;
+                this.shapes = TETROMINOES[type].shapes;
+                this.rotation = 0;
+                this.x = x;
+                this.y = y;
+                this.z = z;
+                this.group = new THREE.Group(); // Three.js group for the 3D blocks
+                this.blocks = []; // Array to hold individual block meshes
+                this.create3DModel();
+            }
+
+            /**
+             * Creates the 3D model for the tetromino based on its current shape.
+             */
+            create3DModel() {
+                this.group = new THREE.Group(); // Reset group
+                this.blocks = []; // Reset blocks array
+
+                const shape = this.shapes[this.rotation];
+                // Calculate offset to center the piece's pivot
+                const offsetX = Math.floor(shape[0][0].length / 2);
+                const offsetY = Math.floor(shape.length / 2);
+                const offsetZ = Math.floor(shape[0].length / 2); // Assuming depth is consistent with width
+
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row][0].length; col++) {
+                        for (let depth = 0; depth < shape[row].length; depth++) {
+                            if (shape[row][depth][col] === 1) { // Check for block presence
+                                const block = createBlock(this.color);
+                                // Position blocks relative to the group's pivot
+                                block.position.set(
+                                    (col - offsetX) * BLOCK_SIZE,
+                                    (row - offsetY) * BLOCK_SIZE,
+                                    (depth - offsetZ) * BLOCK_SIZE
+                                );
+                                this.group.add(block);
+                                this.blocks.push(block);
+                            }
+                        }
+                    }
+                }
+                // Set the group's world position
+                this.group.position.set(
+                    this.x * BLOCK_SIZE,
+                    this.y * BLOCK_SIZE,
+                    this.z * BLOCK_SIZE
+                );
+            }
+
+            /**
+             * Returns the current shape's block coordinates relative to its (x,y,z) origin.
+             * @returns {Array<Array<number>>} Array of [x, y, z] coordinates.
+             */
+            getRelativeBlockPositions() {
+                const positions = [];
+                const shape = this.shapes[this.rotation];
+                const offsetX = Math.floor(shape[0][0].length / 2);
+                const offsetY = Math.floor(shape.length / 2);
+                const offsetZ = Math.floor(shape[0].length / 2);
+
+                for (let row = 0; row < shape.length; row++) {
+                    for (let col = 0; col < shape[row][0].length; col++) {
+                        for (let depth = 0; depth < shape[row].length; depth++) {
+                            if (shape[row][depth][col] === 1) {
+                                positions.push([
+                                    col - offsetX,
+                                    row - offsetY,
+                                    depth - offsetZ
+                                ]);
+                            }
+                        }
+                    }
+                }
+                return positions;
+            }
+
+            /**
+             * Rotates the tetromino.
+             */
+            rotate() {
+                this.rotation = (this.rotation + 1) % this.shapes.length;
+                this.create3DModel(); // Recreate model with new rotation
+            }
+        }
+
+        /**
+         * Manages the game state, logic, and rendering.
+         */
+        class Game {
+            constructor() {
+                this.gameField = Array(TOTAL_GRID_HEIGHT).fill(0).map(() =>
+                    Array(GRID_WIDTH).fill(0).map(() =>
+                        Array(GRID_DEPTH).fill(0)
+                    )
+                ); // 3D array for game field
+                this.currentPiece = null;
+                this.nextPiece = null;
+                this.score = 0;
+                this.level = 1;
+                this.linesCleared = 0;
+                this.gameOver = false;
+
+                this.renderFieldGroup = new THREE.Group(); // Group for static blocks
+                scene.add(this.renderFieldGroup);
+
+                this.createGameGridVisual();
+                this.generateNewPiece();
+                this.updateScoreDisplay();
+                this.updateNextPieceDisplay();
+            }
+
+            /**
+             * Creates the visual grid lines for the game field.
+             */
+            createGameGridVisual() {
+                const material = new THREE.LineBasicMaterial({ color: COLORS.grid });
+
+                // Create grid lines for the base (bottom plane)
+                for (let i = 0; i <= GRID_WIDTH; i++) {
+                    const points = [
+                        new THREE.Vector3(i * BLOCK_SIZE, 0, 0),
+                        new THREE.Vector3(i * BLOCK_SIZE, 0, GRID_DEPTH * BLOCK_SIZE)
+                    ];
+                    this.renderFieldGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+                }
+                for (let i = 0; i <= GRID_DEPTH; i++) {
+                    const points = [
+                        new THREE.Vector3(0, 0, i * BLOCK_SIZE),
+                        new THREE.Vector3(GRID_WIDTH * BLOCK_SIZE, 0, i * BLOCK_SIZE)
+                    ];
+                    this.renderFieldGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+                }
+
+                // Create vertical lines at the corners of the base
+                for (let x = 0; x <= GRID_WIDTH; x++) {
+                    for (let z = 0; z <= GRID_DEPTH; z++) {
+                        const points = [
+                            new THREE.Vector3(x * BLOCK_SIZE, 0, z * BLOCK_SIZE),
+                            new THREE.Vector3(x * BLOCK_SIZE, GRID_HEIGHT * BLOCK_SIZE, z * BLOCK_SIZE)
+                        ];
+                        this.renderFieldGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+                    }
+                }
+
+                // Create horizontal lines for the top plane
+                for (let i = 0; i <= GRID_WIDTH; i++) {
+                    const points = [
+                        new THREE.Vector3(i * BLOCK_SIZE, GRID_HEIGHT * BLOCK_SIZE, 0),
+                        new THREE.Vector3(i * BLOCK_SIZE, GRID_HEIGHT * BLOCK_SIZE, GRID_DEPTH * BLOCK_SIZE)
+                    ];
+                    this.renderFieldGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+                }
+                for (let i = 0; i <= GRID_DEPTH; i++) {
+                    const points = [
+                        new THREE.Vector3(0, GRID_HEIGHT * BLOCK_SIZE, i * BLOCK_SIZE),
+                        new THREE.Vector3(GRID_WIDTH * BLOCK_SIZE, GRID_HEIGHT * BLOCK_SIZE, i * BLOCK_SIZE)
+                    ];
+                    this.renderFieldGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), material));
+                }
+
+                // Adjust the position of the entire grid to be centered
+                this.renderFieldGroup.position.set(
+                    - (GRID_WIDTH * BLOCK_SIZE) / 2 + BLOCK_SIZE / 2,
+                    - (GRID_HEIGHT * BLOCK_SIZE) / 2, // Adjusted to make 0,0,0 the bottom center
+                    - (GRID_DEPTH * BLOCK_SIZE) / 2 + BLOCK_SIZE / 2
+                );
+            }
+
+
+            /**
+             * Generates a new random tetromino and adds it to the scene.
+             * Checks for game over condition.
+             */
+            generateNewPiece() {
+                if (this.nextPiece) {
+                    this.currentPiece = this.nextPiece;
+                } else {
+                    const types = Object.keys(TETROMINOES);
+                    const randomType = types[Math.floor(Math.random() * types.length)];
+                    this.currentPiece = new Tetromino(randomType, Math.floor(GRID_WIDTH / 2) - 1, TOTAL_GRID_HEIGHT - 1, Math.floor(GRID_DEPTH / 2) - 1);
+                }
+
+                const types = Object.keys(TETROMINOES);
+                const randomNextType = types[Math.floor(Math.random() * types.length)];
+                this.nextPiece = new Tetromino(randomNextType, 0, 0, 0); // Placeholder for next piece display
+
+                // Check for game over
+                if (!this.checkCollision(this.currentPiece, 0, 0, 0, 0)) {
+                    this.gameOver = true;
+                    this.showGameOverMessage();
+                    return;
+                }
+
+                scene.add(this.currentPiece.group);
+                this.updateNextPieceDisplay();
+            }
+
+            /**
+             * Displays the game over message.
+             */
+            showGameOverMessage() {
+                document.getElementById('game-over-message').style.display = 'block';
+            }
+
+            /**
+             * Moves the current piece by a given offset.
+             * @param {string} direction - 'left', 'right', 'forward', 'back', 'down'.
+             */
+            movePiece(direction) {
+                if (this.gameOver) return;
+
+                let offsetX = 0, offsetY = 0, offsetZ = 0;
+                switch (direction) {
+                    case 'left': offsetX = -1; break;
+                    case 'right': offsetX = 1; break;
+                    case 'forward': offsetZ = -1; break;
+                    case 'back': offsetZ = 1; break;
+                    case 'down': offsetY = -1; break;
+                }
+
+                if (this.checkCollision(this.currentPiece, offsetX, offsetY, offsetZ, 0)) {
+                    this.currentPiece.x += offsetX;
+                    this.currentPiece.y += offsetY;
+                    this.currentPiece.z += offsetZ;
+                    this.currentPiece.group.position.set(
+                        this.currentPiece.x * BLOCK_SIZE,
+                        this.currentPiece.y * BLOCK_SIZE,
+                        this.currentPiece.z * BLOCK_SIZE
+                    );
+                    tickManager.immediateRestart(); // Reset fall timer
+                } else if (direction === 'down') {
+                    this.lockPiece();
+                }
+            }
+
+            /**
+             * Rotates the current piece.
+             */
+            rotatePiece() {
+                if (this.gameOver) return;
+
+                const originalRotation = this.currentPiece.rotation;
+                this.currentPiece.rotate(); // Temporarily rotate
+
+                if (!this.checkCollision(this.currentPiece, 0, 0, 0, 0)) {
+                    // If collision, revert rotation
+                    this.currentPiece.rotation = originalRotation;
+                    this.currentPiece.create3DModel(); // Recreate model to revert visual
+                }
+                // If no collision, the piece is already rotated visually by create3DModel in Tetromino.rotate()
+                tickManager.immediateRestart(); // Reset fall timer
+            }
+
+            /**
+             * Performs a soft drop (moves piece down one step).
+             */
+            softDrop() {
+                if (this.gameOver) return;
+                this.movePiece('down');
+            }
+
+            /**
+             * Performs a hard drop (moves piece all the way down).
+             */
+            hardDrop() {
+                if (this.gameOver) return;
+                let landed = false;
+                while (!landed) {
+                    if (this.checkCollision(this.currentPiece, 0, -1, 0, 0)) {
+                        this.currentPiece.y -= 1;
+                        this.currentPiece.group.position.set(
+                            this.currentPiece.x * BLOCK_SIZE,
+                            this.currentPiece.y * BLOCK_SIZE,
+                            this.currentPiece.z * BLOCK_SIZE
+                        );
+                        this.score += 2; // Award points for hard drop
+                    } else {
+                        landed = true;
+                    }
+                }
+                this.lockPiece();
+            }
+
+            /**
+             * Checks for collision at a given offset and rotation.
+             * @param {Tetromino} piece - The tetromino to check.
+             * @param {number} offsetX - X offset.
+             * @param {number} offsetY - Y offset.
+             * @param {number} offsetZ - Z offset.
+             * @param {number} rotationOffset - Rotation offset (0 for no rotation, 1 for next rotation).
+             * @returns {boolean} True if no collision, false otherwise.
+             */
+            checkCollision(piece, offsetX, offsetY, offsetZ, rotationOffset) {
+                const currentShape = piece.shapes[(piece.rotation + rotationOffset) % piece.shapes.length];
+                const relativePositions = piece.getRelativeBlockPositions(); // Get positions based on current rotation
+
+                for (const [relX, relY, relZ] of relativePositions) {
+                    const newX = piece.x + relX + offsetX;
+                    const newY = piece.y + relY + offsetY;
+                    const newZ = piece.z + relZ + offsetZ;
+
+                    // Check boundaries
+                    if (newX < 0 || newX >= GRID_WIDTH ||
+                        newY < 0 || newY >= TOTAL_GRID_HEIGHT ||
+                        newZ < 0 || newZ >= GRID_DEPTH) {
+                        return false; // Out of bounds
+                    }
+
+                    // Check for collision with existing solid blocks
+                    if (this.gameField[newY][newX][newZ] === 2) {
+                        return false; // Collision with a solid block
+                    }
+                }
+                return true; // No collision
+            }
+
+            /**
+             * Locks the current piece into the game field and triggers line clearing.
+             */
+            lockPiece() {
+                scene.remove(this.currentPiece.group); // Remove dynamic piece from scene
+
+                const relativePositions = this.currentPiece.getRelativeBlockPositions();
+                for (const [relX, relY, relZ] of relativePositions) {
+                    const x = this.currentPiece.x + relX;
+                    const y = this.currentPiece.y + relY;
+                    const z = this.currentPiece.z + relZ;
+                    if (y >= 0 && y < TOTAL_GRID_HEIGHT && x >= 0 && x < GRID_WIDTH && z >= 0 && z < GRID_DEPTH) {
+                        this.gameField[y][x][z] = 2; // Mark as solid
+                    }
+                }
+
+                this.clearLines();
+                this.renderGameField(); // Re-render static blocks
+                this.generateNewPiece(); // Get next piece
+            }
+
+            /**
+             * Checks for and clears full lines, updating score and level.
+             */
+            clearLines() {
+                let linesClearedThisTurn = 0;
+                const newGameField = Array(TOTAL_GRID_HEIGHT).fill(0).map(() =>
+                    Array(GRID_WIDTH).fill(0).map(() =>
+                        Array(GRID_DEPTH).fill(0)
+                    )
+                );
+                let currentRow = 0;
+
+                for (let y = 0; y < TOTAL_GRID_HEIGHT; y++) {
+                    let isLineFull = true;
+                    // Check if the entire 10x10 plane at this height is full
+                    for (let x = 0; x < GRID_WIDTH; x++) {
+                        for (let z = 0; z < GRID_DEPTH; z++) {
+                            if (this.gameField[y][x][z] !== 2) { // Must be a solid block
+                                isLineFull = false;
+                                break;
+                            }
+                        }
+                        if (!isLineFull) break;
+                    }
+
+                    if (isLineFull) {
+                        linesClearedThisTurn++;
+                        // Don't copy this line to newGameField (effectively clears it)
+                    } else {
+                        // Copy the line to the new game field
+                        for (let x = 0; x < GRID_WIDTH; x++) {
+                            for (let z = 0; z < GRID_DEPTH; z++) {
+                                newGameField[currentRow][x][z] = this.gameField[y][x][z];
+                            }
+                        }
+                        currentRow++;
+                    }
+                }
+
+                this.gameField = newGameField;
+
+                if (linesClearedThisTurn > 0) {
+                    this.linesCleared += linesClearedThisTurn;
+                    this.score += linesClearedThisTurn * linesClearedThisTurn * 100 * this.level; // Scoring based on lines cleared
+                    this.updateScoreDisplay();
+
+                    // Level up logic
+                    if (this.linesCleared >= this.level * 10) {
+                        this.level++;
+                        tickManager.tickDuration *= 0.8; // Speed up game
+                        this.updateScoreDisplay();
+                    }
+                }
+            }
+
+            /**
+             * Renders the static blocks in the game field.
+             */
+            renderGameField() {
+                // Clear existing static blocks
+                while (this.renderFieldGroup.children.length > 0) {
+                    const object = this.renderFieldGroup.children[0];
+                    if (object instanceof THREE.Mesh) {
+                        object.geometry.dispose();
+                        object.material.dispose();
+                    }
+                    this.renderFieldGroup.remove(object);
+                }
+                this.createGameGridVisual(); // Re-add grid lines
+
+                // Add blocks based on gameField state
+                for (let y = 0; y < TOTAL_GRID_HEIGHT; y++) {
+                    for (let x = 0; x < GRID_WIDTH; x++) {
+                        for (let z = 0; z < GRID_DEPTH; z++) {
+                            if (this.gameField[y][x][z] === 2) { // Solid block
+                                const block = createBlock(COLORS.landed);
+                                block.position.set(
+                                    x * BLOCK_SIZE + this.renderFieldGroup.position.x,
+                                    y * BLOCK_SIZE + this.renderFieldGroup.position.y,
+                                    z * BLOCK_SIZE + this.renderFieldGroup.position.z
+                                );
+                                scene.add(block); // Add directly to scene, or to a dedicated 'landedBlocksGroup'
+                            }
+                        }
+                    }
+                }
+            }
+
+            /**
+             * Updates the score, level, and lines cleared display.
+             */
+            updateScoreDisplay() {
+                document.getElementById('score').innerText = this.score;
+                document.getElementById('level').innerText = this.level;
+                document.getElementById('lines').innerText = this.linesCleared;
+            }
+
+            /**
+             * Updates the next piece display.
+             */
+            updateNextPieceDisplay() {
+                const nextPieceDisplay = document.getElementById('next-piece-display');
+                nextPieceDisplay.innerText = this.nextPiece ? this.nextPiece.type : 'N/A';
+            }
+
+            /**
+             * Main game update loop.
+             */
+            update() {
+                if (this.currentPiece && !this.gameOver) {
+                    // Update current piece's 3D position
+                    this.currentPiece.group.position.set(
+                        this.currentPiece.x * BLOCK_SIZE + this.renderFieldGroup.position.x,
+                        this.currentPiece.y * BLOCK_SIZE + this.renderFieldGroup.position.y,
+                        this.currentPiece.z * BLOCK_SIZE + this.renderFieldGroup.position.z
+                    );
+                }
+            }
+        }
+
+        /**
+         * Manages game ticks and piece descent.
+         */
+        class TickManager {
+            constructor(gameInstance) {
+                this.game = gameInstance;
+                this.tickDuration = 1000; // Milliseconds per tick (initial speed)
+                this.lastTickTime = 0;
+                this.isPaused = false;
+            }
+
+            /**
+             * Updates the tick manager. Called every frame.
+             * @param {number} time - Current time from renderer.setAnimationLoop.
+             */
+            update(time) {
+                if (this.isPaused || this.game.gameOver) return;
+
+                if (time - this.lastTickTime > this.tickDuration) {
+                    this.game.softDrop();
+                    this.lastTickTime = time;
+                }
+            }
+
+            /**
+             * Resets the tick timer, causing the next tick to happen sooner.
+             * Useful after player input.
+             */
+            immediateRestart() {
+                this.lastTickTime = performance.now();
+            }
+        }
+
+        // --- Initialization ---
+
+        /**
+         * Initializes the Three.js scene, camera, renderer, and game components.
+         */
+        function init() {
+            // Scene setup
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x222222); // Dark background
+
+            // Camera setup
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            // Camera position will be adjusted by adjustPerspectiveCamera later
+
+            // Renderer setup
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; // Enable shadows
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Soft shadows
+            document.body.appendChild(renderer.domElement);
+
+            // Enable WebXR for the renderer
+            renderer.xr.enabled = true;
+            document.body.appendChild(VRButton.createButton(renderer));
+
+            // Lights
+            const ambientLight = new THREE.HemisphereLight(0xaaaaaa, 0x444444, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 10, 7);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            scene.add(directionalLight);
+
+            // OrbitControls for desktop debugging (will be disabled in VR)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.target.set(0, 0, 0); // Center of the game grid
+            controls.update();
+
+            // Adjust camera to frame the game field
+            adjustPerspectiveCamera();
+
+            // Initialize game and tick manager
+            game = new Game();
+            tickManager = new TickManager(game);
+
+            // Set up VR controllers
+            for (let i = 0; i < 2; i++) {
+                const controller = renderer.xr.getController(i);
+                scene.add(controller);
+                setupController(controller, i);
+            }
+
+            // Add gamepad connection/disconnection listeners (more general than WebXR specific)
+            window.addEventListener('gamepadconnected', onGamepadConnected);
+            window.addEventListener('gamepaddisconnected', onGamepadDisconnected);
+
+            // Handle window resizing
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        /**
+         * Handles window resizing.
+         */
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            adjustPerspectiveCamera(); // Re-adjust camera position
+        }
+
+        /**
+         * Main animation loop.
+         * @param {number} time - Current time provided by WebXR.
+         */
+        function animate(time) {
+            // Update controls for desktop mode
+            if (!renderer.xr.isPresenting) {
+                controls.update();
+            }
+
+            // Handle controller raycasting and input
+            handleControllerRaycasting();
+            for (const { controller } of controllers) {
+                processGamepadInput(controller);
+            }
+
+            // Update game logic
+            tickManager.update(time);
+            game.update();
+
+            renderer.render(scene, camera);
+        }
+
+        // Start the game when the window loads
+        window.onload = function () {
+            init();
+            renderer.setAnimationLoop(animate);
+        };
+
+    </script>
 </body>
 </html>
