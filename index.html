@@ -1,67 +1,595 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  </head>
-  <body>
-    <a-scene>
-      <a-box
-        position="0 -10 0"
-        width="20"
-        height="20"
-        depth="0.1"
-        rotation="-90 0 0"
-        color="#808080"
-      ></a-box>
+<head>
+    <meta charset="utf-8">
+    <title>Memory Fragments | Phase 3 - Emergent Wonders</title>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+    <script src="https://unpkg.com/aframe-particle-system-component@1.3.0/dist/aframe-particle-system-component.min.js"></script>
+</head>
+<body>
+    <a-scene background="color: #0a0a1a" fog="type: exponential; color: #0a0a1a; density: 0.05">
+        <!-- Assets -->
+        <a-assets>
+            <!-- Embedded SVG Textures -->
+            <img id="memoryTexture1" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTAsMEgyNTZWMjU2SDBaIiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTMyLDMySDY0VjY0SDMyVjMyWiIgZmlsbD0iI2ZmNjYwMCIvPjxwYXRoIGQ9Ik05Niw5NkgxMjhWMTI4SDk2Vjk2WiIgZmlsbD0iIzAwZmYwMCIvPjxwYXRoIGQ9Ik0xNjAsMTYwSDE5MlYxOTJIMTYwVjE2MFoiIGZpbGw9IiMwMDY2ZmYiLz48L3N2Zz4=">
+            <img id="memoryTexture2" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTAsMEgyNTZWMjU2SDBaIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSI2NCIgZmlsbD0iI2ZmMDAwMCIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iNjQiIHI9IjMyIiBmaWxsPSIjMDBmZjAwIi8+PGNpcmNsZSBjeD0iMTkyIiBjeT0iNjQiIHI9IjMyIiBmaWxsPSIjMDA2NmZmIi8+PGNpcmNsZSBjeD0iNjQiIGN5PSIxOTIiIHI9IjMyIiBmaWxsPSIjZmYwMGZmIi8+PGNpcmNsZSBjeD0iMTkyIiBjeT0iMTkyIiByPSIzMiIgZmlsbD0iI2ZmZmYwMCIvPjwvc3ZnPg==">
+            
+            <!-- Audio Assets -->
+            <audio id="ambientAudio" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
+            <audio id="interactionAudio" src="data:audio/wav;base64,UklGRlwGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
+            <audio id="secretAudio" src="data:audio/wav;base64,UklGRlwGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
+        </a-assets>
 
-      <a-box
-        position="0 10 0"
-        width="20"
-        height="20"
-        depth="0.1"
-        rotation="90 0 0"
-        color="#808080"
-      ></a-box>
+        <!-- Camera with controllers -->
+        <a-entity id="rig" position="0 1.6 0">
+            <a-entity id="camera" camera look-controls position="0 0 0"></a-entity>
+            <!-- Left Controller -->
+            <a-entity id="leftController" 
+                      laser-controls="hand: left"
+                      raycaster="objects: .interactable"
+                      line="color: #00ffff; opacity: 0.5"
+                      position="0 0 0">
+            </a-entity>
+            <!-- Right Controller -->
+            <a-entity id="rightController" 
+                      laser-controls="hand: right"
+                      raycaster="objects: .interactable"
+                      line="color: #ff00ff; opacity: 0.5"
+                      position="0 0 0">
+            </a-entity>
+        </a-entity>
 
-      <a-box
-        position="0 0 -10"
-        width="20"
-        height="20"
-        depth="0.1"
-        color="#FF0000"
-      ></a-box>
+        <!-- Audio Listener -->
+        <a-entity sound="src: #ambientAudio; autoplay: true; loop: true; volume: 0.3"></a-entity>
 
-      <a-box
-        position="0 0 10"
-        width="20"
-        height="20"
-        depth="0.1"
-        color="#00FF00"
-      ></a-box>
+        <!-- Sky with animated gradient -->
+        <a-sky>
+            <a-animation attribute="material.color" 
+                         from="#0a0a1a" 
+                         to="#1a0a2a" 
+                         dur="10000" 
+                         repeat="indefinite" 
+                         direction="alternate">
+            </a-animation>
+        </a-sky>
 
-      <a-box
-        position="-10 0 0"
-        width="20"
-        height="20"
-        depth="0.1"
-        rotation="0 90 0"
-        color="#0000FF"
-      ></a-box>
+        <!-- Central Memory Core with enhanced effects -->
+        <a-entity id="memoryCore" position="0 1.6 -5" rotation="0 0 0">
+            <a-entity 
+                geometry="primitive: sphere; radius: 1.5" 
+                material="color: #4a00e0; transparent: true; opacity: 0.3; shader: flat"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
+                class="interactable"
+                event-set__mouseenter="material.opacity: 0.7; material.color: #8e2de2"
+                event-set__mouseleave="material.opacity: 0.3; material.color: #4a00e0">
+            </a-entity>
+            <a-entity 
+                geometry="primitive: torus; radius: 2; radiusTubular: 0.1" 
+                material="color: #00f5d4; transparent: true; opacity: 0.6"
+                position="0 0 0"
+                animation="property: rotation; to: 360 0 0; loop: true; dur: 15000; easing: linear">
+            </a-entity>
+            <!-- Core particle system -->
+            <a-entity particle-system="preset: dust; particleCount: 500; color: #8e2de2,#00f5d4; opacity: 0.4"></a-entity>
+        </a-entity>
 
-      <a-box
-        position="10 0 0"
-        width="20"
-        height="20"
-        depth="0.1"
-        rotation="0 -90 0"
-        color="#FFFF00"
-      ></a-box>
+        <!-- Floating Memory Fragments with enhanced interactions -->
+        <a-entity id="fragment1" position="-4 2 -3" class="interactable memory-fragment">
+            <a-entity 
+                geometry="primitive: box; width: 1.5; height: 1.5; depth: 1.5" 
+                material="src: #memoryTexture1; transparent: true; opacity: 0.8"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
+                animation__float="property: position; to: -4 2.5 -3; loop: true; dir: alternate; dur: 3000; easing: easeInOutQuad">
+            </a-entity>
+            <a-entity particle-system="preset: dust; particleCount: 100; color: #ff6b6b,#ffa07a; opacity: 0.6"></a-entity>
+            <!-- Fragment-specific light -->
+            <a-light type="point" color="#ff6b6b" intensity="0.8" distance="5"></a-light>
+        </a-entity>
 
-      <a-entity id="cameraRig" position="0 1.6 0">
-        <a-entity camera="userHeight: 1.6" look-controls wasd-controls position="0 0 0"></a-entity>
-        <a-entity meta-touch-controls="hand: left"></a-entity>
-        <a-entity meta-touch-controls="hand: right"></a-entity>
-      </a-entity>
+        <a-entity id="fragment2" position="4 1 -4" class="interactable memory-fragment">
+            <a-entity 
+                geometry="primitive: octahedron; radius: 1" 
+                material="src: #memoryTexture2; transparent: true; opacity: 0.7"
+                animation="property: rotation; to: 360 0 0; loop: true; dur: 12000; easing: linear"
+                animation__float="property: position; to: 4 1.5 -4; loop: true; dir: alternate; dur: 4000; easing: easeInOutQuad">
+            </a-entity>
+            <a-entity particle-system="preset: default; particleCount: 200; color: #00f5d4,#00bbf9; opacity: 0.5"></a-entity>
+            <!-- Fragment-specific light -->
+            <a-light type="point" color="#00f5d4" intensity="0.8" distance="5"></a-light>
+        </a-entity>
+
+        <a-entity id="fragment3" position="0 3 -6" class="interactable memory-fragment">
+            <a-entity 
+                geometry="primitive: dodecahedron; radius: 1.2" 
+                material="color: #8e2de2; transparent: true; opacity: 0.6"
+                animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; easing: linear"
+                animation__float="property: position; to: 0 3.5 -6; loop: true; dir: alternate; dur: 3500; easing: easeInOutQuad">
+            </a-entity>
+            <a-entity particle-system="preset: default; particleCount: 150; color: #f15bb5,#fee440; opacity: 0.4"></a-entity>
+            <!-- Fragment-specific light -->
+            <a-light type="point" color="#f15bb5" intensity="0.8" distance="5"></a-light>
+        </a-entity>
+
+        <!-- Interactive Walls with enhanced feedback -->
+        <a-entity id="leftWall" 
+                  geometry="primitive: plane; width: 10; height: 10" 
+                  material="color: #001f3f; transparent: true; opacity: 0.2"
+                  position="-5 1.6 -2" 
+                  rotation="0 30 0"
+                  class="interactable"
+                  event-set__mouseenter="material.opacity: 0.6; material.color: #0074D9"
+                  event-set__mouseleave="material.opacity: 0.2; material.color: #001f3f">
+            <!-- Wall particle system -->
+            <a-entity particle-system="preset: rain; particleCount: 50; color: #0074D9; opacity: 0.3; velocity: 0 0 0"></a-entity>
+        </a-entity>
+
+        <a-entity id="rightWall" 
+                  geometry="primitive: plane; width: 10; height: 10" 
+                  material="color: #3d003d; transparent: true; opacity: 0.2"
+                  position="5 1.6 -2" 
+                  rotation="0 -30 0"
+                  class="interactable"
+                  event-set__mouseenter="material.opacity: 0.6; material.color: #8e2de2"
+                  event-set__mouseleave="material.opacity: 0.2; material.color: #3d003d">
+            <!-- Wall particle system -->
+            <a-entity particle-system="preset: rain; particleCount: 50; color: #8e2de2; opacity: 0.3; velocity: 0 0 0"></a-entity>
+        </a-entity>
+
+        <!-- Ground Grid with enhanced visual -->
+        <a-entity id="grid" 
+                  geometry="primitive: plane; width: 30; height: 30" 
+                  material="shader: flat; color: #0a0a1a"
+                  rotation="-90 0 0"
+                  position="0 -0.5 0">
+            <a-entity 
+                geometry="primitive: plane; width: 30; height: 30" 
+                material="shader: flat; color: #ffffff; wireframe: true; wireframeLinewidth: 0.5; opacity: 0.1"
+                rotation="-90 0 0"
+                position="0 0.01 0">
+            </a-entity>
+            <!-- Grid particle system -->
+            <a-entity particle-system="preset: dust; particleCount: 200; color: #4a00e0,#00f5d4; opacity: 0.2; velocity: 0 0.1 0"></a-entity>
+        </a-entity>
+
+        <!-- Secret Portal (Hidden until discovered) -->
+        <a-entity id="secretPortal" 
+                  position="0 0.1 -10" 
+                  visible="false"
+                  class="interactable secret-element">
+            <a-entity 
+                geometry="primitive: torus; radius: 1; radiusTubular: 0.2" 
+                material="color: #ff00ff; transparent: true; opacity: 0.7"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 5000">
+            </a-entity>
+            <a-entity 
+                geometry="primitive: sphere; radius: 0.8" 
+                material="color: #000000; transparent: true; opacity: 0.3"
+                position="0 0 0">
+            </a-entity>
+            <a-entity particle-system="preset: dust; particleCount: 300; color: #ff00ff,#00ffff; opacity: 0.5"></a-entity>
+        </a-entity>
+
+        <!-- Ambient Lights -->
+        <a-light type="ambient" color="#404040"></a-light>
+        <a-light type="directional" color="#ffffff" intensity="0.8" position="-1 5 2"></a-light>
+        <a-light type="hemisphere" color="#8e2de2" groundColor="#00f5d4" intensity="0.3"></a-light>
+
+        <!-- Dynamic lighting system -->
+        <a-entity id="dynamicLight" 
+                  light="type: point; color: #ffffff; intensity: 0.5" 
+                  position="0 3 -5">
+            <a-animation attribute="light.color" 
+                         from="#ffffff" 
+                         to="#8e2de2" 
+                         dur="5000" 
+                         repeat="indefinite" 
+                         direction="alternate">
+            </a-animation>
+        </a-entity>
+
+        <!-- Script for enhanced interactions -->
+        <script>
+            // Enhanced controller interaction system
+            AFRAME.registerComponent('controller-interactions', {
+                init: function() {
+                    const el = this.el;
+                    let interactionCount = 0;
+                    
+                    // Handle controller events
+                    el.addEventListener('triggerdown', function(evt) {
+                        console.log('Trigger pressed on', el.getAttribute('id'));
+                        // Activate memory core
+                        document.querySelector('#memoryCore').setAttribute('material', 'opacity', '0.8');
+                        
+                        // Play interaction sound
+                        const soundEl = document.querySelector('[sound]');
+                        if (soundEl) {
+                            soundEl.components.sound.playSound();
+                        }
+                        
+                        // Track interactions for secret discovery
+                        interactionCount++;
+                        if (interactionCount >= 10) {
+                            unlockSecret();
+                        }
+                    });
+                    
+                    el.addEventListener('triggerup', function(evt) {
+                        document.querySelector('#memoryCore').setAttribute('material', 'opacity', '0.3');
+                    });
+                    
+                    el.addEventListener('gripdown', function(evt) {
+                        // Activate all particles
+                        const particles = document.querySelectorAll('[particle-system]');
+                        particles.forEach(p => {
+                            p.setAttribute('particle-system', 'enabled', true);
+                        });
+                        
+                        // Change sky color
+                        document.querySelector('a-sky').setAttribute('material', 'color', '#1a0a2a');
+                    });
+                    
+                    el.addEventListener('gripup', function(evt) {
+                        // Deactivate particles after delay
+                        setTimeout(() => {
+                            const particles = document.querySelectorAll('[particle-system]');
+                            particles.forEach(p => {
+                                p.setAttribute('particle-system', 'enabled', false);
+                            });
+                        }, 2000);
+                        
+                        // Reset sky color
+                        document.querySelector('a-sky').setAttribute('material', 'color', '#0a0a1a');
+                    });
+                }
+            });
+
+            // Memory fragment behavior with procedural generation
+            AFRAME.registerComponent('memory-fragment', {
+                schema: {
+                    type: {type: 'string', default: 'random'},
+                    seed: {type: 'number', default: Math.random() * 1000}
+                },
+                
+                init: function() {
+                    const el = this.el;
+                    let isActivated = false;
+                    let fragmentType = this.data.type;
+                    
+                    // Generate random fragment type if not specified
+                    if (fragmentType === 'random') {
+                        const types = ['box', 'sphere', 'octahedron', 'tetrahedron', 'torus'];
+                        fragmentType = types[Math.floor(Math.random() * types.length)];
+                    }
+                    
+                    // Apply fragment type
+                    const geometryEl = el.querySelector('[geometry]');
+                    if (geometryEl) {
+                        switch(fragmentType) {
+                            case 'sphere':
+                                geometryEl.setAttribute('geometry', 'primitive: sphere; radius: 1');
+                                break;
+                            case 'octahedron':
+                                geometryEl.setAttribute('geometry', 'primitive: octahedron; radius: 1');
+                                break;
+                            case 'tetrahedron':
+                                geometryEl.setAttribute('geometry', 'primitive: tetrahedron; radius: 1');
+                                break;
+                            case 'torus':
+                                geometryEl.setAttribute('geometry', 'primitive: torus; radius: 1; radiusTubular: 0.3');
+                                break;
+                            default: // box
+                                geometryEl.setAttribute('geometry', 'primitive: box; width: 1.5; height: 1.5; depth: 1.5');
+                        }
+                    }
+                    
+                    el.addEventListener('click', function() {
+                        if (!isActivated) {
+                            // Expand fragment
+                            el.setAttribute('scale', '1.5 1.5 1.5');
+                            
+                            // Change particle system
+                            const particles = el.querySelector('[particle-system]');
+                            if (particles) {
+                                particles.setAttribute('particle-system', {
+                                    particleCount: 500,
+                                    velocity: '0 0.5 0'
+                                });
+                            }
+                            
+                            // Add glow effect
+                            const geometryEl = el.querySelector('[geometry]');
+                            if (geometryEl) {
+                                geometryEl.setAttribute('material', 'emissive', '#ffffff');
+                            }
+                            
+                            isActivated = true;
+                            
+                            // Play sound
+                            const soundEl = document.createElement('a-entity');
+                            soundEl.setAttribute('sound', {
+                                src: '#interactionAudio',
+                                autoplay: true,
+                                volume: 0.5
+                            });
+                            el.appendChild(soundEl);
+                            
+                            // Remove sound entity after playing
+                            setTimeout(() => {
+                                if (soundEl.parentNode) {
+                                    soundEl.parentNode.removeChild(soundEl);
+                                }
+                            }, 2000);
+                            
+                            // Maybe spawn a new fragment?
+                            if (Math.random() > 0.7) {
+                                spawnNewFragment();
+                            }
+                        } else {
+                            // Reset fragment
+                            el.setAttribute('scale', '1 1 1');
+                            
+                            const particles = el.querySelector('[particle-system]');
+                            if (particles) {
+                                particles.setAttribute('particle-system', {
+                                    particleCount: 100,
+                                    velocity: '0 0 0'
+                                });
+                            }
+                            
+                            const geometryEl = el.querySelector('[geometry]');
+                            if (geometryEl) {
+                                geometryEl.setAttribute('material', 'emissive', '#000000');
+                            }
+                            
+                            isActivated = false;
+                        }
+                    });
+                }
+            });
+
+            // Secret discovery system
+            AFRAME.registerComponent('secret-discovery', {
+                init: function() {
+                    const el = this.el;
+                    let discoveryProgress = 0;
+                    
+                    // Listen for special interactions
+                    el.addEventListener('mouseenter', function() {
+                        discoveryProgress += 0.1;
+                        checkDiscovery(discoveryProgress);
+                    });
+                    
+                    el.addEventListener('click', function() {
+                        discoveryProgress += 0.3;
+                        checkDiscovery(discoveryProgress);
+                    });
+                }
+            });
+
+            // Add component to controllers
+            document.addEventListener('DOMContentLoaded', function() {
+                document.querySelector('#leftController').setAttribute('controller-interactions', '');
+                document.querySelector('#rightController').setAttribute('controller-interactions', '');
+                
+                // Add memory fragment behavior
+                const fragments = document.querySelectorAll('.memory-fragment');
+                fragments.forEach(fragment => {
+                    fragment.setAttribute('memory-fragment', '');
+                });
+                
+                // Add click handlers to interactable objects
+                const interactables = document.querySelectorAll('.interactable');
+                interactables.forEach(obj => {
+                    obj.addEventListener('click', function() {
+                        // Create visual feedback
+                        const originalColor = this.getAttribute('material')?.color || '#ffffff';
+                        this.setAttribute('material', 'color', '#ffffff');
+                        
+                        setTimeout(() => {
+                            this.setAttribute('material', 'color', originalColor);
+                        }, 300);
+                        
+                        // Add ripple effect
+                        createRippleEffect(this.object3D.position);
+                    });
+                });
+                
+                // Add secret discovery to walls
+                const walls = document.querySelectorAll('#leftWall, #rightWall');
+                walls.forEach(wall => {
+                    wall.setAttribute('secret-discovery', '');
+                });
+                
+                // Add floating animation to all fragments
+                const floatingFragments = document.querySelectorAll('[animation__float]');
+                let timeOffset = 0;
+                floatingFragments.forEach(fragment => {
+                    const anim = fragment.getAttribute('animation__float');
+                    if (anim) {
+                        anim.dur = 3000 + Math.random() * 2000; // Randomize duration
+                        anim.delay = timeOffset; // Stagger animations
+                        fragment.setAttribute('animation__float', anim);
+                        timeOffset += 500;
+                    }
+                });
+                
+                // Start background procedural generation
+                setInterval(proceduralGeneration, 10000);
+            });
+
+            // Ripple effect function
+            function createRippleEffect(position) {
+                const ripple = document.createElement('a-entity');
+                ripple.setAttribute('geometry', 'primitive: ring; radiusInner: 0.1; radiusOuter: 0.2');
+                ripple.setAttribute('material', 'color: #00f5d4; shader: flat; transparent: true; opacity: 0.8');
+                ripple.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
+                ripple.setAttribute('animation', {
+                    property: 'scale',
+                    to: '3 3 3',
+                    dur: 1000,
+                    easing: 'easeOutQuad'
+                });
+                ripple.setAttribute('animation__opacity', {
+                    property: 'material.opacity',
+                    to: 0,
+                    dur: 1000,
+                    easing: 'easeOutQuad'
+                });
+                
+                document.querySelector('a-scene').appendChild(ripple);
+                
+                // Remove after animation
+                setTimeout(() => {
+                    if (ripple.parentNode) {
+                        ripple.parentNode.removeChild(ripple);
+                    }
+                }, 1000);
+            }
+            
+            // Secret unlock function
+            function unlockSecret() {
+                const portal = document.querySelector('#secretPortal');
+                if (portal && !portal.getAttribute('visible')) {
+                    portal.setAttribute('visible', true);
+                    
+                    // Play secret sound
+                    const soundEl = document.createElement('a-entity');
+                    soundEl.setAttribute('sound', {
+                        src: '#secretAudio',
+                        autoplay: true,
+                        volume: 0.7
+                    });
+                    document.querySelector('a-scene').appendChild(soundEl);
+                    
+                    // Visual feedback
+                    document.querySelector('a-sky').setAttribute('material', 'color', '#2a0a2a');
+                    
+                    // Create particle burst
+                    const burst = document.createElement('a-entity');
+                    burst.setAttribute('particle-system', {
+                        preset: 'dust',
+                        particleCount: 1000,
+                        color: '#ff00ff,#00ffff',
+                        opacity: 0.8
+                    });
+                    document.querySelector('a-scene').appendChild(burst);
+                    
+                    setTimeout(() => {
+                        if (burst.parentNode) {
+                            burst.parentNode.removeChild(burst);
+                        }
+                        if (soundEl.parentNode) {
+                            soundEl.parentNode.removeChild(soundEl);
+                        }
+                    }, 3000);
+                }
+            }
+            
+            // Check discovery progress
+            function checkDiscovery(progress) {
+                if (progress > 1.0) {
+                    // Reveal hidden elements
+                    const hiddenElements = document.querySelectorAll('.secret-element');
+                    hiddenElements.forEach(el => {
+                        el.setAttribute('visible', true);
+                    });
+                }
+            }
+            
+            // Spawn new fragment procedurally
+            function spawnNewFragment() {
+                const scene = document.querySelector('a-scene');
+                const fragment = document.createElement('a-entity');
+                
+                // Random position around the center
+                const x = (Math.random() - 0.5) * 10;
+                const y = 1 + Math.random() * 3;
+                const z = -3 - Math.random() * 5;
+                
+                fragment.setAttribute('position', `${x} ${y} ${z}`);
+                fragment.setAttribute('class', 'interactable memory-fragment');
+                
+                // Create geometry
+                const geometry = document.createElement('a-entity');
+                geometry.setAttribute('geometry', 'primitive: sphere; radius: 0.8');
+                geometry.setAttribute('material', 'color: #ffffff; transparent: true; opacity: 0.7');
+                geometry.setAttribute('animation', {
+                    property: 'rotation',
+                    to: '0 360 0',
+                    loop: true,
+                    dur: 8000
+                });
+                
+                // Create particles
+                const particles = document.createElement('a-entity');
+                particles.setAttribute('particle-system', {
+                    preset: 'dust',
+                    particleCount: 100,
+                    color: '#ffffff,#ffff00',
+                    opacity: 0.5
+                });
+                
+                fragment.appendChild(geometry);
+                fragment.appendChild(particles);
+                scene.appendChild(fragment);
+                
+                // Add behavior
+                fragment.setAttribute('memory-fragment', '');
+                
+                // Remove after some time
+                setTimeout(() => {
+                    if (fragment.parentNode) {
+                        fragment.parentNode.removeChild(fragment);
+                    }
+                }, 30000);
+            }
+            
+            // Procedural generation background process
+            function proceduralGeneration() {
+                // Randomly change fragment properties
+                const fragments = document.querySelectorAll('.memory-fragment');
+                fragments.forEach(fragment => {
+                    if (Math.random() > 0.8) {
+                        // Change color
+                        const colors = ['#ff6b6b', '#00f5d4', '#8e2de2', '#f15bb5', '#00bbf9'];
+                        const color = colors[Math.floor(Math.random() * colors.length)];
+                        
+                        const geometryEl = fragment.querySelector('[geometry]');
+                        if (geometryEl) {
+                            geometryEl.setAttribute('material', 'color', color);
+                        }
+                    }
+                });
+                
+                // Maybe spawn a temporary effect
+                if (Math.random() > 0.7) {
+                    const effect = document.createElement('a-entity');
+                    effect.setAttribute('position', '0 2 -5');
+                    effect.setAttribute('geometry', 'primitive: ring; radiusInner: 0.5; radiusOuter: 1');
+                    effect.setAttribute('material', 'color: #ffffff; transparent: true; opacity: 0.5');
+                    effect.setAttribute('animation', {
+                        property: 'scale',
+                        to: '5 5 5',
+                        dur: 2000
+                    });
+                    effect.setAttribute('animation__opacity', {
+                        property: 'material.opacity',
+                        to: 0,
+                        dur: 2000
+                    });
+                    
+                    document.querySelector('a-scene').appendChild(effect);
+                    
+                    setTimeout(() => {
+                        if (effect.parentNode) {
+                            effect.parentNode.removeChild(effect);
+                        }
+                    }, 2000);
+                }
+            }
+        </script>
     </a-scene>
-  </body>
+</body>
 </html>
