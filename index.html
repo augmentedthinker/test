@@ -1,15 +1,103 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  </head>
-  <body>
-    <a-scene>
-      <a-box position="0 1.5 -3" rotation="0 45 0" color="#4CC3D9"></a-box>
-      <a-sphere position="-1 1.25 -5" radius="1.25" color="#EF2D5E"></a-sphere>
-      <a-cylinder position="1 0.75 -3" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
-      <a-plane position="0 0 -4" rotation="-90 0 0" width="4" height="4" color="#7BC8A4"></a-plane>
-      <a-sky color="#ECECEC"></a-sky>
-    </a-scene>
-  </body>
+<head>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-family: monospace; }
+  </style>
+</head>
+<body>
+  <div class="loading" id="loading">INITIALIZING WORKSHOP SPACE...</div>
+  
+  <a-scene 
+    loading-screen="enabled: false"
+    background="color: #000"
+    renderer="antialias: true; colorManagement: true;"
+    vr-mode-ui="enabled: true">
+    
+    <!-- Workshop Environment -->
+    <a-entity id="workshop" position="0 0 -5">
+      <!-- Floating Code Cubes -->
+      <a-entity id="cube-chamber" position="0 1.6 0">
+        <a-box id="cube1" position="-2 0 0" rotation="0 45 0" color="#4CC3D9" 
+               animation="property: rotation; to: 0 360 0; dur: 8000; easing: linear; loop: true"
+               event-set__mouseenter="_event: mouseenter; color: #FF6B6B"
+               event-set__mouseleave="_event: mouseleave; color: #4CC3D9">
+          <a-text value="<div>" position="0 1.5 0" color="#FF6B6B" align="center"></a-text>
+        </a-box>
+        
+        <a-box id="cube2" position="2 0 0" rotation="0 45 0" color="#9B59B6"
+               animation="property: rotation; to: 360 0 0; dur: 6000; easing: linear; loop: true"
+               event-set__mouseenter="_event: mouseenter; color: #1ABC9C"
+               event-set__mouseleave="_event: mouseleave; color: #9B59B6">
+          <a-text value="</div>" position="0 1.5 0" color="#1ABC9C" align="center"></a-text>
+        </a-box>
+        
+        <a-box id="cube3" position="0 2 0" rotation="45 0 0" color="#F1C40F"
+               animation="property: rotation; to: 0 0 360; dur: 4000; easing: linear; loop: true"
+               event-set__mouseenter="_event: mouseenter; color: #E74C3C"
+               event-set__mouseleave="_event: mouseleave; color: #F1C40F">
+          <a-text value="{}" position="0 1.5 0" color="#E74C3C" align="center"></a-text>
+        </a-box>
+      </a-entity>
+      
+      <!-- Laser Pointer Interaction Grid -->
+      <a-entity id="laser-grid" position="0 0 -3">
+        <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#2C3E50" opacity="0.3"></a-plane>
+        <!-- Grid of interactive spheres -->
+        <script>
+          AFRAME.registerComponent('workshop-init', {
+            init: function() {
+              const grid = document.querySelector('#laser-grid');
+              for (let x = -4; x <= 4; x += 2) {
+                for (let z = -4; z <= 4; z += 2) {
+                  const sphere = document.createElement('a-sphere');
+                  sphere.setAttribute('position', `${x} 0.5 ${z}`);
+                  sphere.setAttribute('radius', '0.2');
+                  sphere.setAttribute('color', '#3498DB');
+                  sphere.setAttribute('class', 'interactable');
+                  sphere.setAttribute('animation__mouseenter', 'property: scale; to: 2 2 2; dur: 300; easing: easeOutQuad');
+                  sphere.setAttribute('animation__mouseleave', 'property: scale; to: 1 1 1; dur: 300; easing: easeOutQuad');
+                  grid.appendChild(sphere);
+                }
+              }
+              document.getElementById('loading').style.display = 'none';
+            }
+          });
+        </script>
+      </a-entity>
+    </a-entity>
+    
+    <!-- Player Camera with Laser Pointer -->
+    <a-entity laser-controls="hand: right"></a-entity>
+    <a-entity camera look-controls position="0 1.6 0"></a-entity>
+    
+    <!-- Workshop Ambient Sounds -->
+    <a-entity sound="src: url(https://cdn.aframe.io/sounds/ambient.mp3); autoplay: true; loop: true; volume: 0.1"></a-entity>
+  </a-scene>
+
+  <script>
+    // Workshop utility functions
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add workshop behaviors
+      const scene = document.querySelector('a-scene');
+      scene.setAttribute('workshop-init', '');
+      
+      // Cube chamber interaction
+      document.querySelectorAll('#cube-chamber a-box').forEach((cube, index) => {
+        cube.addEventListener('click', function() {
+          this.setAttribute('color', `hsl(${Math.random() * 360}, 70%, 60%)`);
+          // Spawn particle effect
+          const particles = document.createElement('a-entity');
+          particles.setAttribute('position', this.getAttribute('position'));
+          particles.setAttribute('particle-system', 'preset: dust; particleCount: 100');
+          scene.appendChild(particles);
+          setTimeout(() => scene.removeChild(particles), 2000);
+        });
+      });
+    });
+  </script>
+</body>
 </html>
