@@ -1,273 +1,30 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8">
-    <title>Immersive Forest</title>
+<head>
+    <title>Immersive A-Frame Forest</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-
-    <!-- Include required components for environment -->
-    <script src="https://unpkg.com/aframe-environment-component@1.5.3/dist/aframe-environment-component.min.js"></script>
-    <script src="https://unpkg.com/aframe-particle-system-component@1.0.0/dist/aframe-particle-system-component.min.js"></script>
-    <script src="https://unpkg.com/aframe-aabb-collider-component@3.2.2/dist/aframe-aabb-collider-component.min.js"></script>
-
-    <!-- (Optional) Include if you want advanced water -->
-    <!-- <script src="https://unpkg.com/a-water@0.1.1/dist/a-water.min.js"></script> -->
-
-    <!-- (Optional) Include stats for development -->
-    <!-- <script src="https://cdn.jsdelivr.net/gh/aframevr/aframe@master/dist/aframe-master.min.js"></script> -->
-
-    <style>
-      body { margin: 0; overflow: hidden; }
-    </style>
-  </head>
-  <body>
-    <a-scene
-      renderer="colorManagement: true; foveationLevel: 3;"
-      fog="type: exponential; color: #ddeeff; density: 0.001"
-      stats <!-- Remove for production -->
-    >
-
-      <!-- Preload assets -->
-      <a-assets>
-        <audio id="forestSound" src="https://cdn.aframe.io/test-audio/forest.mp3" preload="auto" crossorigin="anonymous"></audio>
-        <audio id="rainSound" src="https://cdn.aframe.io/test-audio/rain.mp3" preload="auto" crossorigin="anonymous"></audio>
-        <audio id="snowSound" src="https://cdn.aframe.io/test-audio/wind.mp3" preload="auto" crossorigin="anonymous"></audio>
-        <!-- Add your own textures if needed -->
-        <!-- <img id="skyTexture" src="path/to/your/sky.jpg" crossorigin="anonymous"> -->
-      </a-assets>
-
-      <!-- 1. Static Environment Baseline -->
-      <a-entity id="env"
-        environment="preset: forest;
-                     shadow: true;
-                     fog: 0.1;
-                     groundColor: #6B8E23;
-                     groundColor2: #228B22;
-                     dressingAmount: 10;">
-      </a-entity>
-
-      <!-- 2. Add Static Water (Optional) -->
-       <a-entity id="lake"
-         geometry="primitive: circle; radius: 5"
-         rotation="-90 0 0"
-         position="0 0.1 -20" <!-- Slightly above ground -->
-         material="color: #1e90ff; opacity: 0.7; shader: standard; roughness: 0.1; metalness: 0.0"
-         shadow="receive: true">
-       </a-entity>
-
-      <!-- 3. Ambient Sound -->
-      <a-entity sound="src: #forestSound; autoplay: true; loop: true; volume: 0.5; positional: false"></a-entity>
-
-      <!-- 4. Dynamic Weather Particles (Initially Disabled) -->
-      <a-entity id="rainEmitter" particle-system="preset: rain; particleCount: 0; color: #BBB;"></a-entity>
-      <a-entity id="snowEmitter" particle-system="preset: snow; particleCount: 0;"></a-entity>
-
-      <!-- 5. Region Trigger Example (Foggy Lake Area) -->
-      <a-box class="fogzone"
-        position="0 1 -20" <!-- Centered on lake, slightly above ground -->
-        width="20" height="5" depth="20"
-        material="opacity: 0; transparent: true;"
-        visible="false">
-      </a-box>
-
-      <!-- 6. Player Rig with Controller Movement and Interaction -->
-      <!-- Assumes baseline setup includes camera rig and basic controls -->
-      <a-entity id="playerRig"
-        position="0 0 0"
-        movement-controls="controls: oculus-touch-controls; fly: false; speed: 0.1;" <!-- Basic movement -->
-        aabb-collider="objects: .fogzone; interval: 100;"> <!-- For region triggers -->
-
-        <!-- Camera -->
-        <a-entity id="head"
-          camera
-          look-controls="pointerLockEnabled: false;"
-          position="0 1.6 0">
+    <script src="https://unpkg.com/aframe-environment-component@1.3.3/dist/aframe-environment-component.min.js"></script>
+</head>
+<body>
+    <a-scene>
+        <a-entity id="player"
+                  movement-controls="speed: 0.1;"
+                  position="0 1.6 0"> <a-camera></a-camera>
+            <a-entity oculus-touch-controls="hand: right"></a-entity>
+            <a-entity oculus-touch-controls="hand: left"></a-entity>
         </a-entity>
 
-        <!-- Controller for Weather Toggle -->
-        <a-entity id="rightHand"
-          oculus-touch-controls="hand: right; model: false;">
+        <a-entity environment="preset: forest;
+                                dressingAmount: 100;
+                                groundTexture: walkernoise;
+                                skyType: atmosphere;
+                                lightPosition: 0 1 0.5;">
         </a-entity>
 
-        <!-- (Optional) Left Controller for other interactions -->
-        <a-entity id="leftHand"
-          oculus-touch-controls="hand: left; model: false;">
-        </a-entity>
-
-        <!-- Attach weather particles to player so they follow -->
-        <a-entity id="rainEmitterAttached" particle-system="preset: rain; particleCount: 0; color: #BBB;"></a-entity>
-        <a-entity id="snowEmitterAttached" particle-system="preset: snow; particleCount: 0;"></a-entity>
-
-      </a-entity>
-
-      <!-- (Optional) Simple Sky for Night Stars (if environment doesn't provide) -->
-      <!-- This is a placeholder idea, implementation might vary -->
-      <!-- <a-sky id="starSky" src="#starTexture" material="side: back; opacity: 0;"></a-sky> -->
-
+        <a-assets>
+            <audio id="forestSound" src="https://cdn.aframe.io/basic-hit/audio/kick.wav" preload="auto"></audio>
+            </a-assets>
+        <a-entity sound="src: #forestSound; autoplay: true; loop: true; volume: 0.5"></a-entity>
     </a-scene>
-
-    <script>
-      // --- JavaScript for Dynamic Features ---
-
-      let weather = 'clear';
-      const sceneEl = document.querySelector('a-scene');
-      const playerRig = document.getElementById('playerRig');
-      const rainSoundEl = document.querySelector('[sound*="rainSound"]');
-      const snowSoundEl = document.querySelector('[sound*="snowSound"]');
-      const forestSoundEl = document.querySelector('[sound*="forestSound"]');
-      const rainEmitter = document.querySelector('#rainEmitterAttached'); // Use attached emitter
-      const snowEmitter = document.querySelector('#snowEmitterAttached'); // Use attached emitter
-
-      // --- 4. Dynamic Day/Night Cycle (Simple Animation) ---
-      // Note: This relies on environment component's lightPosition being animatable.
-      // If not, implement via tick() function (see PRP Step 4 alt).
-      const dayCycleControl = document.createElement('a-entity');
-      dayCycleControl.setAttribute('animation__sun', {
-        property: 'environment.lightPosition',
-        to: '0 -1 -0.2', // Below horizon
-        dur: 120000, // 2 minutes
-        loop: true,
-        dir: 'alternate',
-        easing: 'linear'
-      });
-      // Assuming an environment entity with id 'env' exists
-      const envEl = document.getElementById('env');
-      envEl.appendChild(dayCycleControl);
-
-      // --- 5. Weather System Integration ---
-      function setWeather(mode) {
-        console.log("Setting weather to:", mode);
-        if (mode === 'rain') {
-          // Enable rain
-          rainEmitter.setAttribute('particle-system', 'particleCount', 5000); // Adjusted count
-          snowEmitter.setAttribute('particle-system', 'particleCount', 0);
-          // Adjust environment (if supported dynamically)
-          // envEl.setAttribute('environment', 'skyColor', '#777'); // [UNVERIFIED_ASSUMPTION]
-          // Darken ambient slightly?
-          // Play rain sound
-          if (rainSoundEl && rainSoundEl.components.sound) {
-              rainSoundEl.components.sound.stopSound();
-              rainSoundEl.setAttribute('sound', 'volume', 0.6);
-              rainSoundEl.components.sound.playSound();
-          }
-          // Duck forest sound
-           if (forestSoundEl && forestSoundEl.components.sound) {
-              forestSoundEl.setAttribute('sound', 'volume', 0.2);
-          }
-          // Disable shadows? (if supported dynamically)
-          // envEl.setAttribute('environment', 'shadow', false); // [UNVERIFIED_ASSUMPTION]
-
-        } else if (mode === 'snow') {
-          // Enable snow
-          rainEmitter.setAttribute('particle-system', 'particleCount', 0);
-          snowEmitter.setAttribute('particle-system', 'particleCount', 1500);
-          // envEl.setAttribute('environment', 'skyColor', '#aaa');
-          // Play snow sound
-           if (snowSoundEl && snowSoundEl.components.sound) {
-              snowSoundEl.components.sound.stopSound();
-              snowSoundEl.setAttribute('sound', 'volume', 0.5);
-              snowSoundEl.components.sound.playSound();
-          }
-          // Duck forest sound
-           if (forestSoundEl && forestSoundEl.components.sound) {
-              forestSoundEl.setAttribute('sound', 'volume', 0.2);
-          }
-        } else { // clear
-          // Disable weather
-          rainEmitter.setAttribute('particle-system', 'particleCount', 0);
-          snowEmitter.setAttribute('particle-system', 'particleCount', 0);
-          // envEl.setAttribute('environment', 'skyColor', '#87CEEB'); // Reset if changed
-          // Stop weather sounds
-           if (rainSoundEl && rainSoundEl.components.sound) {
-              rainSoundEl.components.sound.stopSound();
-          }
-          if (snowSoundEl && snowSoundEl.components.sound) {
-              snowSoundEl.components.sound.stopSound();
-          }
-          // Restore forest sound
-           if (forestSoundEl && forestSoundEl.components.sound) {
-              forestSoundEl.setAttribute('sound', 'volume', 0.5);
-          }
-          // Re-enable shadows? (if supported dynamically)
-          // envEl.setAttribute('environment', 'shadow', true); // [UNVERIFIED_ASSUMPTION]
-        }
-        weather = mode;
-      }
-
-      // --- 7. Controller Input for Weather Toggle ---
-      const rHand = document.getElementById('rightHand');
-      if (rHand) {
-        rHand.addEventListener('abuttondown', () => {
-          console.log("A Button Pressed");
-          // cycle weather: clear-> rain-> snow-> clear...
-          if (weather === 'clear') {
-            setWeather('rain');
-          } else if (weather === 'rain') {
-            setWeather('snow');
-          } else {
-            setWeather('clear');
-          }
-        });
-        // Example: B button to toggle day/night cycle (animation pause/resume)
-        rHand.addEventListener('bbuttondown', () => {
-          const animComponent = dayCycleControl.components['animation__sun'];
-          if (animComponent) {
-            if (animComponent.isRunning) {
-                animComponent.pause();
-            } else {
-                animComponent.resume();
-            }
-          }
-        });
-      }
-
-      // --- 6. Region-Based Effects ---
-      playerRig.addEventListener('hitstart', (evt) => {
-        console.log("Hit Start Event:", evt);
-        const intersectedEls = evt.detail.intersectedEls;
-        if (intersectedEls && intersectedEls.length > 0) {
-          for (let el of intersectedEls) {
-            if (el.classList.contains('fogzone')) {
-              console.log("Entering fog zone");
-              sceneEl.setAttribute('fog', 'density: 0.01; color: #8899aa'); // Thicker fog
-               if (forestSoundEl && forestSoundEl.components.sound) {
-                  forestSoundEl.setAttribute('sound', 'volume', 0.2); // Muffle sound
-              }
-              // Could also play a different sound here
-              break; // Handle one zone at a time
-            }
-          }
-        }
-      });
-
-      playerRig.addEventListener('hitend', (evt) => {
-        console.log("Hit End Event:", evt);
-        const clearedEls = evt.detail.intersectedEls;
-         if (clearedEls && clearedEls.length > 0) {
-          for (let el of clearedEls) {
-            if (el.classList.contains('fogzone')) {
-              console.log("Exiting fog zone");
-              sceneEl.setAttribute('fog', 'density: 0.001; color: #ddeeff'); // Default fog
-               if (forestSoundEl && forestSoundEl.components.sound) {
-                  forestSoundEl.setAttribute('sound', 'volume', 0.5); // Restore sound
-              }
-              break; // Handle one zone at a time
-            }
-          }
-        }
-      });
-
-      // --- Additional Notes ---
-      // - Movement: The `movement-controls` component provides basic WASD/Joystick movement.
-      //   You might need to include the `aframe-extras` library for this component.
-      //   <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.controls.min.js"></script>
-      //   Add `movement-controls` to the playerRig entity.
-      // - Teleportation: If preferred, integrate teleport controls (e.g., from aframe-extras or custom).
-      // - Performance: Monitor FPS using Quest Browser Dev HUD or OVR Metrics Tool.
-      //   Adjust particle counts, environment dressingAmount, or disable shadows if needed.
-      // - Audio: Ensure sounds are preloaded and autoplay permissions are handled (usually granted once VR session starts).
-      // - Assets: Replace placeholder audio URLs with your own hosted files.
-
-    </script>
-  </body>
+</body>
 </html>
