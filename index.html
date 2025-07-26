@@ -1,595 +1,375 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Memory Fragments | Phase 3 - Emergent Wonders</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
-    <script src="https://unpkg.com/aframe-particle-system-component@1.3.0/dist/aframe-particle-system-component.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Constellation</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 18px;
+            text-shadow: 1px 1px 2px black;
+            pointer-events: none; /* So it doesn't block controller rays */
+            z-index: 100;
+        }
+        #info a {
+            color: #00ffff;
+            text-decoration: none;
+        }
+        #info a:hover {
+            text-decoration: underline;
+        }
+    </style>
+    <!-- Load Three.js and required modules from CDN -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
 </head>
 <body>
-    <a-scene background="color: #0a0a1a" fog="type: exponential; color: #0a0a1a; density: 0.05">
-        <!-- Assets -->
-        <a-assets>
-            <!-- Embedded SVG Textures -->
-            <img id="memoryTexture1" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTAsMEgyNTZWMjU2SDBaIiBmaWxsPSJub25lIi8+PHBhdGggZD0iTTMyLDMySDY0VjY0SDMyVjMyWiIgZmlsbD0iI2ZmNjYwMCIvPjxwYXRoIGQ9Ik05Niw5NkgxMjhWMTI4SDk2Vjk2WiIgZmlsbD0iIzAwZmYwMCIvPjxwYXRoIGQ9Ik0xNjAsMTYwSDE5MlYxOTJIMTYwVjE2MFoiIGZpbGw9IiMwMDY2ZmYiLz48L3N2Zz4=">
-            <img id="memoryTexture2" src="data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjU2IiBoZWlnaHQ9IjI1NiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZmZmZmZmIi8+PHBhdGggZD0iTTAsMEgyNTZWMjU2SDBaIiBmaWxsPSJub25lIi8+PGNpcmNsZSBjeD0iMTI4IiBjeT0iMTI4IiByPSI2NCIgZmlsbD0iI2ZmMDAwMCIvPjxjaXJjbGUgY3g9IjY0IiBjeT0iNjQiIHI9IjMyIiBmaWxsPSIjMDBmZjAwIi8+PGNpcmNsZSBjeD0iMTkyIiBjeT0iNjQiIHI9IjMyIiBmaWxsPSIjMDA2NmZmIi8+PGNpcmNsZSBjeD0iNjQiIGN5PSIxOTIiIHI9IjMyIiBmaWxsPSIjZmYwMGZmIi8+PGNpcmNsZSBjeD0iMTkyIiBjeT0iMTkyIiByPSIzMiIgZmlsbD0iI2ZmZmYwMCIvPjwvc3ZnPg==">
+    <div id="info">Neural Constellation<br/>
+        <span style="font-size: 14px;">Squeeze Grip: Create Node | Trigger: Select/Move | Joystick: Scale Selected</span><br/>
+        <span style="font-size: 12px;">Nodes connect when close. Grab and move to teach the network.</span>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { ARButton } from 'three/addons/webxr/ARButton.js';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
+        // --- Configuration (from PRDs) ---
+        const CONFIG = {
+            MAX_NODES: 50, // Keep scene complexity manageable
+            NODE_RADIUS: 0.05, // Real-world scale (meters)
+            LINK_WIDTH: 0.005,
+            BASE_INTENSITY: 0.7,
+            HIGHLIGHT_COLOR: 0x00ffff,
+            NODE_COLOR: 0xffffff,
+            LINK_COLOR: 0xaaaaaa,
+            SELECTION_DISTANCE: 0.1, // How close to grab something
+            SCALING_SPEED: 0.5, // Units per second per joystick unit
+        };
+
+        // --- Core Three.js Setup ---
+        let container;
+        let camera, scene, renderer;
+        let controller1, controller2;
+        let controllerGrip1, controllerGrip2;
+        let reticle; // For initial placement help (from AR Baseline)
+        let hitTestSource = null;
+        let hitTestSourceRequested = false;
+
+        // --- Application State ---
+        const nodes = [];
+        const links = [];
+        let selectedObject = null;
+        let tempMatrix = new THREE.Matrix4();
+        let clock = new THREE.Clock();
+        let scalingDirection = 0; // For joystick scaling
+
+        init();
+        animate();
+
+        function init() {
+            container = document.createElement('div');
+            document.body.appendChild(container);
+
+            // 1. Scene Setup (from Environmental Design PRP)
+            scene = new THREE.Scene();
+            scene.background = null; // Essential for AR passthrough (from AR Baseline)
+
+            // 2. Camera & Renderer (from AR Baseline & Tetris Guide)
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            // Note: Camera position/orientation is managed by WebXR
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); // Alpha for AR (from AR Baseline)
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true; // Enable WebXR (from Tetris Guide)
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            // 3. Lighting (from Tetris Guide & Environmental Design)
+            const ambientLight = new THREE.AmbientLight(0xffffff, CONFIG.BASE_INTENSITY * 0.5);
+            scene.add(ambientLight);
+
+            const hemisphereLight = new THREE.HemisphereLight(0x80deea, 0x4caf50, CONFIG.BASE_INTENSITY * 0.3);
+            scene.add(hemisphereLight);
+
+            // 4. AR Initialization (from AR Baseline)
+            // Create AR Button and add to DOM
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local-floor', 'hit-test'] }));
+
+            // 5. Controllers (from Controller PRD & AR Baseline)
+            // Note: Using generic WebXR controllers, not A-Frame meta-touch-controls
+            controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
+            // Listen for squeeze (grip) start to create nodes (from Controller PRD Advanced Manipulation)
+            controller1.addEventListener('squeezestart', onSqueezeStart);
+            scene.add(controller1);
+
+            controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
+            controller2.addEventListener('squeezestart', onSqueezeStart);
+            scene.add(controller2);
+
+            // Controller models for visualization (from Controller PRD)
+            const controllerModelFactory = new XRControllerModelFactory();
+            controllerGrip1 = renderer.xr.getControllerGrip(0);
+            const model1 = controllerModelFactory.createControllerModel(controllerGrip1);
+            controllerGrip1.add(model1);
+            scene.add(controllerGrip1);
+
+            controllerGrip2 = renderer.xr.getControllerGrip(1);
+            const model2 = controllerModelFactory.createControllerModel(controllerGrip2);
+            controllerGrip2.add(model2);
+            scene.add(controllerGrip2);
+
+            // 6. Reticle for placement feedback (from AR Baseline)
+            reticle = new THREE.Mesh(
+                new THREE.RingGeometry(0.03, 0.05, 32).rotateX(-Math.PI / 2),
+                new THREE.MeshBasicMaterial({ color: 0x00ff00, opacity: 0.75, transparent: true })
+            );
+            reticle.matrixAutoUpdate = false;
+            reticle.visible = false;
+            scene.add(reticle);
+
+            // 7. Event Listeners
+            window.addEventListener('resize', onWindowResize);
+
+            // --- Custom Interaction Setup ---
+            // Listen for controller axes changes for scaling (Joystick Use from Controller PRD)
+            // We need to access the gamepad data directly in the animation loop for continuous input.
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // --- Interaction Handlers (from Controller PRD) ---
+
+        function onSelectStart(event) {
+            // Raycasting to find objects to grab/move (from Controller PRD Grabbing & Moving)
+            const controller = event.target;
+            const intersections = getIntersections(controller);
+
+            if (intersections.length > 0) {
+                const intersection = intersections[0];
+                const object = intersection.object;
+
+                // Check if it's a node we can select
+                if (object.isNode) {
+                    selectedObject = object;
+                    // "Grab" the object: make it a child of the controller
+                    controller.attach(object);
+                    object.material.emissive.set(CONFIG.HIGHLIGHT_COLOR);
+                }
+            }
+        }
+
+        function onSelectEnd(event) {
+            // Release the object (from Controller PRD Grabbing & Moving)
+            if (selectedObject) {
+                // Re-attach to scene
+                scene.attach(selectedObject);
+                selectedObject.material.emissive.set(0x000000);
+                // Check for nearby nodes to form a link
+                checkAndCreateLink(selectedObject);
+                selectedObject = null;
+            }
+        }
+
+        function onSqueezeStart(event) {
+            // Create a new node at the controller's position (from Creative Prompt)
+            const controller = event.target;
             
-            <!-- Audio Assets -->
-            <audio id="ambientAudio" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
-            <audio id="interactionAudio" src="data:audio/wav;base64,UklGRlwGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
-            <audio id="secretAudio" src="data:audio/wav;base64,UklGRlwGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQgGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT" preload="auto"></audio>
-        </a-assets>
+            // Limit number of nodes (Performance from AR Baseline)
+            if (nodes.length >= CONFIG.MAX_NODES) {
+                console.warn("Max nodes reached");
+                return;
+            }
 
-        <!-- Camera with controllers -->
-        <a-entity id="rig" position="0 1.6 0">
-            <a-entity id="camera" camera look-controls position="0 0 0"></a-entity>
-            <!-- Left Controller -->
-            <a-entity id="leftController" 
-                      laser-controls="hand: left"
-                      raycaster="objects: .interactable"
-                      line="color: #00ffff; opacity: 0.5"
-                      position="0 0 0">
-            </a-entity>
-            <!-- Right Controller -->
-            <a-entity id="rightController" 
-                      laser-controls="hand: right"
-                      raycaster="objects: .interactable"
-                      line="color: #ff00ff; opacity: 0.5"
-                      position="0 0 0">
-            </a-entity>
-        </a-entity>
+            const nodeGeometry = new THREE.SphereGeometry(CONFIG.NODE_RADIUS, 16, 16);
+            const nodeMaterial = new THREE.MeshStandardMaterial({
+                color: CONFIG.NODE_COLOR,
+                emissive: 0x222222,
+                roughness: 0.2,
+                metalness: 0.8
+            });
+            const node = new THREE.Mesh(nodeGeometry, nodeMaterial);
+            node.isNode = true; // Custom flag for identification
 
-        <!-- Audio Listener -->
-        <a-entity sound="src: #ambientAudio; autoplay: true; loop: true; volume: 0.3"></a-entity>
+            // Position the node slightly in front of the controller
+            node.position.set(0, 0, -0.1);
+            controller.attach(node); // Attach to controller to get its world position
+            scene.attach(node); // Immediately re-attach to scene so it stays
 
-        <!-- Sky with animated gradient -->
-        <a-sky>
-            <a-animation attribute="material.color" 
-                         from="#0a0a1a" 
-                         to="#1a0a2a" 
-                         dur="10000" 
-                         repeat="indefinite" 
-                         direction="alternate">
-            </a-animation>
-        </a-sky>
+            nodes.push(node);
+            scene.add(node);
+        }
 
-        <!-- Central Memory Core with enhanced effects -->
-        <a-entity id="memoryCore" position="0 1.6 -5" rotation="0 0 0">
-            <a-entity 
-                geometry="primitive: sphere; radius: 1.5" 
-                material="color: #4a00e0; transparent: true; opacity: 0.3; shader: flat"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 20000; easing: linear"
-                class="interactable"
-                event-set__mouseenter="material.opacity: 0.7; material.color: #8e2de2"
-                event-set__mouseleave="material.opacity: 0.3; material.color: #4a00e0">
-            </a-entity>
-            <a-entity 
-                geometry="primitive: torus; radius: 2; radiusTubular: 0.1" 
-                material="color: #00f5d4; transparent: true; opacity: 0.6"
-                position="0 0 0"
-                animation="property: rotation; to: 360 0 0; loop: true; dur: 15000; easing: linear">
-            </a-entity>
-            <!-- Core particle system -->
-            <a-entity particle-system="preset: dust; particleCount: 500; color: #8e2de2,#00f5d4; opacity: 0.4"></a-entity>
-        </a-entity>
+        // --- Helper Functions ---
 
-        <!-- Floating Memory Fragments with enhanced interactions -->
-        <a-entity id="fragment1" position="-4 2 -3" class="interactable memory-fragment">
-            <a-entity 
-                geometry="primitive: box; width: 1.5; height: 1.5; depth: 1.5" 
-                material="src: #memoryTexture1; transparent: true; opacity: 0.8"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"
-                animation__float="property: position; to: -4 2.5 -3; loop: true; dir: alternate; dur: 3000; easing: easeInOutQuad">
-            </a-entity>
-            <a-entity particle-system="preset: dust; particleCount: 100; color: #ff6b6b,#ffa07a; opacity: 0.6"></a-entity>
-            <!-- Fragment-specific light -->
-            <a-light type="point" color="#ff6b6b" intensity="0.8" distance="5"></a-light>
-        </a-entity>
+        function getIntersections(controller) {
+            // Perform raycasting from the controller (from Controller PRD)
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            const raycaster = new THREE.Raycaster();
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            return raycaster.intersectObjects(nodes, true);
+        }
 
-        <a-entity id="fragment2" position="4 1 -4" class="interactable memory-fragment">
-            <a-entity 
-                geometry="primitive: octahedron; radius: 1" 
-                material="src: #memoryTexture2; transparent: true; opacity: 0.7"
-                animation="property: rotation; to: 360 0 0; loop: true; dur: 12000; easing: linear"
-                animation__float="property: position; to: 4 1.5 -4; loop: true; dir: alternate; dur: 4000; easing: easeInOutQuad">
-            </a-entity>
-            <a-entity particle-system="preset: default; particleCount: 200; color: #00f5d4,#00bbf9; opacity: 0.5"></a-entity>
-            <!-- Fragment-specific light -->
-            <a-light type="point" color="#00f5d4" intensity="0.8" distance="5"></a-light>
-        </a-entity>
+        function checkAndCreateLink(nodeA) {
+            // Find the closest node and create a link if close enough
+            let closestNode = null;
+            let minDistance = Infinity;
 
-        <a-entity id="fragment3" position="0 3 -6" class="interactable memory-fragment">
-            <a-entity 
-                geometry="primitive: dodecahedron; radius: 1.2" 
-                material="color: #8e2de2; transparent: true; opacity: 0.6"
-                animation="property: rotation; to: 0 0 360; loop: true; dur: 10000; easing: linear"
-                animation__float="property: position; to: 0 3.5 -6; loop: true; dir: alternate; dur: 3500; easing: easeInOutQuad">
-            </a-entity>
-            <a-entity particle-system="preset: default; particleCount: 150; color: #f15bb5,#fee440; opacity: 0.4"></a-entity>
-            <!-- Fragment-specific light -->
-            <a-light type="point" color="#f15bb5" intensity="0.8" distance="5"></a-light>
-        </a-entity>
+            for (let nodeB of nodes) {
+                if (nodeA !== nodeB) {
+                    const distance = nodeA.position.distanceTo(nodeB.position);
+                    if (distance < minDistance) {
+                        minDistance = distance;
+                        closestNode = nodeB;
+                    }
+                }
+            }
 
-        <!-- Interactive Walls with enhanced feedback -->
-        <a-entity id="leftWall" 
-                  geometry="primitive: plane; width: 10; height: 10" 
-                  material="color: #001f3f; transparent: true; opacity: 0.2"
-                  position="-5 1.6 -2" 
-                  rotation="0 30 0"
-                  class="interactable"
-                  event-set__mouseenter="material.opacity: 0.6; material.color: #0074D9"
-                  event-set__mouseleave="material.opacity: 0.2; material.color: #001f3f">
-            <!-- Wall particle system -->
-            <a-entity particle-system="preset: rain; particleCount: 50; color: #0074D9; opacity: 0.3; velocity: 0 0 0"></a-entity>
-        </a-entity>
+            if (closestNode && minDistance < CONFIG.NODE_RADIUS * 5) {
+                createLink(nodeA, closestNode);
+            }
+        }
 
-        <a-entity id="rightWall" 
-                  geometry="primitive: plane; width: 10; height: 10" 
-                  material="color: #3d003d; transparent: true; opacity: 0.2"
-                  position="5 1.6 -2" 
-                  rotation="0 -30 0"
-                  class="interactable"
-                  event-set__mouseenter="material.opacity: 0.6; material.color: #8e2de2"
-                  event-set__mouseleave="material.opacity: 0.2; material.color: #3d003d">
-            <!-- Wall particle system -->
-            <a-entity particle-system="preset: rain; particleCount: 50; color: #8e2de2; opacity: 0.3; velocity: 0 0 0"></a-entity>
-        </a-entity>
+        function createLink(nodeA, nodeB) {
+            // Check if link already exists
+            for (let link of links) {
+                if ((link.userData.node1 === nodeA && link.userData.node2 === nodeB) ||
+                    (link.userData.node1 === nodeB && link.userData.node2 === nodeA)) {
+                    return; // Link already exists
+                }
+            }
 
-        <!-- Ground Grid with enhanced visual -->
-        <a-entity id="grid" 
-                  geometry="primitive: plane; width: 30; height: 30" 
-                  material="shader: flat; color: #0a0a1a"
-                  rotation="-90 0 0"
-                  position="0 -0.5 0">
-            <a-entity 
-                geometry="primitive: plane; width: 30; height: 30" 
-                material="shader: flat; color: #ffffff; wireframe: true; wireframeLinewidth: 0.5; opacity: 0.1"
-                rotation="-90 0 0"
-                position="0 0.01 0">
-            </a-entity>
-            <!-- Grid particle system -->
-            <a-entity particle-system="preset: dust; particleCount: 200; color: #4a00e0,#00f5d4; opacity: 0.2; velocity: 0 0.1 0"></a-entity>
-        </a-entity>
+            const points = [nodeA.position.clone(), nodeB.position.clone()];
+            const geometry = new THREE.BufferGeometry().setFromPoints(points);
+            const material = new THREE.LineBasicMaterial({
+                color: CONFIG.LINK_COLOR,
+                linewidth: 2 // Note: linewidth is not always supported in WebGL
+            });
 
-        <!-- Secret Portal (Hidden until discovered) -->
-        <a-entity id="secretPortal" 
-                  position="0 0.1 -10" 
-                  visible="false"
-                  class="interactable secret-element">
-            <a-entity 
-                geometry="primitive: torus; radius: 1; radiusTubular: 0.2" 
-                material="color: #ff00ff; transparent: true; opacity: 0.7"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 5000">
-            </a-entity>
-            <a-entity 
-                geometry="primitive: sphere; radius: 0.8" 
-                material="color: #000000; transparent: true; opacity: 0.3"
-                position="0 0 0">
-            </a-entity>
-            <a-entity particle-system="preset: dust; particleCount: 300; color: #ff00ff,#00ffff; opacity: 0.5"></a-entity>
-        </a-entity>
+            const link = new THREE.Line(geometry, material);
+            link.userData = { node1: nodeA, node2: nodeB }; // Store references for updates
 
-        <!-- Ambient Lights -->
-        <a-light type="ambient" color="#404040"></a-light>
-        <a-light type="directional" color="#ffffff" intensity="0.8" position="-1 5 2"></a-light>
-        <a-light type="hemisphere" color="#8e2de2" groundColor="#00f5d4" intensity="0.3"></a-light>
+            links.push(link);
+            scene.add(link);
+        }
 
-        <!-- Dynamic lighting system -->
-        <a-entity id="dynamicLight" 
-                  light="type: point; color: #ffffff; intensity: 0.5" 
-                  position="0 3 -5">
-            <a-animation attribute="light.color" 
-                         from="#ffffff" 
-                         to="#8e2de2" 
-                         dur="5000" 
-                         repeat="indefinite" 
-                         direction="alternate">
-            </a-animation>
-        </a-entity>
+        function updateLinks() {
+            // Update the geometry of all links to match their nodes' positions
+            for (let link of links) {
+                const positions = link.geometry.attributes.position.array;
+                positions[0] = link.userData.node1.position.x;
+                positions[1] = link.userData.node1.position.y;
+                positions[2] = link.userData.node1.position.z;
+                positions[3] = link.userData.node2.position.x;
+                positions[4] = link.userData.node2.position.y;
+                positions[5] = link.userData.node2.position.z;
+                link.geometry.attributes.position.needsUpdate = true;
+                
+                // Simple visual feedback: brighter links when nodes are close
+                const distance = link.userData.node1.position.distanceTo(link.userData.node2.position);
+                const brightness = THREE.MathUtils.clamp(1.0 - (distance / 0.5), 0.2, 1.0);
+                link.material.opacity = brightness;
+                link.material.transparent = true;
+            }
+        }
 
-        <!-- Script for enhanced interactions -->
-        <script>
-            // Enhanced controller interaction system
-            AFRAME.registerComponent('controller-interactions', {
-                init: function() {
-                    const el = this.el;
-                    let interactionCount = 0;
-                    
-                    // Handle controller events
-                    el.addEventListener('triggerdown', function(evt) {
-                        console.log('Trigger pressed on', el.getAttribute('id'));
-                        // Activate memory core
-                        document.querySelector('#memoryCore').setAttribute('material', 'opacity', '0.8');
-                        
-                        // Play interaction sound
-                        const soundEl = document.querySelector('[sound]');
-                        if (soundEl) {
-                            soundEl.components.sound.playSound();
-                        }
-                        
-                        // Track interactions for secret discovery
-                        interactionCount++;
-                        if (interactionCount >= 10) {
-                            unlockSecret();
-                        }
-                    });
-                    
-                    el.addEventListener('triggerup', function(evt) {
-                        document.querySelector('#memoryCore').setAttribute('material', 'opacity', '0.3');
-                    });
-                    
-                    el.addEventListener('gripdown', function(evt) {
-                        // Activate all particles
-                        const particles = document.querySelectorAll('[particle-system]');
-                        particles.forEach(p => {
-                            p.setAttribute('particle-system', 'enabled', true);
+        // --- Animation Loop (from Tetris Guide) ---
+        function animate() {
+            renderer.setAnimationLoop(render); // Essential for WebXR (from Tetris Guide)
+        }
+
+        function render() {
+            const delta = clock.getDelta();
+            
+            // --- AR Hit Test (from AR Baseline) ---
+            if (renderer.xr.isPresenting) { // Only run hit-test logic in AR session
+
+                const session = renderer.xr.getSession();
+                if (session) {
+                    // Request hit test source once
+                    if (!hitTestSourceRequested) {
+                        session.requestReferenceSpace('viewer').then((referenceSpace) => {
+                            session.requestHitTestSource({ space: referenceSpace }).then((source) => {
+                                hitTestSource = source;
+                            });
                         });
-                        
-                        // Change sky color
-                        document.querySelector('a-sky').setAttribute('material', 'color', '#1a0a2a');
-                    });
-                    
-                    el.addEventListener('gripup', function(evt) {
-                        // Deactivate particles after delay
-                        setTimeout(() => {
-                            const particles = document.querySelectorAll('[particle-system]');
-                            particles.forEach(p => {
-                                p.setAttribute('particle-system', 'enabled', false);
-                            });
-                        }, 2000);
-                        
-                        // Reset sky color
-                        document.querySelector('a-sky').setAttribute('material', 'color', '#0a0a1a');
-                    });
-                }
-            });
+                        session.addEventListener('end', () => {
+                            hitTestSourceRequested = false;
+                            hitTestSource = null;
+                        });
+                        hitTestSourceRequested = true;
+                    }
 
-            // Memory fragment behavior with procedural generation
-            AFRAME.registerComponent('memory-fragment', {
-                schema: {
-                    type: {type: 'string', default: 'random'},
-                    seed: {type: 'number', default: Math.random() * 1000}
-                },
-                
-                init: function() {
-                    const el = this.el;
-                    let isActivated = false;
-                    let fragmentType = this.data.type;
-                    
-                    // Generate random fragment type if not specified
-                    if (fragmentType === 'random') {
-                        const types = ['box', 'sphere', 'octahedron', 'tetrahedron', 'torus'];
-                        fragmentType = types[Math.floor(Math.random() * types.length)];
-                    }
-                    
-                    // Apply fragment type
-                    const geometryEl = el.querySelector('[geometry]');
-                    if (geometryEl) {
-                        switch(fragmentType) {
-                            case 'sphere':
-                                geometryEl.setAttribute('geometry', 'primitive: sphere; radius: 1');
-                                break;
-                            case 'octahedron':
-                                geometryEl.setAttribute('geometry', 'primitive: octahedron; radius: 1');
-                                break;
-                            case 'tetrahedron':
-                                geometryEl.setAttribute('geometry', 'primitive: tetrahedron; radius: 1');
-                                break;
-                            case 'torus':
-                                geometryEl.setAttribute('geometry', 'primitive: torus; radius: 1; radiusTubular: 0.3');
-                                break;
-                            default: // box
-                                geometryEl.setAttribute('geometry', 'primitive: box; width: 1.5; height: 1.5; depth: 1.5');
-                        }
-                    }
-                    
-                    el.addEventListener('click', function() {
-                        if (!isActivated) {
-                            // Expand fragment
-                            el.setAttribute('scale', '1.5 1.5 1.5');
-                            
-                            // Change particle system
-                            const particles = el.querySelector('[particle-system]');
-                            if (particles) {
-                                particles.setAttribute('particle-system', {
-                                    particleCount: 500,
-                                    velocity: '0 0.5 0'
-                                });
-                            }
-                            
-                            // Add glow effect
-                            const geometryEl = el.querySelector('[geometry]');
-                            if (geometryEl) {
-                                geometryEl.setAttribute('material', 'emissive', '#ffffff');
-                            }
-                            
-                            isActivated = true;
-                            
-                            // Play sound
-                            const soundEl = document.createElement('a-entity');
-                            soundEl.setAttribute('sound', {
-                                src: '#interactionAudio',
-                                autoplay: true,
-                                volume: 0.5
-                            });
-                            el.appendChild(soundEl);
-                            
-                            // Remove sound entity after playing
-                            setTimeout(() => {
-                                if (soundEl.parentNode) {
-                                    soundEl.parentNode.removeChild(soundEl);
-                                }
-                            }, 2000);
-                            
-                            // Maybe spawn a new fragment?
-                            if (Math.random() > 0.7) {
-                                spawnNewFragment();
-                            }
+                    // Update reticle based on hit test
+                    if (hitTestSource) {
+                        const hitTestResults = session.requestHitTestResults([hitTestSource]);
+                        if (hitTestResults.length) {
+                            const hit = hitTestResults[0];
+                            reticle.visible = true;
+                            reticle.matrix.fromArray(hit.getPose(renderer.xr.getReferenceSpace()).transform.matrix);
                         } else {
-                            // Reset fragment
-                            el.setAttribute('scale', '1 1 1');
-                            
-                            const particles = el.querySelector('[particle-system]');
-                            if (particles) {
-                                particles.setAttribute('particle-system', {
-                                    particleCount: 100,
-                                    velocity: '0 0 0'
-                                });
-                            }
-                            
-                            const geometryEl = el.querySelector('[geometry]');
-                            if (geometryEl) {
-                                geometryEl.setAttribute('material', 'emissive', '#000000');
-                            }
-                            
-                            isActivated = false;
+                            reticle.visible = false;
                         }
-                    });
+                    }
                 }
-            });
 
-            // Secret discovery system
-            AFRAME.registerComponent('secret-discovery', {
-                init: function() {
-                    const el = this.el;
-                    let discoveryProgress = 0;
-                    
-                    // Listen for special interactions
-                    el.addEventListener('mouseenter', function() {
-                        discoveryProgress += 0.1;
-                        checkDiscovery(discoveryProgress);
-                    });
-                    
-                    el.addEventListener('click', function() {
-                        discoveryProgress += 0.3;
-                        checkDiscovery(discoveryProgress);
-                    });
-                }
-            });
+                // --- Continuous Controller Input (Joystick Scaling) ---
+                // Get gamepads for joystick input (Joystick Use from Controller PRD)
+                const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
+                const gamepad1 = gamepads[0];
+                const gamepad2 = gamepads[1];
 
-            // Add component to controllers
-            document.addEventListener('DOMContentLoaded', function() {
-                document.querySelector('#leftController').setAttribute('controller-interactions', '');
-                document.querySelector('#rightController').setAttribute('controller-interactions', '');
-                
-                // Add memory fragment behavior
-                const fragments = document.querySelectorAll('.memory-fragment');
-                fragments.forEach(fragment => {
-                    fragment.setAttribute('memory-fragment', '');
-                });
-                
-                // Add click handlers to interactable objects
-                const interactables = document.querySelectorAll('.interactable');
-                interactables.forEach(obj => {
-                    obj.addEventListener('click', function() {
-                        // Create visual feedback
-                        const originalColor = this.getAttribute('material')?.color || '#ffffff';
-                        this.setAttribute('material', 'color', '#ffffff');
-                        
-                        setTimeout(() => {
-                            this.setAttribute('material', 'color', originalColor);
-                        }, 300);
-                        
-                        // Add ripple effect
-                        createRippleEffect(this.object3D.position);
-                    });
-                });
-                
-                // Add secret discovery to walls
-                const walls = document.querySelectorAll('#leftWall, #rightWall');
-                walls.forEach(wall => {
-                    wall.setAttribute('secret-discovery', '');
-                });
-                
-                // Add floating animation to all fragments
-                const floatingFragments = document.querySelectorAll('[animation__float]');
-                let timeOffset = 0;
-                floatingFragments.forEach(fragment => {
-                    const anim = fragment.getAttribute('animation__float');
-                    if (anim) {
-                        anim.dur = 3000 + Math.random() * 2000; // Randomize duration
-                        anim.delay = timeOffset; // Stagger animations
-                        fragment.setAttribute('animation__float', anim);
-                        timeOffset += 500;
-                    }
-                });
-                
-                // Start background procedural generation
-                setInterval(proceduralGeneration, 10000);
-            });
+                // Simple scaling: Use joystick Y axis from either controller if an object is selected
+                scalingDirection = 0;
+                if (selectedObject && gamepad1 && gamepad1.axes && gamepad1.axes[3] !== undefined) {
+                    scalingDirection = gamepad1.axes[3]; // Y axis of Joystick
+                } else if (selectedObject && gamepad2 && gamepad2.axes && gamepad2.axes[3] !== undefined) {
+                    scalingDirection = gamepad2.axes[3];
+                }
 
-            // Ripple effect function
-            function createRippleEffect(position) {
-                const ripple = document.createElement('a-entity');
-                ripple.setAttribute('geometry', 'primitive: ring; radiusInner: 0.1; radiusOuter: 0.2');
-                ripple.setAttribute('material', 'color: #00f5d4; shader: flat; transparent: true; opacity: 0.8');
-                ripple.setAttribute('position', `${position.x} ${position.y} ${position.z}`);
-                ripple.setAttribute('animation', {
-                    property: 'scale',
-                    to: '3 3 3',
-                    dur: 1000,
-                    easing: 'easeOutQuad'
-                });
-                ripple.setAttribute('animation__opacity', {
-                    property: 'material.opacity',
-                    to: 0,
-                    dur: 1000,
-                    easing: 'easeOutQuad'
-                });
-                
-                document.querySelector('a-scene').appendChild(ripple);
-                
-                // Remove after animation
-                setTimeout(() => {
-                    if (ripple.parentNode) {
-                        ripple.parentNode.removeChild(ripple);
-                    }
-                }, 1000);
-            }
-            
-            // Secret unlock function
-            function unlockSecret() {
-                const portal = document.querySelector('#secretPortal');
-                if (portal && !portal.getAttribute('visible')) {
-                    portal.setAttribute('visible', true);
-                    
-                    // Play secret sound
-                    const soundEl = document.createElement('a-entity');
-                    soundEl.setAttribute('sound', {
-                        src: '#secretAudio',
-                        autoplay: true,
-                        volume: 0.7
-                    });
-                    document.querySelector('a-scene').appendChild(soundEl);
-                    
-                    // Visual feedback
-                    document.querySelector('a-sky').setAttribute('material', 'color', '#2a0a2a');
-                    
-                    // Create particle burst
-                    const burst = document.createElement('a-entity');
-                    burst.setAttribute('particle-system', {
-                        preset: 'dust',
-                        particleCount: 1000,
-                        color: '#ff00ff,#00ffff',
-                        opacity: 0.8
-                    });
-                    document.querySelector('a-scene').appendChild(burst);
-                    
-                    setTimeout(() => {
-                        if (burst.parentNode) {
-                            burst.parentNode.removeChild(burst);
-                        }
-                        if (soundEl.parentNode) {
-                            soundEl.parentNode.removeChild(soundEl);
-                        }
-                    }, 3000);
+                if (selectedObject && Math.abs(scalingDirection) > 0.1) {
+                    // Scale the selected object
+                    const scaleFactor = 1 + scalingDirection * CONFIG.SCALING_SPEED * delta;
+                    selectedObject.scale.multiplyScalar(scaleFactor);
+                    // Clamp scale to reasonable values
+                    selectedObject.scale.clampScalar(0.1, 5.0);
                 }
             }
-            
-            // Check discovery progress
-            function checkDiscovery(progress) {
-                if (progress > 1.0) {
-                    // Reveal hidden elements
-                    const hiddenElements = document.querySelectorAll('.secret-element');
-                    hiddenElements.forEach(el => {
-                        el.setAttribute('visible', true);
-                    });
-                }
-            }
-            
-            // Spawn new fragment procedurally
-            function spawnNewFragment() {
-                const scene = document.querySelector('a-scene');
-                const fragment = document.createElement('a-entity');
-                
-                // Random position around the center
-                const x = (Math.random() - 0.5) * 10;
-                const y = 1 + Math.random() * 3;
-                const z = -3 - Math.random() * 5;
-                
-                fragment.setAttribute('position', `${x} ${y} ${z}`);
-                fragment.setAttribute('class', 'interactable memory-fragment');
-                
-                // Create geometry
-                const geometry = document.createElement('a-entity');
-                geometry.setAttribute('geometry', 'primitive: sphere; radius: 0.8');
-                geometry.setAttribute('material', 'color: #ffffff; transparent: true; opacity: 0.7');
-                geometry.setAttribute('animation', {
-                    property: 'rotation',
-                    to: '0 360 0',
-                    loop: true,
-                    dur: 8000
-                });
-                
-                // Create particles
-                const particles = document.createElement('a-entity');
-                particles.setAttribute('particle-system', {
-                    preset: 'dust',
-                    particleCount: 100,
-                    color: '#ffffff,#ffff00',
-                    opacity: 0.5
-                });
-                
-                fragment.appendChild(geometry);
-                fragment.appendChild(particles);
-                scene.appendChild(fragment);
-                
-                // Add behavior
-                fragment.setAttribute('memory-fragment', '');
-                
-                // Remove after some time
-                setTimeout(() => {
-                    if (fragment.parentNode) {
-                        fragment.parentNode.removeChild(fragment);
-                    }
-                }, 30000);
-            }
-            
-            // Procedural generation background process
-            function proceduralGeneration() {
-                // Randomly change fragment properties
-                const fragments = document.querySelectorAll('.memory-fragment');
-                fragments.forEach(fragment => {
-                    if (Math.random() > 0.8) {
-                        // Change color
-                        const colors = ['#ff6b6b', '#00f5d4', '#8e2de2', '#f15bb5', '#00bbf9'];
-                        const color = colors[Math.floor(Math.random() * colors.length)];
-                        
-                        const geometryEl = fragment.querySelector('[geometry]');
-                        if (geometryEl) {
-                            geometryEl.setAttribute('material', 'color', color);
-                        }
-                    }
-                });
-                
-                // Maybe spawn a temporary effect
-                if (Math.random() > 0.7) {
-                    const effect = document.createElement('a-entity');
-                    effect.setAttribute('position', '0 2 -5');
-                    effect.setAttribute('geometry', 'primitive: ring; radiusInner: 0.5; radiusOuter: 1');
-                    effect.setAttribute('material', 'color: #ffffff; transparent: true; opacity: 0.5');
-                    effect.setAttribute('animation', {
-                        property: 'scale',
-                        to: '5 5 5',
-                        dur: 2000
-                    });
-                    effect.setAttribute('animation__opacity', {
-                        property: 'material.opacity',
-                        to: 0,
-                        dur: 2000
-                    });
-                    
-                    document.querySelector('a-scene').appendChild(effect);
-                    
-                    setTimeout(() => {
-                        if (effect.parentNode) {
-                            effect.parentNode.removeChild(effect);
-                        }
-                    }, 2000);
-                }
-            }
-        </script>
-    </a-scene>
+
+            // --- Update Scene Logic ---
+            updateLinks(); // Update link positions/visuals every frame
+
+            // --- Render ---
+            renderer.render(scene, camera);
+        }
+
+    </script>
 </body>
 </html>
