@@ -1,343 +1,293 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Workshop Experience</title>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Courier New', monospace;
-            background: #000;
-        }
-        #ar-container {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-        }
-        #startButton {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            padding: 20px 40px;
-            background: #00ff41;
-            color: #000;
-            border: none;
-            font-family: 'Courier New', monospace;
-            font-size: 18px;
-            font-weight: bold;
-            cursor: pointer;
-            border-radius: 4px;
-            z-index: 100;
-            box-shadow: 0 0 20px #00ff41;
-        }
-        #startButton:hover {
-            background: #00cc33;
-        }
-        #workshopUI {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #00ff41;
-            font-size: 14px;
-            z-index: 10;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 4px;
-            display: none;
-        }
-        .code-element {
-            position: absolute;
-            color: #00ff41;
-            font-family: 'Courier New', monospace;
-            font-size: 16px;
-            text-shadow: 0 0 5px #00ff41;
-            pointer-events: none;
-            z-index: 5;
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>VR Workshop Room</title>
+  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+  <style>
+    body { margin: 0; overflow: hidden; background: #000; }
+    #enterVR { 
+      position: fixed; top: 50%; left: 50%; 
+      transform: translate(-50%, -50%);
+      padding: 20px 40px; 
+      background: #4CC3D9; 
+      color: white; 
+      border: none; 
+      border-radius: 8px;
+      font-size: 24px; 
+      cursor: pointer;
+      z-index: 1000;
+      font-family: 'Courier New', monospace;
+      box-shadow: 0 0 20px rgba(76, 195, 217, 0.5);
+    }
+    #enterVR:hover { background: #3AAFC0; }
+  </style>
 </head>
 <body>
-    <div id="ar-container"></div>
-    <button id="startButton">START AR WORKSHOP</button>
-    <div id="workshopUI">
-        <div>WORKSHOP MODE: ACTIVE</div>
-        <div>OBJECTS: <span id="objectCount">0</span></div>
-        <div>STATUS: <span id="status">READY</span></div>
-    </div>
+  <button id="enterVR">ENTER WORKSHOP</button>
+  
+  <a-scene 
+    background="color: #1a1a2e"
+    renderer="antialias: true; colorManagement: true; sortObjects: true;"
+    vr-mode-ui="enabled: true"
+    teleport-controls="cameraRig: #rig; teleportOrigin: #camera; button: trigger; collisionEntities: .floor"
+    cursor="rayOrigin: mouse">
+    
+    <!-- Lighting -->
+    <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
+    <a-entity light="type: directional; color: #FFF; intensity: 0.8" position="-1 3 2"></a-entity>
+    <a-entity light="type: point; color: #4CC3D9; intensity: 0.6" position="0 4 -3"></a-entity>
+    
+    <!-- Camera Rig -->
+    <a-entity id="rig" movement-controls="fly: false; speed: 0.2">
+      <a-entity id="camera" camera look-controls position="0 1.6 0"></a-entity>
+      
+      <!-- Controllers -->
+      <a-entity 
+        laser-controls="hand: left" 
+        raycaster="objects: .interactable"
+        line="color: #4CC3D9; opacity: 0.75"
+        cursor="fuse: false">
+      </a-entity>
+      <a-entity 
+        laser-controls="hand: right" 
+        raycaster="objects: .interactable"
+        line="color: #4CC3D9; opacity: 0.75"
+        cursor="fuse: false">
+      </a-entity>
+    </a-entity>
+    
+    <!-- Room Geometry -->
+    <a-entity id="room">
+      <!-- Floor -->
+      <a-plane 
+        class="floor interactable" 
+        position="0 0 0" 
+        rotation="-90 0 0" 
+        width="10" 
+        height="10" 
+        color="#2c3e50"
+        shadow="receive: true">
+        <a-animation 
+          attribute="color" 
+          from="#2c3e50" 
+          to="#3498db" 
+          dur="1000" 
+          begin="click" 
+          repeat="1" 
+          direction="alternate">
+        </a-animation>
+      </a-plane>
+      
+      <!-- Walls -->
+      <a-box position="0 2.5 -5" width="10" height="5" depth="0.2" color="#34495e" shadow="receive: true"></a-box>
+      <a-box position="0 2.5 5" width="10" height="5" depth="0.2" color="#34495e" shadow="receive: true"></a-box>
+      <a-box position="-5 2.5 0" width="0.2" height="5" depth="10" color="#34495e" shadow="receive: true"></a-box>
+      <a-box position="5 2.5 0" width="0.2" height="5" depth="10" color="#34495e" shadow="receive: true"></a-box>
+      
+      <!-- Ceiling -->
+      <a-box position="0 5 0" width="10" height="0.2" depth="10" color="#2c3e50"></a-box>
+    </a-entity>
+    
+    <!-- Interactive Elements -->
+    <a-entity id="interactive-zone" position="0 0 -2">
+      <!-- Rotating Code Cube -->
+      <a-entity id="code-cube" position="0 1.5 0">
+        <a-box 
+          class="interactable" 
+          width="1.5" 
+          height="1.5" 
+          depth="1.5" 
+          color="#e74c3c"
+          animation="property: rotation; to: 0 360 0; dur: 8000; easing: linear; loop: true"
+          shadow="cast: true">
+        </a-box>
+        <a-text 
+          value="<CODE/>" 
+          position="0 0 0.76" 
+          color="#ffffff" 
+          align="center" 
+          scale="2 2 2">
+        </a-text>
+      </a-entity>
+      
+      <!-- Interactive Panel -->
+      <a-box 
+        class="interactable panel" 
+        position="0 1.5 -2" 
+        width="3" 
+        height="2" 
+        depth="0.1" 
+        color="#9b59b6"
+        shadow="cast: true">
+        <a-text 
+          id="panel-text" 
+          value="CLICK ME" 
+          position="0 0 0.06" 
+          color="#ffffff" 
+          align="center" 
+          scale="3 3 3">
+        </a-text>
+      </a-box>
+      
+      <!-- Floating Spheres -->
+      <a-entity id="sphere-group" position="2 1.5 -1">
+        <a-sphere 
+          class="interactable" 
+          position="0 0 0" 
+          radius="0.3" 
+          color="#f1c40f"
+          animation="property: position; to: 0 2 0; dur: 2000; easing: easeInOutQuad; loop: true; dir: alternate"
+          shadow="cast: true">
+        </a-sphere>
+        <a-sphere 
+          class="interactable" 
+          position="0 1 1" 
+          radius="0.25" 
+          color="#2ecc71"
+          animation="property: rotation; to: 360 0 0; dur: 4000; easing: linear; loop: true"
+          shadow="cast: true">
+        </a-sphere>
+      </a-entity>
+      
+      <!-- Bouncing Box -->
+      <a-box 
+        class="interactable" 
+        id="bounce-box"
+        position="-2 0.5 -1" 
+        width="0.8" 
+        height="0.8" 
+        depth="0.8" 
+        color="#3498db"
+        shadow="cast: true">
+        <a-animation 
+          id="bounce-anim"
+          attribute="position"
+          from="-2 0.5 -1"
+          to="-2 3 -1"
+          dur="1500"
+          easing="easeInOutQuad"
+          repeat="indefinite"
+          direction="alternate">
+        </a-animation>
+      </a-box>
+    </a-entity>
+    
+    <!-- Workshop Decorations -->
+    <a-entity id="decorations">
+      <!-- Floating Particles -->
+      <a-entity position="0 3 0" particle-system="preset: dust; particleCount: 200; color: #4CC3D9,#9B59B6; velocityValue: 0 0.2 0"></a-entity>
+      
+      <!-- Workshop Sign -->
+      <a-box position="0 4 -4.9" width="4" height="1" depth="0.1" color="#e67e22"></a-box>
+      <a-text value="WORKSHOP" position="0 4 -4.85" color="#ffffff" align="center" scale="2 2 2"></a-text>
+    </a-entity>
+  </a-scene>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        class ARWorkshop {
-            constructor() {
-                this.scene = null;
-                this.camera = null;
-                this.renderer = null;
-                this.arSession = null;
-                this.arRefSpace = null;
-                this.workshopObjects = [];
-                this.raycaster = new THREE.Raycaster();
-                this.mouse = new THREE.Vector2();
-                this.isRunning = false;
-                
-                this.init();
+  <script>
+    // Workshop Room Logic
+    document.addEventListener('DOMContentLoaded', function() {
+      const scene = document.querySelector('a-scene');
+      const enterVRButton = document.getElementById('enterVR');
+      
+      // Enter VR button handler
+      enterVRButton.addEventListener('click', function() {
+        scene.enterVR();
+        this.style.display = 'none';
+      });
+      
+      // Handle VR mode changes
+      scene.addEventListener('enter-vr', function() {
+        enterVRButton.style.display = 'none';
+      });
+      
+      scene.addEventListener('exit-vr', function() {
+        enterVRButton.style.display = 'block';
+      });
+      
+      // Interactive element behaviors
+      const codeCube = document.querySelector('#code-cube');
+      codeCube.addEventListener('click', function() {
+        const box = this.querySelector('a-box');
+        const newColor = getRandomColor();
+        box.setAttribute('color', newColor);
+        
+        // Visual feedback
+        box.setAttribute('scale', '1.2 1.2 1.2');
+        setTimeout(() => box.setAttribute('scale', '1 1 1'), 300);
+      });
+      
+      // Panel interaction
+      const panel = document.querySelector('.panel');
+      const panelText = document.getElementById('panel-text');
+      const messages = [
+        "HACK THE PLANET!",
+        "CODE IS POETRY",
+        "DEBUGGING LIFE",
+        "404: FUN NOT FOUND",
+        "PRESS ALT+F4",
+        "SEGFAULT CORE DUMPED"
+      ];
+      
+      panel.addEventListener('click', function() {
+        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
+        panelText.setAttribute('value', randomMessage);
+        this.setAttribute('color', getRandomColor());
+      });
+      
+      // Bouncing box interaction
+      const bounceBox = document.getElementById('bounce-box');
+      bounceBox.addEventListener('click', function() {
+        this.setAttribute('color', getRandomColor());
+        const anim = document.getElementById('bounce-anim');
+        anim.setAttribute('dur', Math.random() * 1000 + 500);
+      });
+      
+      // Sphere interactions
+      document.querySelectorAll('#sphere-group .interactable').forEach(sphere => {
+        sphere.addEventListener('click', function() {
+          this.setAttribute('color', getRandomColor());
+          
+          // Create explosion effect
+          const particles = document.createElement('a-entity');
+          const pos = this.getAttribute('position');
+          particles.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+          particles.setAttribute('particle-system', 'preset: explosion; particleCount: 100; color: ' + getRandomColor());
+          scene.appendChild(particles);
+          
+          setTimeout(() => {
+            if (particles.parentNode) {
+              scene.removeChild(particles);
             }
-
-            async init() {
-                // Check for WebXR support
-                if (!navigator.xr) {
-                    this.showStatus("WEBXR NOT SUPPORTED");
-                    return;
-                }
-
-                document.getElementById('startButton').addEventListener('click', () => {
-                    this.startAR();
-                });
-            }
-
-            async startAR() {
-                try {
-                    // Hide start button and show UI
-                    document.getElementById('startButton').style.display = 'none';
-                    document.getElementById('workshopUI').style.display = 'block';
-                    this.showStatus("INITIALIZING AR...");
-
-                    // Create Three.js scene
-                    this.scene = new THREE.Scene();
-                    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                    
-                    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-                    this.renderer.setSize(window.innerWidth, window.innerHeight);
-                    this.renderer.setPixelRatio(window.devicePixelRatio);
-                    this.renderer.xr.enabled = true;
-                    document.getElementById('ar-container').appendChild(this.renderer.domElement);
-
-                    // Add lighting
-                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-                    this.scene.add(ambientLight);
-                    
-                    const directionalLight = new THREE.DirectionalLight(0x00ff41, 0.8);
-                    directionalLight.position.set(1, 1, 1);
-                    this.scene.add(directionalLight);
-
-                    // Start XR session
-                    this.arSession = await navigator.xr.requestSession('immersive-ar', {
-                        requiredFeatures: ['hit-test']
-                    });
-
-                    this.arSession.addEventListener('end', () => {
-                        this.isRunning = false;
-                        document.getElementById('startButton').style.display = 'block';
-                        document.getElementById('workshopUI').style.display = 'none';
-                    });
-
-                    // Set up reference space
-                    this.arRefSpace = await this.arSession.requestReferenceSpace('local');
-
-                    // Set up hit test source
-                    this.hitTestSource = null;
-                    this.arSession.requestHitTestSource({ space: this.arRefSpace })
-                        .then(source => this.hitTestSource = source);
-
-                    // Start rendering
-                    this.isRunning = true;
-                    this.renderer.setAnimationLoop((timestamp, frame) => {
-                        this.render(timestamp, frame);
-                    });
-
-                    // Add event listeners
-                    this.setupInteraction();
-
-                    this.showStatus("WORKSHOP READY");
-                    this.createObjectCounter();
-
-                } catch (error) {
-                    console.error("AR initialization failed:", error);
-                    this.showStatus("AR INIT FAILED: " + error.message);
-                    document.getElementById('startButton').style.display = 'block';
-                }
-            }
-
-            setupInteraction() {
-                // Touch/mouse interaction for placing objects
-                const container = document.getElementById('ar-container');
-                
-                const handleInteraction = (event) => {
-                    if (!this.isRunning) return;
-                    
-                    event.preventDefault();
-                    
-                    // Get normalized device coordinates
-                    const rect = container.getBoundingClientRect();
-                    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-                    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-                };
-
-                container.addEventListener('mousedown', handleInteraction);
-                container.addEventListener('touchstart', (event) => {
-                    handleInteraction(event.touches[0]);
-                });
-
-                container.addEventListener('click', () => {
-                    if (this.hitTestSource) {
-                        this.placeWorkshopObject();
-                    }
-                });
-            }
-
-            placeWorkshopObject() {
-                // Create a random workshop object
-                const geometryTypes = [
-                    () => new THREE.BoxGeometry(0.1, 0.1, 0.1),
-                    () => new THREE.SphereGeometry(0.08, 16, 16),
-                    () => new THREE.ConeGeometry(0.07, 0.15, 8),
-                    () => new THREE.TorusGeometry(0.08, 0.03, 8, 16)
-                ];
-                
-                const colors = [0x00ff41, 0xff0080, 0x0080ff, 0xffff00];
-                
-                const geometry = geometryTypes[Math.floor(Math.random() * geometryTypes.length)]();
-                const material = new THREE.MeshPhongMaterial({ 
-                    color: colors[Math.floor(Math.random() * colors.length)],
-                    emissive: 0x222222,
-                    shininess: 80
-                });
-                
-                const object = new THREE.Mesh(geometry, material);
-                
-                // Position at hit test result or in front of camera
-                if (this.lastHitPose) {
-                    object.position.set(
-                        this.lastHitPose.transform.position.x,
-                        this.lastHitPose.transform.position.y,
-                        this.lastHitPose.transform.position.z
-                    );
-                } else {
-                    // Fallback position in front of camera
-                    object.position.set(0, 0, -0.5);
-                }
-                
-                // Add floating animation
-                object.userData = {
-                    initialY: object.position.y,
-                    floatOffset: Math.random() * Math.PI * 2
-                };
-                
-                this.scene.add(object);
-                this.workshopObjects.push(object);
-                this.updateObjectCounter();
-                
-                // Add floating code snippet near object
-                this.createCodeSnippet(object.position);
-            }
-
-            createCodeSnippet(position) {
-                const snippets = [
-                    "const magic = true;",
-                    "if(reality) break;",
-                    "while(creating) {}",
-                    "function wonder() {}",
-                    "let ideas = infinite;"
-                ];
-                
-                const snippet = snippets[Math.floor(Math.random() * snippets.length)];
-                const element = document.createElement('div');
-                element.className = 'code-element';
-                element.textContent = snippet;
-                element.style.left = (Math.random() * 80 + 10) + '%';
-                element.style.top = (Math.random() * 80 + 10) + '%';
-                element.style.fontSize = (12 + Math.random() * 8) + 'px';
-                element.style.opacity = '0.8';
-                document.body.appendChild(element);
-                
-                // Animate and remove after delay
-                setTimeout(() => {
-                    element.style.transition = 'all 2s ease-out';
-                    element.style.opacity = '0';
-                    element.style.transform = 'translateY(-50px)';
-                    setTimeout(() => {
-                        if (element.parentNode) {
-                            element.parentNode.removeChild(element);
-                        }
-                    }, 2000);
-                }, 3000);
-            }
-
-            render(timestamp, frame) {
-                if (!frame) return;
-
-                // Get pose information
-                const pose = frame.getViewerPose(this.arRefSpace);
-                if (pose) {
-                    // Update camera
-                    const view = pose.views[0];
-                    const cameraMatrix = view.transform.matrix;
-                    this.camera.matrix.fromArray(cameraMatrix);
-                    this.camera.matrix.decompose(this.camera.position, this.camera.quaternion, this.camera.scale);
-                    this.camera.projectionMatrix.fromArray(view.projectionMatrix);
-                    this.camera.updateMatrixWorld(true);
-                }
-
-                // Process hit test results
-                if (this.hitTestSource) {
-                    const hitTestResults = frame.getHitTestResults(this.hitTestSource);
-                    if (hitTestResults.length > 0) {
-                        this.lastHitPose = hitTestResults[0];
-                    }
-                }
-
-                // Animate workshop objects
-                const time = timestamp * 0.001;
-                this.workshopObjects.forEach((object, index) => {
-                    if (object.userData) {
-                        // Floating animation
-                        object.position.y = object.userData.initialY + Math.sin(time + object.userData.floatOffset) * 0.05;
-                        
-                        // Gentle rotation
-                        object.rotation.x = time * 0.5 + index;
-                        object.rotation.y = time * 0.3 + index;
-                    }
-                });
-
-                // Render the scene
-                this.renderer.render(this.scene, this.camera);
-            }
-
-            createObjectCounter() {
-                const counter = document.getElementById('objectCount');
-                const update = () => {
-                    if (this.isRunning) {
-                        counter.textContent = this.workshopObjects.length;
-                        requestAnimationFrame(update);
-                    }
-                };
-                update();
-            }
-
-            updateObjectCounter() {
-                document.getElementById('objectCount').textContent = this.workshopObjects.length;
-            }
-
-            showStatus(message) {
-                document.getElementById('status').textContent = message;
-            }
-        }
-
-        // Initialize when page loads
-        window.addEventListener('load', () => {
-            new ARWorkshop();
+          }, 2000);
         });
-
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            if (window.arWorkshop) {
-                window.arWorkshop.camera.aspect = window.innerWidth / window.innerHeight;
-                window.arWorkshop.camera.updateProjectionMatrix();
-                window.arWorkshop.renderer.setSize(window.innerWidth, window.innerHeight);
-            }
+      });
+      
+      // Floor interaction
+      const floor = document.querySelector('.floor');
+      floor.addEventListener('click', function(evt) {
+        // Create a new interactive sphere at click position
+        const sphere = document.createElement('a-sphere');
+        sphere.setAttribute('class', 'interactable');
+        sphere.setAttribute('radius', '0.2');
+        sphere.setAttribute('color', getRandomColor());
+        sphere.setAttribute('position', `${evt.detail.intersection.point.x} 0.2 ${evt.detail.intersection.point.z}`);
+        sphere.setAttribute('shadow', 'cast: true');
+        
+        sphere.addEventListener('click', function() {
+          this.parentNode.removeChild(this);
         });
-    </script>
+        
+        scene.appendChild(sphere);
+      });
+      
+      // Color utility
+      function getRandomColor() {
+        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#1abc9c', '#e67e22'];
+        return colors[Math.floor(Math.random() * colors.length)];
+      }
+    });
+  </script>
 </body>
 </html>
