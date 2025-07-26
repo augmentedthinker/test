@@ -2,410 +2,47 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VR Workshop Room - Standards Compliant</title>
+  <title>Simple VR Environment</title>
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.7/dist/aframe-environment-component.min.js"></script>
   <style>
-    body { margin: 0; overflow: hidden; background: #000; }
-    #enterVR { 
-      position: fixed; top: 50%; left: 50%; 
-      transform: translate(-50%, -50%);
-      padding: 20px 40px; 
-      background: #4CC3D9; 
-      color: white; 
-      border: none; 
-      border-radius: 8px;
-      font-size: 24px; 
-      cursor: pointer;
-      z-index: 1000;
-      font-family: 'Courier New', monospace;
-      box-shadow: 0 0 20px rgba(76, 195, 217, 0.5);
-    }
-    #enterVR:hover { background: #3AAFC0; }
+    body { margin: 0; overflow: hidden; }
   </style>
 </head>
 <body>
-  <button id="enterVR">ENTER WORKSHOP</button>
-  
   <a-scene 
-    background="color: #1a1a2e"
-    renderer="antialias: true; colorManagement: true; sortObjects: true; physicallyCorrectLights: false; maxCanvasWidth: 1920; maxCanvasHeight: 1080;"
-    vr-mode-ui="enabled: true"
-    teleport-controls="cameraRig: #rig; teleportOrigin: #camera; button: trigger; collisionEntities: .floor"
-    cursor="rayOrigin: mouse"
-    loading-screen="enabled: false">
+    renderer="antialias: true; colorManagement: true; maxCanvasWidth: 1920; maxCanvasHeight: 1080;"
+    background="color: #87CEEB">
     
-    <!-- Preloaded Assets -->
-    <a-assets>
-      <img id="floorTexture" src="https://cdn.aframe.io/aframe/examples/assets/images/floor.jpg">
-      <a-asset-item id="controllerModel" src="https://cdn.aframe.io/controllers/oculus/oculus-touch-controller-left.glb"></a-asset-item>
-    </a-assets>
+    <!-- Environment with sky and ground -->
+    <a-entity environment="preset: default; shadow: false; groundColor: #7BC8A4; skyColor: #87CEEB;"></a-entity>
     
-    <!-- Lighting -->
-    <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
-    <a-entity light="type: directional; color: #FFF; intensity: 0.8" position="-1 3 2"></a-entity>
-    <a-entity light="type: point; color: #4CC3D9; intensity: 0.6" position="0 4 -3"></a-entity>
-    
-    <!-- Camera Rig with Standards-Compliant Controls -->
-    <a-entity id="rig" movement-controls="fly: false; speed: 0.2">
-      <a-entity id="camera" camera look-controls position="0 1.6 0"></a-entity>
-      
-      <!-- Standards-compliant controller setup -->
+    <!-- Camera rig with controllers -->
+    <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity camera look-controls wasd-controls position="0 0 0"></a-entity>
       <a-entity 
-        id="leftController"
+        id="leftHand" 
         meta-touch-controls="hand: left; model: true"
-        raycaster="objects: .interactable; far: 10"
-        line="color: #4CC3D9; opacity: 0.75"
-        cursor="fuse: false">
+        raycaster="objects: .interactable"
+        line="color: #0099FF; opacity: 0.75">
       </a-entity>
       <a-entity 
-        id="rightController"
+        id="rightHand" 
         meta-touch-controls="hand: right; model: true"
-        raycaster="objects: .interactable; far: 10"
-        line="color: #4CC3D9; opacity: 0.75"
-        cursor="fuse: false">
+        raycaster="objects: .interactable"
+        line="color: #0099FF; opacity: 0.75">
       </a-entity>
     </a-entity>
     
-    <!-- Room Geometry -->
-    <a-entity id="room">
-      <!-- Floor with texture -->
-      <a-plane 
-        class="floor interactable" 
-        position="0 0 0" 
-        rotation="-90 0 0" 
-        width="10" 
-        height="10" 
-        src="#floorTexture"
-        shadow="receive: true">
-      </a-plane>
-      
-      <!-- Walls -->
-      <a-box position="0 2.5 -5" width="10" height="5" depth="0.2" color="#34495e" shadow="receive: true"></a-box>
-      <a-box position="0 2.5 5" width="10" height="5" depth="0.2" color="#34495e" shadow="receive: true"></a-box>
-      <a-box position="-5 2.5 0" width="0.2" height="5" depth="10" color="#34495e" shadow="receive: true"></a-box>
-      <a-box position="5 2.5 0" width="0.2" height="5" depth="10" color="#34495e" shadow="receive: true"></a-box>
-      
-      <!-- Ceiling -->
-      <a-box position="0 5 0" width="10" height="0.2" depth="10" color="#2c3e50"></a-box>
-    </a-entity>
-    
-    <!-- Interactive Elements -->
-    <a-entity id="interactive-zone" position="0 0 -2">
-      <!-- Rotating Code Cube -->
-      <a-entity id="code-cube" position="0 1.5 0">
-        <a-box 
-          class="interactable" 
-          width="1.5" 
-          height="1.5" 
-          depth="1.5" 
-          color="#e74c3c"
-          animation="property: rotation; to: 0 360 0; dur: 8000; easing: linear; loop: true"
-          shadow="cast: true">
-        </a-box>
-        <a-text 
-          value="<CODE/>" 
-          position="0 0 0.76" 
-          color="#ffffff" 
-          align="center" 
-          scale="2 2 2">
-        </a-text>
-      </a-entity>
-      
-      <!-- Interactive Panel -->
-      <a-box 
-        class="interactable panel" 
-        position="0 1.5 -2" 
-        width="3" 
-        height="2" 
-        depth="0.1" 
-        color="#9b59b6"
-        shadow="cast: true">
-        <a-text 
-          id="panel-text" 
-          value="CLICK ME" 
-          position="0 0 0.06" 
-          color="#ffffff" 
-          align="center" 
-          scale="3 3 3">
-        </a-text>
-      </a-box>
-      
-      <!-- Floating Spheres -->
-      <a-entity id="sphere-group" position="2 1.5 -1">
-        <a-sphere 
-          class="interactable" 
-          position="0 0 0" 
-          radius="0.3" 
-          color="#f1c40f"
-          animation="property: position; to: 0 2 0; dur: 2000; easing: easeInOutQuad; loop: true; dir: alternate"
-          shadow="cast: true">
-        </a-sphere>
-        <a-sphere 
-          class="interactable" 
-          position="0 1 1" 
-          radius="0.25" 
-          color="#2ecc71"
-          animation="property: rotation; to: 360 0 0; dur: 4000; easing: linear; loop: true"
-          shadow="cast: true">
-        </a-sphere>
-      </a-entity>
-      
-      <!-- Bouncing Box -->
-      <a-box 
-        class="interactable" 
-        id="bounce-box"
-        position="-2 0.5 -1" 
-        width="0.8" 
-        height="0.8" 
-        depth="0.8" 
-        color="#3498db"
-        shadow="cast: true">
-        <a-animation 
-          id="bounce-anim"
-          attribute="position"
-          from="-2 0.5 -1"
-          to="-2 3 -1"
-          dur="1500"
-          easing="easeInOutQuad"
-          repeat="indefinite"
-          direction="alternate">
-        </a-animation>
-      </a-box>
-    </a-entity>
-    
-    <!-- Embedded 2D Game Surface -->
-    <a-entity position="0 1.5 3" rotation="0 180 0">
-      <a-plane 
-        id="gameSurface" 
-        class="interactable clickable" 
-        width="4" 
-        height="3" 
-        color="#000000"
-        shadow="receive: true">
-      </a-plane>
-    </a-entity>
-    
-    <!-- Workshop Decorations -->
-    <a-entity id="decorations">
-      <!-- Floating Particles -->
-      <a-entity position="0 3 0" particle-system="preset: dust; particleCount: 200; color: #4CC3D9,#9B59B6; velocityValue: 0 0.2 0"></a-entity>
-      
-      <!-- Workshop Sign -->
-      <a-box position="0 4 -4.9" width="4" height="1" depth="0.1" color="#e67e22"></a-box>
-      <a-text value="WORKSHOP" position="0 4 -4.85" color="#ffffff" align="center" scale="2 2 2"></a-text>
-    </a-entity>
+    <!-- Invisible floor for raycasting -->
+    <a-plane 
+      class="interactable" 
+      position="0 0 0" 
+      rotation="-90 0 0" 
+      width="20" 
+      height="20" 
+      visible="false">
+    </a-plane>
   </a-scene>
-
-  <script>
-    // Workshop Room Logic
-    document.addEventListener('DOMContentLoaded', function() {
-      const scene = document.querySelector('a-scene');
-      const enterVRButton = document.getElementById('enterVR');
-      const gameSurface = document.getElementById('gameSurface');
-      
-      // Create canvas for embedded game
-      const canvas = document.createElement('canvas');
-      canvas.width = 800;
-      canvas.height = 600;
-      const ctx = canvas.getContext('2d');
-      
-      // Set canvas as texture on game surface
-      gameSurface.setAttribute('material', `src: #gameCanvasTexture; shader: flat`);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.needsUpdate = true;
-      
-      // Add texture to scene (using A-Frame's internal THREE.js reference)
-      scene.addEventListener('loaded', function() {
-        const material = gameSurface.getObject3D('mesh').material;
-        material.map = texture;
-        material.needsUpdate = true;
-      });
-      
-      // Simple 2D game logic (Pong-like)
-      let game = {
-        paddleY: 250,
-        ballX: 400,
-        ballY: 300,
-        ballDX: 3,
-        ballDY: 2,
-        score: 0
-      };
-      
-      function updateGame() {
-        // Update ball position
-        game.ballX += game.ballDX;
-        game.ballY += game.ballDY;
-        
-        // Ball collision with top/bottom
-        if (game.ballY < 10 || game.ballY > 590) {
-          game.ballDY = -game.ballDY;
-        }
-        
-        // Ball collision with paddle
-        if (game.ballX < 30 && game.ballY > game.paddleY && game.ballY < game.paddleY + 100) {
-          game.ballDX = -game.ballDX;
-          game.score++;
-        }
-        
-        // Ball reset if missed
-        if (game.ballX < 0) {
-          game.ballX = 400;
-          game.ballY = 300;
-          game.score = 0;
-        }
-        
-        // Ball reset if goes off screen
-        if (game.ballX > 800) {
-          game.ballDX = -game.ballDX;
-        }
-        
-        // Draw game
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, 800, 600);
-        
-        ctx.fillStyle = '#fff';
-        ctx.font = '24px Arial';
-        ctx.fillText(`Score: ${game.score}`, 20, 40);
-        
-        // Draw paddle
-        ctx.fillRect(20, game.paddleY, 15, 100);
-        
-        // Draw ball
-        ctx.beginPath();
-        ctx.arc(game.ballX, game.ballY, 10, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      
-      // Game loop
-      setInterval(function() {
-        updateGame();
-        texture.needsUpdate = true; // Critical for dynamic canvas updates
-      }, 1000/60);
-      
-      // Controller interaction for game
-      function setupControllerInteraction(controllerId) {
-        const controller = document.getElementById(controllerId);
-        
-        controller.addEventListener('triggerdown', function(evt) {
-          // Move paddle up
-          game.paddleY = Math.max(0, game.paddleY - 20);
-        });
-        
-        controller.addEventListener('gripdown', function(evt) {
-          // Move paddle down
-          game.paddleY = Math.min(500, game.paddleY + 20);
-        });
-        
-        // For laser pointer interaction on game surface
-        gameSurface.addEventListener('mousedown', function(evt) {
-          if (evt.detail.intersection) {
-            const localY = evt.detail.intersection.point.y;
-            game.paddleY = Math.max(0, Math.min(500, (localY - 0.75) * 400)); // Map 3D position to 2D canvas
-          }
-        });
-      }
-      
-      // Enter VR button handler
-      enterVRButton.addEventListener('click', function() {
-        scene.enterVR();
-        this.style.display = 'none';
-      });
-      
-      // Handle VR mode changes
-      scene.addEventListener('enter-vr', function() {
-        enterVRButton.style.display = 'none';
-        // Setup controller interactions when entering VR
-        setupControllerInteraction('leftController');
-        setupControllerInteraction('rightController');
-      });
-      
-      scene.addEventListener('exit-vr', function() {
-        enterVRButton.style.display = 'block';
-      });
-      
-      // Interactive element behaviors
-      const codeCube = document.querySelector('#code-cube');
-      codeCube.addEventListener('click', function() {
-        const box = this.querySelector('a-box');
-        const newColor = getRandomColor();
-        box.setAttribute('color', newColor);
-        
-        // Visual feedback
-        box.setAttribute('scale', '1.2 1.2 1.2');
-        setTimeout(() => box.setAttribute('scale', '1 1 1'), 300);
-      });
-      
-      // Panel interaction
-      const panel = document.querySelector('.panel');
-      const panelText = document.getElementById('panel-text');
-      const messages = [
-        "HACK THE PLANET!",
-        "CODE IS POETRY",
-        "DEBUGGING LIFE",
-        "404: FUN NOT FOUND",
-        "PRESS ALT+F4",
-        "SEGFAULT CORE DUMPED"
-      ];
-      
-      panel.addEventListener('click', function() {
-        const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-        panelText.setAttribute('value', randomMessage);
-        this.setAttribute('color', getRandomColor());
-      });
-      
-      // Bouncing box interaction
-      const bounceBox = document.getElementById('bounce-box');
-      bounceBox.addEventListener('click', function() {
-        this.setAttribute('color', getRandomColor());
-        const anim = document.getElementById('bounce-anim');
-        anim.setAttribute('dur', Math.random() * 1000 + 500);
-      });
-      
-      // Sphere interactions
-      document.querySelectorAll('#sphere-group .interactable').forEach(sphere => {
-        sphere.addEventListener('click', function() {
-          this.setAttribute('color', getRandomColor());
-          
-          // Create explosion effect
-          const particles = document.createElement('a-entity');
-          const pos = this.getAttribute('position');
-          particles.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
-          particles.setAttribute('particle-system', 'preset: explosion; particleCount: 100; color: ' + getRandomColor());
-          scene.appendChild(particles);
-          
-          setTimeout(() => {
-            if (particles.parentNode) {
-              scene.removeChild(particles);
-            }
-          }, 2000);
-        });
-      });
-      
-      // Floor interaction
-      const floor = document.querySelector('.floor');
-      floor.addEventListener('click', function(evt) {
-        // Create a new interactive sphere at click position
-        const sphere = document.createElement('a-sphere');
-        sphere.setAttribute('class', 'interactable');
-        sphere.setAttribute('radius', '0.2');
-        sphere.setAttribute('color', getRandomColor());
-        sphere.setAttribute('position', `${evt.detail.intersection.point.x} 0.2 ${evt.detail.intersection.point.z}`);
-        sphere.setAttribute('shadow', 'cast: true');
-        
-        sphere.addEventListener('click', function() {
-          this.parentNode.removeChild(this);
-        });
-        
-        scene.appendChild(sphere);
-      });
-      
-      // Color utility
-      function getRandomColor() {
-        const colors = ['#e74c3c', '#3498db', '#2ecc71', '#f1c40f', '#9b59b6', '#1abc9c', '#e67e22'];
-        return colors[Math.floor(Math.random() * colors.length)];
-      }
-    });
-  </script>
 </body>
 </html>
