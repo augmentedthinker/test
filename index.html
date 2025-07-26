@@ -1,103 +1,343 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-  <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
-  <style>
-    body { margin: 0; overflow: hidden; }
-    .loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-family: monospace; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Workshop Experience</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Courier New', monospace;
+            background: #000;
+        }
+        #ar-container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+        #startButton {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            background: #00ff41;
+            color: #000;
+            border: none;
+            font-family: 'Courier New', monospace;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            border-radius: 4px;
+            z-index: 100;
+            box-shadow: 0 0 20px #00ff41;
+        }
+        #startButton:hover {
+            background: #00cc33;
+        }
+        #workshopUI {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #00ff41;
+            font-size: 14px;
+            z-index: 10;
+            background: rgba(0,0,0,0.7);
+            padding: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+        .code-element {
+            position: absolute;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            text-shadow: 0 0 5px #00ff41;
+            pointer-events: none;
+            z-index: 5;
+        }
+    </style>
 </head>
 <body>
-  <div class="loading" id="loading">INITIALIZING WORKSHOP SPACE...</div>
-  
-  <a-scene 
-    loading-screen="enabled: false"
-    background="color: #000"
-    renderer="antialias: true; colorManagement: true;"
-    vr-mode-ui="enabled: true">
-    
-    <!-- Workshop Environment -->
-    <a-entity id="workshop" position="0 0 -5">
-      <!-- Floating Code Cubes -->
-      <a-entity id="cube-chamber" position="0 1.6 0">
-        <a-box id="cube1" position="-2 0 0" rotation="0 45 0" color="#4CC3D9" 
-               animation="property: rotation; to: 0 360 0; dur: 8000; easing: linear; loop: true"
-               event-set__mouseenter="_event: mouseenter; color: #FF6B6B"
-               event-set__mouseleave="_event: mouseleave; color: #4CC3D9">
-          <a-text value="<div>" position="0 1.5 0" color="#FF6B6B" align="center"></a-text>
-        </a-box>
-        
-        <a-box id="cube2" position="2 0 0" rotation="0 45 0" color="#9B59B6"
-               animation="property: rotation; to: 360 0 0; dur: 6000; easing: linear; loop: true"
-               event-set__mouseenter="_event: mouseenter; color: #1ABC9C"
-               event-set__mouseleave="_event: mouseleave; color: #9B59B6">
-          <a-text value="</div>" position="0 1.5 0" color="#1ABC9C" align="center"></a-text>
-        </a-box>
-        
-        <a-box id="cube3" position="0 2 0" rotation="45 0 0" color="#F1C40F"
-               animation="property: rotation; to: 0 0 360; dur: 4000; easing: linear; loop: true"
-               event-set__mouseenter="_event: mouseenter; color: #E74C3C"
-               event-set__mouseleave="_event: mouseleave; color: #F1C40F">
-          <a-text value="{}" position="0 1.5 0" color="#E74C3C" align="center"></a-text>
-        </a-box>
-      </a-entity>
-      
-      <!-- Laser Pointer Interaction Grid -->
-      <a-entity id="laser-grid" position="0 0 -3">
-        <a-plane position="0 0 0" rotation="-90 0 0" width="10" height="10" color="#2C3E50" opacity="0.3"></a-plane>
-        <!-- Grid of interactive spheres -->
-        <script>
-          AFRAME.registerComponent('workshop-init', {
-            init: function() {
-              const grid = document.querySelector('#laser-grid');
-              for (let x = -4; x <= 4; x += 2) {
-                for (let z = -4; z <= 4; z += 2) {
-                  const sphere = document.createElement('a-sphere');
-                  sphere.setAttribute('position', `${x} 0.5 ${z}`);
-                  sphere.setAttribute('radius', '0.2');
-                  sphere.setAttribute('color', '#3498DB');
-                  sphere.setAttribute('class', 'interactable');
-                  sphere.setAttribute('animation__mouseenter', 'property: scale; to: 2 2 2; dur: 300; easing: easeOutQuad');
-                  sphere.setAttribute('animation__mouseleave', 'property: scale; to: 1 1 1; dur: 300; easing: easeOutQuad');
-                  grid.appendChild(sphere);
-                }
-              }
-              document.getElementById('loading').style.display = 'none';
-            }
-          });
-        </script>
-      </a-entity>
-    </a-entity>
-    
-    <!-- Player Camera with Laser Pointer -->
-    <a-entity laser-controls="hand: right"></a-entity>
-    <a-entity camera look-controls position="0 1.6 0"></a-entity>
-    
-    <!-- Workshop Ambient Sounds -->
-    <a-entity sound="src: url(https://cdn.aframe.io/sounds/ambient.mp3); autoplay: true; loop: true; volume: 0.1"></a-entity>
-  </a-scene>
+    <div id="ar-container"></div>
+    <button id="startButton">START AR WORKSHOP</button>
+    <div id="workshopUI">
+        <div>WORKSHOP MODE: ACTIVE</div>
+        <div>OBJECTS: <span id="objectCount">0</span></div>
+        <div>STATUS: <span id="status">READY</span></div>
+    </div>
 
-  <script>
-    // Workshop utility functions
-    document.addEventListener('DOMContentLoaded', function() {
-      // Add workshop behaviors
-      const scene = document.querySelector('a-scene');
-      scene.setAttribute('workshop-init', '');
-      
-      // Cube chamber interaction
-      document.querySelectorAll('#cube-chamber a-box').forEach((cube, index) => {
-        cube.addEventListener('click', function() {
-          this.setAttribute('color', `hsl(${Math.random() * 360}, 70%, 60%)`);
-          // Spawn particle effect
-          const particles = document.createElement('a-entity');
-          particles.setAttribute('position', this.getAttribute('position'));
-          particles.setAttribute('particle-system', 'preset: dust; particleCount: 100');
-          scene.appendChild(particles);
-          setTimeout(() => scene.removeChild(particles), 2000);
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        class ARWorkshop {
+            constructor() {
+                this.scene = null;
+                this.camera = null;
+                this.renderer = null;
+                this.arSession = null;
+                this.arRefSpace = null;
+                this.workshopObjects = [];
+                this.raycaster = new THREE.Raycaster();
+                this.mouse = new THREE.Vector2();
+                this.isRunning = false;
+                
+                this.init();
+            }
+
+            async init() {
+                // Check for WebXR support
+                if (!navigator.xr) {
+                    this.showStatus("WEBXR NOT SUPPORTED");
+                    return;
+                }
+
+                document.getElementById('startButton').addEventListener('click', () => {
+                    this.startAR();
+                });
+            }
+
+            async startAR() {
+                try {
+                    // Hide start button and show UI
+                    document.getElementById('startButton').style.display = 'none';
+                    document.getElementById('workshopUI').style.display = 'block';
+                    this.showStatus("INITIALIZING AR...");
+
+                    // Create Three.js scene
+                    this.scene = new THREE.Scene();
+                    this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                    
+                    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+                    this.renderer.setSize(window.innerWidth, window.innerHeight);
+                    this.renderer.setPixelRatio(window.devicePixelRatio);
+                    this.renderer.xr.enabled = true;
+                    document.getElementById('ar-container').appendChild(this.renderer.domElement);
+
+                    // Add lighting
+                    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+                    this.scene.add(ambientLight);
+                    
+                    const directionalLight = new THREE.DirectionalLight(0x00ff41, 0.8);
+                    directionalLight.position.set(1, 1, 1);
+                    this.scene.add(directionalLight);
+
+                    // Start XR session
+                    this.arSession = await navigator.xr.requestSession('immersive-ar', {
+                        requiredFeatures: ['hit-test']
+                    });
+
+                    this.arSession.addEventListener('end', () => {
+                        this.isRunning = false;
+                        document.getElementById('startButton').style.display = 'block';
+                        document.getElementById('workshopUI').style.display = 'none';
+                    });
+
+                    // Set up reference space
+                    this.arRefSpace = await this.arSession.requestReferenceSpace('local');
+
+                    // Set up hit test source
+                    this.hitTestSource = null;
+                    this.arSession.requestHitTestSource({ space: this.arRefSpace })
+                        .then(source => this.hitTestSource = source);
+
+                    // Start rendering
+                    this.isRunning = true;
+                    this.renderer.setAnimationLoop((timestamp, frame) => {
+                        this.render(timestamp, frame);
+                    });
+
+                    // Add event listeners
+                    this.setupInteraction();
+
+                    this.showStatus("WORKSHOP READY");
+                    this.createObjectCounter();
+
+                } catch (error) {
+                    console.error("AR initialization failed:", error);
+                    this.showStatus("AR INIT FAILED: " + error.message);
+                    document.getElementById('startButton').style.display = 'block';
+                }
+            }
+
+            setupInteraction() {
+                // Touch/mouse interaction for placing objects
+                const container = document.getElementById('ar-container');
+                
+                const handleInteraction = (event) => {
+                    if (!this.isRunning) return;
+                    
+                    event.preventDefault();
+                    
+                    // Get normalized device coordinates
+                    const rect = container.getBoundingClientRect();
+                    this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+                    this.mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+                };
+
+                container.addEventListener('mousedown', handleInteraction);
+                container.addEventListener('touchstart', (event) => {
+                    handleInteraction(event.touches[0]);
+                });
+
+                container.addEventListener('click', () => {
+                    if (this.hitTestSource) {
+                        this.placeWorkshopObject();
+                    }
+                });
+            }
+
+            placeWorkshopObject() {
+                // Create a random workshop object
+                const geometryTypes = [
+                    () => new THREE.BoxGeometry(0.1, 0.1, 0.1),
+                    () => new THREE.SphereGeometry(0.08, 16, 16),
+                    () => new THREE.ConeGeometry(0.07, 0.15, 8),
+                    () => new THREE.TorusGeometry(0.08, 0.03, 8, 16)
+                ];
+                
+                const colors = [0x00ff41, 0xff0080, 0x0080ff, 0xffff00];
+                
+                const geometry = geometryTypes[Math.floor(Math.random() * geometryTypes.length)]();
+                const material = new THREE.MeshPhongMaterial({ 
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    emissive: 0x222222,
+                    shininess: 80
+                });
+                
+                const object = new THREE.Mesh(geometry, material);
+                
+                // Position at hit test result or in front of camera
+                if (this.lastHitPose) {
+                    object.position.set(
+                        this.lastHitPose.transform.position.x,
+                        this.lastHitPose.transform.position.y,
+                        this.lastHitPose.transform.position.z
+                    );
+                } else {
+                    // Fallback position in front of camera
+                    object.position.set(0, 0, -0.5);
+                }
+                
+                // Add floating animation
+                object.userData = {
+                    initialY: object.position.y,
+                    floatOffset: Math.random() * Math.PI * 2
+                };
+                
+                this.scene.add(object);
+                this.workshopObjects.push(object);
+                this.updateObjectCounter();
+                
+                // Add floating code snippet near object
+                this.createCodeSnippet(object.position);
+            }
+
+            createCodeSnippet(position) {
+                const snippets = [
+                    "const magic = true;",
+                    "if(reality) break;",
+                    "while(creating) {}",
+                    "function wonder() {}",
+                    "let ideas = infinite;"
+                ];
+                
+                const snippet = snippets[Math.floor(Math.random() * snippets.length)];
+                const element = document.createElement('div');
+                element.className = 'code-element';
+                element.textContent = snippet;
+                element.style.left = (Math.random() * 80 + 10) + '%';
+                element.style.top = (Math.random() * 80 + 10) + '%';
+                element.style.fontSize = (12 + Math.random() * 8) + 'px';
+                element.style.opacity = '0.8';
+                document.body.appendChild(element);
+                
+                // Animate and remove after delay
+                setTimeout(() => {
+                    element.style.transition = 'all 2s ease-out';
+                    element.style.opacity = '0';
+                    element.style.transform = 'translateY(-50px)';
+                    setTimeout(() => {
+                        if (element.parentNode) {
+                            element.parentNode.removeChild(element);
+                        }
+                    }, 2000);
+                }, 3000);
+            }
+
+            render(timestamp, frame) {
+                if (!frame) return;
+
+                // Get pose information
+                const pose = frame.getViewerPose(this.arRefSpace);
+                if (pose) {
+                    // Update camera
+                    const view = pose.views[0];
+                    const cameraMatrix = view.transform.matrix;
+                    this.camera.matrix.fromArray(cameraMatrix);
+                    this.camera.matrix.decompose(this.camera.position, this.camera.quaternion, this.camera.scale);
+                    this.camera.projectionMatrix.fromArray(view.projectionMatrix);
+                    this.camera.updateMatrixWorld(true);
+                }
+
+                // Process hit test results
+                if (this.hitTestSource) {
+                    const hitTestResults = frame.getHitTestResults(this.hitTestSource);
+                    if (hitTestResults.length > 0) {
+                        this.lastHitPose = hitTestResults[0];
+                    }
+                }
+
+                // Animate workshop objects
+                const time = timestamp * 0.001;
+                this.workshopObjects.forEach((object, index) => {
+                    if (object.userData) {
+                        // Floating animation
+                        object.position.y = object.userData.initialY + Math.sin(time + object.userData.floatOffset) * 0.05;
+                        
+                        // Gentle rotation
+                        object.rotation.x = time * 0.5 + index;
+                        object.rotation.y = time * 0.3 + index;
+                    }
+                });
+
+                // Render the scene
+                this.renderer.render(this.scene, this.camera);
+            }
+
+            createObjectCounter() {
+                const counter = document.getElementById('objectCount');
+                const update = () => {
+                    if (this.isRunning) {
+                        counter.textContent = this.workshopObjects.length;
+                        requestAnimationFrame(update);
+                    }
+                };
+                update();
+            }
+
+            updateObjectCounter() {
+                document.getElementById('objectCount').textContent = this.workshopObjects.length;
+            }
+
+            showStatus(message) {
+                document.getElementById('status').textContent = message;
+            }
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', () => {
+            new ARWorkshop();
         });
-      });
-    });
-  </script>
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            if (window.arWorkshop) {
+                window.arWorkshop.camera.aspect = window.innerWidth / window.innerHeight;
+                window.arWorkshop.camera.updateProjectionMatrix();
+                window.arWorkshop.renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+        });
+    </script>
 </body>
 </html>
