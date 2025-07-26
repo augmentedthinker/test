@@ -16,17 +16,21 @@
   <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
       <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="#00FFFF" width="3"></a-text>
-      <a-text id="scoreCounter" value="Score: 0" position="0 0.3 -1.5" align="center" color="#00FFFF" width="3"></a-text>
-      <a-text id="gameOverText" value="SYSTEM FAILURE!" position="0 0.2 -2" align="center" color="#FF00FF" width="4" visible="false"></a-text>
-      <a-text id="winText" value="ESCAPE SEQUENCE COMPLETE!" position="0 0.2 -2" align="center" color="#00FF00" width="4" visible="false"></a-text>
+      <a-text id="gameOverText" value="SYSTEM FAILURE!" position="0 0.3 -2" align="center" color="#FF00FF" width="4" visible="false"></a-text>
+      <a-text id="winText" value="ESCAPE SEQUENCE COMPLETE!" position="0 0.3 -2" align="center" color="#00FF00" width="4" visible="false"></a-text>
+      <!-- Restart button added here -->
       <a-entity id="restartButton" 
-                geometry="primitive: plane; width: 0.8; height: 0.3"
-                material="color: #00FF00; opacity: 0.8"
-                position="0 -0.2 -2"
+                geometry="primitive: plane; width: 1.5; height: 0.4" 
+                material="color: #4A0082" 
+                position="0 -0.3 -2" 
                 visible="false"
                 class="interactable"
                 restart-game>
-        <a-text value="RESTART" align="center" color="#000000" position="0 0 0.01"></a-text>
+        <a-text value="RESTART" 
+                align="center" 
+                color="#00FFFF" 
+                position="0 0 0.01" 
+                width="2"></a-text>
       </a-entity>
     </a-entity>
     <a-entity id="leftHand"
@@ -96,13 +100,11 @@
         },
         init: function () {
             this.hits = 0;
-            this.score = 0;
             this.maxHits = this.data.maxHits;
             this.hitCounterEl = document.querySelector('#hitCounter');
-            this.scoreCounterEl = document.querySelector('#scoreCounter');
             this.gameOverTextEl = document.querySelector('#gameOverText');
             this.winTextEl = document.querySelector('#winText');
-            this.restartButtonEl = document.querySelector('#restartButton');
+            this.restartButtonEl = document.querySelector('#restartButton'); // Added reference
             this.clickableSphere = document.querySelector('#colorSphere');
             this.isGameOverFlag = false;
             this.hasWonFlag = false;
@@ -130,9 +132,6 @@
             if (this.hitCounterEl) {
                 this.hitCounterEl.setAttribute('value', `Hits: ${this.hits}/${this.maxHits}`);
             }
-            if (this.scoreCounterEl) {
-                this.scoreCounterEl.setAttribute('value', `Score: ${this.score}`);
-            }
         },
         registerHit: function() {
             if (this.isGameOverFlag || this.hasWonFlag) return;
@@ -142,20 +141,13 @@
                 this.gameOver();
             }
         },
-        addScore: function(points) {
-            if (this.isGameOverFlag || this.hasWonFlag) return;
-            this.score += points;
-            this.updateDisplay();
-        },
         gameOver: function() {
             this.isGameOverFlag = true;
             this.gameEnded = true;
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
-            if (this.restartButtonEl) {
-                this.restartButtonEl.setAttribute('visible', true);
-            }
+            this.showRestartButton(); // Show restart button
             this.disableSphereInteraction();
         },
         winGame: function() {
@@ -164,10 +156,13 @@
             if (this.winTextEl) {
                 this.winTextEl.setAttribute('visible', true);
             }
+            this.showRestartButton(); // Show restart button
+            this.disableSphereInteraction();
+        },
+        showRestartButton: function() {
             if (this.restartButtonEl) {
                 this.restartButtonEl.setAttribute('visible', true);
             }
-            this.disableSphereInteraction();
         },
         disableSphereInteraction: function() {
             if (this.clickableSphere) {
@@ -177,46 +172,62 @@
                 this.clickableSphere.setAttribute('class', 'non-clickable');
             }
         },
-        restartGame: function() {
+        // New method to reset the game
+        resetGame: function() {
             // Reset game state
             this.hits = 0;
-            this.score = 0;
             this.isGameOverFlag = false;
             this.hasWonFlag = false;
             this.gameEnded = false;
             this.gameStartTime = performance.now();
             
-            // Hide game over elements
+            // Hide end game texts
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', false);
             }
             if (this.winTextEl) {
                 this.winTextEl.setAttribute('visible', false);
             }
+            
+            // Hide restart button
             if (this.restartButtonEl) {
                 this.restartButtonEl.setAttribute('visible', false);
             }
             
-            // Re-enable sphere
+            // Reset hit counter display
+            this.updateDisplay();
+            
+            // Re-enable sphere interaction
             if (this.clickableSphere) {
-                this.clickableSphere.setAttribute('shoot-on-click', '');
-                this.clickableSphere.setAttribute('toggle-color-on-click', '');
-                this.clickableSphere.setAttribute('color', '#00FF00');
                 this.clickableSphere.setAttribute('class', 'clickable');
+                this.clickableSphere.setAttribute('color', '#00FF00');
+                this.clickableSphere.setAttribute('toggle-color-on-click', '');
+                this.clickableSphere.setAttribute('shoot-on-click', '');
             }
             
-            // Remove all projectiles
+            // Remove all existing projectiles
             const projectiles = document.querySelectorAll('[projectile-move]');
-            projectiles.forEach(p => {
-                if (p.parentNode) {
-                    p.parentNode.removeChild(p);
+            projectiles.forEach(projectile => {
+                if (projectile.parentNode) {
+                    projectile.parentNode.removeChild(projectile);
                 }
             });
-            
-            // Update display
-            this.updateDisplay();
         }
     });
+    
+    // New component for restart button
+    AFRAME.registerComponent('restart-game', {
+        init: function() {
+            this.el.setAttribute('visible', false);
+            this.el.addEventListener('click', () => {
+                const gameManager = this.el.sceneEl.components['game-manager'];
+                if (gameManager) {
+                    gameManager.resetGame();
+                }
+            });
+        }
+    });
+    
     AFRAME.registerComponent('toggle-color-on-click', {
       schema: {
         colors: {type: 'array', default: ['#00FF00', '#00FFFF', '#FF00FF', '#FFFF00']}
@@ -319,10 +330,6 @@
             const gameManager = this.el.sceneEl.components['game-manager'];
             if (gameManager && gameManager.isGameOver()) {
                 return;
-            }
-            // Add score for clicking the sphere
-            if (gameManager) {
-                gameManager.addScore(10);
             }
             try {
                 if (laserAudio && audioUnlocked) {
@@ -445,16 +452,6 @@
           playerSphere.object3D.parent.worldToLocal(mid);
           playerSphere.object3D.position.copy(mid);
         }
-      }
-    });
-    AFRAME.registerComponent('restart-game', {
-      init: function () {
-        this.el.addEventListener('click', () => {
-          const gameManager = this.el.sceneEl.components['game-manager'];
-          if (gameManager) {
-            gameManager.restartGame();
-          }
-        });
       }
     });
     document.addEventListener('DOMContentLoaded', function () {
