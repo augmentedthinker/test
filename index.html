@@ -2,8 +2,8 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>VR Workshop Room</title>
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+  <title>VR Workshop Room - Standards Compliant</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
   <style>
     body { margin: 0; overflow: hidden; background: #000; }
@@ -29,30 +29,39 @@
   
   <a-scene 
     background="color: #1a1a2e"
-    renderer="antialias: true; colorManagement: true; sortObjects: true;"
+    renderer="antialias: true; colorManagement: true; sortObjects: true; physicallyCorrectLights: false; maxCanvasWidth: 1920; maxCanvasHeight: 1080;"
     vr-mode-ui="enabled: true"
     teleport-controls="cameraRig: #rig; teleportOrigin: #camera; button: trigger; collisionEntities: .floor"
-    cursor="rayOrigin: mouse">
+    cursor="rayOrigin: mouse"
+    loading-screen="enabled: false">
+    
+    <!-- Preloaded Assets -->
+    <a-assets>
+      <img id="floorTexture" src="https://cdn.aframe.io/aframe/examples/assets/images/floor.jpg">
+      <a-asset-item id="controllerModel" src="https://cdn.aframe.io/controllers/oculus/oculus-touch-controller-left.glb"></a-asset-item>
+    </a-assets>
     
     <!-- Lighting -->
     <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
     <a-entity light="type: directional; color: #FFF; intensity: 0.8" position="-1 3 2"></a-entity>
     <a-entity light="type: point; color: #4CC3D9; intensity: 0.6" position="0 4 -3"></a-entity>
     
-    <!-- Camera Rig -->
+    <!-- Camera Rig with Standards-Compliant Controls -->
     <a-entity id="rig" movement-controls="fly: false; speed: 0.2">
       <a-entity id="camera" camera look-controls position="0 1.6 0"></a-entity>
       
-      <!-- Controllers -->
+      <!-- Standards-compliant controller setup -->
       <a-entity 
-        laser-controls="hand: left" 
-        raycaster="objects: .interactable"
+        id="leftController"
+        meta-touch-controls="hand: left; model: true"
+        raycaster="objects: .interactable; far: 10"
         line="color: #4CC3D9; opacity: 0.75"
         cursor="fuse: false">
       </a-entity>
       <a-entity 
-        laser-controls="hand: right" 
-        raycaster="objects: .interactable"
+        id="rightController"
+        meta-touch-controls="hand: right; model: true"
+        raycaster="objects: .interactable; far: 10"
         line="color: #4CC3D9; opacity: 0.75"
         cursor="fuse: false">
       </a-entity>
@@ -60,24 +69,15 @@
     
     <!-- Room Geometry -->
     <a-entity id="room">
-      <!-- Floor -->
+      <!-- Floor with texture -->
       <a-plane 
         class="floor interactable" 
         position="0 0 0" 
         rotation="-90 0 0" 
         width="10" 
         height="10" 
-        color="#2c3e50"
+        src="#floorTexture"
         shadow="receive: true">
-        <a-animation 
-          attribute="color" 
-          from="#2c3e50" 
-          to="#3498db" 
-          dur="1000" 
-          begin="click" 
-          repeat="1" 
-          direction="alternate">
-        </a-animation>
       </a-plane>
       
       <!-- Walls -->
@@ -174,6 +174,18 @@
       </a-box>
     </a-entity>
     
+    <!-- Embedded 2D Game Surface -->
+    <a-entity position="0 1.5 3" rotation="0 180 0">
+      <a-plane 
+        id="gameSurface" 
+        class="interactable clickable" 
+        width="4" 
+        height="3" 
+        color="#000000"
+        shadow="receive: true">
+      </a-plane>
+    </a-entity>
+    
     <!-- Workshop Decorations -->
     <a-entity id="decorations">
       <!-- Floating Particles -->
@@ -190,6 +202,109 @@
     document.addEventListener('DOMContentLoaded', function() {
       const scene = document.querySelector('a-scene');
       const enterVRButton = document.getElementById('enterVR');
+      const gameSurface = document.getElementById('gameSurface');
+      
+      // Create canvas for embedded game
+      const canvas = document.createElement('canvas');
+      canvas.width = 800;
+      canvas.height = 600;
+      const ctx = canvas.getContext('2d');
+      
+      // Set canvas as texture on game surface
+      gameSurface.setAttribute('material', `src: #gameCanvasTexture; shader: flat`);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.needsUpdate = true;
+      
+      // Add texture to scene (using A-Frame's internal THREE.js reference)
+      scene.addEventListener('loaded', function() {
+        const material = gameSurface.getObject3D('mesh').material;
+        material.map = texture;
+        material.needsUpdate = true;
+      });
+      
+      // Simple 2D game logic (Pong-like)
+      let game = {
+        paddleY: 250,
+        ballX: 400,
+        ballY: 300,
+        ballDX: 3,
+        ballDY: 2,
+        score: 0
+      };
+      
+      function updateGame() {
+        // Update ball position
+        game.ballX += game.ballDX;
+        game.ballY += game.ballDY;
+        
+        // Ball collision with top/bottom
+        if (game.ballY < 10 || game.ballY > 590) {
+          game.ballDY = -game.ballDY;
+        }
+        
+        // Ball collision with paddle
+        if (game.ballX < 30 && game.ballY > game.paddleY && game.ballY < game.paddleY + 100) {
+          game.ballDX = -game.ballDX;
+          game.score++;
+        }
+        
+        // Ball reset if missed
+        if (game.ballX < 0) {
+          game.ballX = 400;
+          game.ballY = 300;
+          game.score = 0;
+        }
+        
+        // Ball reset if goes off screen
+        if (game.ballX > 800) {
+          game.ballDX = -game.ballDX;
+        }
+        
+        // Draw game
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 800, 600);
+        
+        ctx.fillStyle = '#fff';
+        ctx.font = '24px Arial';
+        ctx.fillText(`Score: ${game.score}`, 20, 40);
+        
+        // Draw paddle
+        ctx.fillRect(20, game.paddleY, 15, 100);
+        
+        // Draw ball
+        ctx.beginPath();
+        ctx.arc(game.ballX, game.ballY, 10, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      
+      // Game loop
+      setInterval(function() {
+        updateGame();
+        texture.needsUpdate = true; // Critical for dynamic canvas updates
+      }, 1000/60);
+      
+      // Controller interaction for game
+      function setupControllerInteraction(controllerId) {
+        const controller = document.getElementById(controllerId);
+        
+        controller.addEventListener('triggerdown', function(evt) {
+          // Move paddle up
+          game.paddleY = Math.max(0, game.paddleY - 20);
+        });
+        
+        controller.addEventListener('gripdown', function(evt) {
+          // Move paddle down
+          game.paddleY = Math.min(500, game.paddleY + 20);
+        });
+        
+        // For laser pointer interaction on game surface
+        gameSurface.addEventListener('mousedown', function(evt) {
+          if (evt.detail.intersection) {
+            const localY = evt.detail.intersection.point.y;
+            game.paddleY = Math.max(0, Math.min(500, (localY - 0.75) * 400)); // Map 3D position to 2D canvas
+          }
+        });
+      }
       
       // Enter VR button handler
       enterVRButton.addEventListener('click', function() {
@@ -200,6 +315,9 @@
       // Handle VR mode changes
       scene.addEventListener('enter-vr', function() {
         enterVRButton.style.display = 'none';
+        // Setup controller interactions when entering VR
+        setupControllerInteraction('leftController');
+        setupControllerInteraction('rightController');
       });
       
       scene.addEventListener('exit-vr', function() {
