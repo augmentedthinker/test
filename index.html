@@ -1,274 +1,56 @@
 <!DOCTYPE html>
 <html>
-<head>
-    <meta charset="utf-8">
-    <title>VR Environment for Meta Quest 2</title>
-    <meta name="description" content="A-Frame VR Environment for Meta Quest 2">
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-environment-component@master/dist/aframe-environment-component.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            color: white;
-            z-index: 100;
-            text-align: center;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        h1 {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
-            color: #4CAF50;
-        }
-        p {
-            font-size: 1.2rem;
-            max-width: 600px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-        .features {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
-            gap: 20px;
-            margin: 20px 0;
-        }
-        .feature {
-            background: rgba(76, 175, 80, 0.2);
-            border: 1px solid #4CAF50;
-            border-radius: 10px;
-            padding: 15px;
-            width: 200px;
-        }
-        .feature h3 {
-            margin-top: 0;
-            color: #4CAF50;
-        }
-        button {
-            background: #4CAF50;
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            font-size: 1.2rem;
-            border-radius: 30px;
-            cursor: pointer;
-            margin-top: 20px;
-            transition: all 0.3s;
-        }
-        button:hover {
-            background: #45a049;
-            transform: scale(1.05);
-        }
-        .instructions {
-            background: rgba(30, 30, 30, 0.9);
-            border-radius: 10px;
-            padding: 20px;
-            margin-top: 20px;
-            max-width: 600px;
-        }
-        .instructions h2 {
-            color: #4CAF50;
-            margin-top: 0;
-        }
-        .instructions ul {
-            text-align: left;
-            padding-left: 20px;
-        }
-        .instructions li {
-            margin-bottom: 10px;
-        }
-        .hidden {
-            display: none;
-        }
-    </style>
-</head>
-<body>
-    <div id="overlay" class="overlay">
-        <h1>VR Environment for Meta Quest 2</h1>
-        <div class="features">
-            <div class="feature">
-                <h3>Controller Movement</h3>
-                <p>Use thumbsticks or WASD to move around the environment</p>
-            </div>
-            <div class="feature">
-                <h3>Laser Interaction</h3>
-                <p>Point and click with your controllers to interact</p>
-            </div>
-            <div class="feature">
-                <h3>Immersive World</h3>
-                <p>Beautiful environment with dynamic lighting</p>
-            </div>
-        </div>
-        <button id="enterVR">Enter VR Experience</button>
-        <div class="instructions">
-            <h2>How to Use:</h2>
-            <ul>
-                <li>Put on your Meta Quest 2 headset</li>
-                <li>Open this page in the Quest browser</li>
-                <li>Click "Enter VR Experience" to start</li>
-                <li>Use thumbsticks to move around</li>
-                <li>Point with controllers to interact with objects</li>
-            </ul>
-        </div>
-    </div>
+  <head>
+    <title>A-Frame VR Environment for Meta Quest 2</title>
+    <script src="https://unpkg.com/aframe@1.5.0/dist/aframe-master.min.js"></script>
+  </head>
+  <body>
+    <a-scene>
+      <a-assets>
+        </a-assets>
 
-    <a-scene 
-        id="scene"
-        class="hidden"
-        renderer="antialias: true; colorManagement: true; sortObjects: true; physicallyCorrectLights: true;"
-        background="color: #87CEEB"
-        environment="preset: forest; shadow: true; shadowSize: 1024"
-        vr-mode-ui="enabled: true">
-        
-        <!-- Lighting -->
-        <a-entity light="type: ambient; color: #BBB; intensity: 0.5"></a-entity>
-        <a-entity light="type: directional; color: #FFF; intensity: 0.8; castShadow: true; shadowMapHeight: 1024; shadowMapWidth: 1024;" position="-1 3 -1"></a-entity>
-        
-        <!-- Ground -->
-        <a-entity id="ground" geometry="primitive: plane; width: 100; height: 100" 
-                  rotation="-90 0 0" 
-                  material="src: #groundTexture; repeat: 100 100; color: #556B2F" 
-                  shadow="receive: true">
-        </a-entity>
-        
-        <!-- Interactive Objects -->
-        <a-entity position="0 1.6 -5">
-            <a-box id="redBox" position="-2 0 0" rotation="0 45 0" color="#FF5722" shadow="cast: true" scale="1 1 1">
-                <a-animation attribute="rotation" to="0 360 0" dur="5000" easing="linear" repeat="indefinite"></a-animation>
-            </a-box>
-            <a-sphere id="blueSphere" position="0 0 0" radius="1.25" color="#2196F3" shadow="cast: true">
-                <a-animation attribute="position" from="0 0 0" to="0 2 0" dur="2000" direction="alternate" easing="easeInOutQuad" repeat="indefinite"></a-animation>
-            </a-sphere>
-            <a-cylinder id="greenCylinder" position="2 0 0" radius="0.5" height="2.5" color="#4CAF50" shadow="cast: true" rotation="0 0 90">
-                <a-animation attribute="scale" from="1 1 1" to="1.5 1.5 1.5" dur="1500" direction="alternate" easing="easeInOutQuad" repeat="indefinite"></a-animation>
-            </a-cylinder>
-        </a-entity>
-        
-        <!-- Trees -->
-        <a-entity position="5 0 -8">
-            <a-cylinder position="0 2 0" radius="0.3" height="4" color="#8B4513"></a-cylinder>
-            <a-cone position="0 5 0" radius-bottom="2" radius-top="0.1" height="4" color="#2E8B57"></a-cone>
-        </a-entity>
-        <a-entity position="-5 0 -10">
-            <a-cylinder position="0 1.5 0" radius="0.4" height="3" color="#8B4513"></a-cylinder>
-            <a-cone position="0 4 0" radius-bottom="2.5" radius-top="0.1" height="5" color="#3CB371"></a-cone>
-        </a-entity>
-        
-        <!-- Rocks -->
-        <a-entity position="3 0 -6">
-            <a-box position="0 0.2 0" width="1" height="0.4" depth="1.2" color="#777" rotation="0 20 0"></a-box>
-        </a-entity>
-        <a-entity position="-4 0 -7">
-            <a-sphere position="0 0.3 0" radius="0.5" color="#666" segments-width="8" segments-height="6"></a-sphere>
-        </a-entity>
-        
-        <!-- Camera Rig with Movement Controls -->
-        <a-entity id="rig" movement-controls="fly: false; speed: 0.2">
-            <a-entity id="camera" camera="active: true" position="0 1.6 0" look-controls="pointerLockEnabled: true"></a-entity>
-            
-            <!-- Left Controller -->
-            <a-entity id="leftHand" 
-                      laser-controls="hand: left" 
-                      raycaster="objects: [interactable]; far: 10; lineColor: #FF0000; lineOpacity: 0.8"
-                      position="0 0 0">
-                <a-entity vive-controls="hand: left" oculus-touch-controls="hand: left"></a-entity>
-            </a-entity>
-            
-            <!-- Right Controller -->
-            <a-entity id="rightHand" 
-                      laser-controls="hand: right" 
-                      raycaster="objects: [interactable]; far: 10; lineColor: #0000FF; lineOpacity: 0.8"
-                      position="0 0 0">
-                <a-entity vive-controls="hand: right" oculus-touch-controls="hand: right"></a-entity>
-            </a-entity>
-        </a-entity>
+      <a-entity
+        id="rig"
+        movement-controls="speed: 0.1;"
+        position="0 1.6 0"
+      >
+        <a-camera
+          look-controls="pointerLockEnabled: false"
+          wasd-controls="acceleration: 100"
+        ></a-camera>
+        <a-entity
+          hand-controls="hand: right"
+          laser-controls="hand: right"
+          raycaster="objects: [raycaster-target]; far: 10; showLine: true; lineColor: red; lineOpacity: 0.5;"
+          thumbstick-logging
+        ></a-entity>
+        <a-entity
+          hand-controls="hand: left"
+          laser-controls="hand: left"
+          thumbstick-logging
+        ></a-entity>
+      </a-entity>
+
+      <a-sky color="#87CEEB"></a-sky>
+
+      <a-plane
+        static-body
+        color="#7BC8A4"
+        width="100"
+        height="100"
+        rotation="-90 0 0"
+      ></a-plane>
+
+      <a-entity light="type: ambient; color: #BBB"></a-entity>
+
+      <a-box
+        position="0 1 -3"
+        color="orange"
+        raycaster-target
+        grabbable
+        hoverable
+        clickable
+      ></a-box>
     </a-scene>
-
-    <!-- Textures -->
-    <img id="groundTexture" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAALEwAACxMBAJqcGAAAA4BJREFUeJzt3M1rE1EUxvFzZ9J0JmnaSdK0pG0lKAgKKiiIiCju3PgL+Be4c6OLbsSF4MaFiIu6EBeiiAsRBVFRUUGkIiKlQkspJW2SNk2mM3fm3nPhY0ibzEySmbRJ54EHwvDm3HPPe5K5MxP8n1n8x29m9nD9+vV3b9++/Z5l2X96f319fWV5efl6Xde/53neH31mZmZqjuNcLxQKj0zTfJHnef/0WVxcvGUYxv3Z2dk3/Xq/3//y9OnT651O530cx799n5mZKdRqtUdzc3PPwjD8mWXZr36WZdHq6ur1Vqv1KkmSX36SJGEYhpeWlq4YYfj9VxzH3wqFwqV+QbfbfXn9+vV7SZL88pMkIY7j75ZlXe4X9Hq9l5Zl3U+S5JefJAlJkvC9XC5f7hf0er2Xtm3fT5Lkl58kCUmS8L1cLl/uF/R6vZeOY99PkuSXnyQJSZLwvVwuX+4X9Hq9l47j3E+S5JefJAlJkvC9XC5f7hf0er2XjuPcT5Lkl58kCUmS8L1cLl/uF/R6vZeO49xPkuSXnyQJSZLwvVwuX+4X9Hq9l47j3k+S5JefJAlJkvC9XC5f7hf0er2XjuveT5Lkl58kCUmS8L1cLl/uF/R6vZeO695PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3U+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3U+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuveT5Lkl58kCUmS8L1cLl/uF/R6vZeO695PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5f7hf0er2XjuvdT5Lkl58kCUmS8L1cLl/uF/R6vZeO691PkuSXnyQJSZLwvVwuX+4X9Hq9l47r3k+S5JefJAlJkvC9XC5......" style="display: none;">
-    
-    <script>
-        // Initialize the scene
-        document.addEventListener('DOMContentLoaded', function() {
-            const scene = document.getElementById('scene');
-            const overlay = document.getElementById('overlay');
-            const enterVRButton = document.getElementById('enterVR');
-            
-            // Enter VR button functionality
-            enterVRButton.addEventListener('click', function() {
-                overlay.classList.add('hidden');
-                scene.classList.remove('hidden');
-                
-                // Enter VR mode if available
-                if (scene.hasAttribute('vr-mode-ui')) {
-                    const vrModeUI = scene.getAttribute('vr-mode-ui');
-                    if (vrModeUI && vrModeUI.enabled) {
-                        // The VR button will appear automatically
-                    }
-                }
-            });
-            
-            // Add interaction to objects
-            const interactableObjects = document.querySelectorAll('#redBox, #blueSphere, #greenCylinder');
-            
-            interactableObjects.forEach(obj => {
-                obj.setAttribute('class', 'interactable');
-                
-                // Add event listeners for interaction
-                obj.addEventListener('mouseenter', function() {
-                    this.setAttribute('scale', {
-                        x: parseFloat(this.getAttribute('scale').x) * 1.2,
-                        y: parseFloat(this.getAttribute('scale').y) * 1.2,
-                        z: parseFloat(this.getAttribute('scale').z) * 1.2
-                    });
-                });
-                
-                obj.addEventListener('mouseleave', function() {
-                    this.setAttribute('scale', {
-                        x: parseFloat(this.getAttribute('scale').x) / 1.2,
-                        y: parseFloat(this.getAttribute('scale').y) / 1.2,
-                        z: parseFloat(this.getAttribute('scale').z) / 1.2
-                    });
-                });
-                
-                obj.addEventListener('click', function() {
-                    // Change color on click
-                    const colors = ['#FF5722', '#2196F3', '#4CAF50', '#FFC107', '#9C27B0'];
-                    const currentColor = this.getAttribute('color');
-                    let newColor;
-                    do {
-                        newColor = colors[Math.floor(Math.random() * colors.length)];
-                    } while (newColor === currentColor);
-                    
-                    this.setAttribute('color', newColor);
-                });
-            });
-            
-            // Handle window resize
-            window.addEventListener('resize', function() {
-                const camera = document.querySelector('[camera]');
-                if (camera) {
-                    camera.setAttribute('camera', {
-                        aspect: window.innerWidth / window.innerHeight
-                    });
-                }
-            });
-        });
-    </script>
-</body>
+  </body>
 </html>
