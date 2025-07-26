@@ -18,16 +18,6 @@
       <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="#00FFFF" width="3"></a-text>
       <a-text id="gameOverText" value="SYSTEM FAILURE!" position="0 0 -2" align="center" color="#FF00FF" width="4" visible="false"></a-text>
       <a-text id="winText" value="ESCAPE SEQUENCE COMPLETE!" position="0 0 -2" align="center" color="#00FF00" width="4" visible="false"></a-text>
-      <!-- Restart Button -->
-      <a-entity id="restartButton"
-                geometry="primitive: box; width: 0.4; height: 0.15; depth: 0.05"
-                material="color: #00FF00"
-                position="0 -0.3 -1.5"
-                visible="false"
-                class="clickable"
-                restart-game-on-click>
-        <a-text value="RESTART" align="center" color="#000000" position="0 0 0.026" width="1.5"></a-text>
-      </a-entity>
     </a-entity>
     <a-entity id="leftHand"
               oculus-touch-controls="hand: left; model: true"
@@ -100,7 +90,6 @@
             this.hitCounterEl = document.querySelector('#hitCounter');
             this.gameOverTextEl = document.querySelector('#gameOverText');
             this.winTextEl = document.querySelector('#winText');
-            this.restartButtonEl = document.querySelector('#restartButton'); // Get the restart button
             this.clickableSphere = document.querySelector('#colorSphere');
             this.isGameOverFlag = false;
             this.hasWonFlag = false;
@@ -143,7 +132,6 @@
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
-            this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
         },
         winGame: function() {
@@ -152,7 +140,6 @@
             if (this.winTextEl) {
                 this.winTextEl.setAttribute('visible', true);
             }
-            this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
         },
         disableSphereInteraction: function() {
@@ -162,48 +149,7 @@
                 this.clickableSphere.setAttribute('color', '#444');
                 this.clickableSphere.setAttribute('class', 'non-clickable');
             }
-        },
-        // --- New Methods for Restart ---
-        showRestartButton: function() {
-            if (this.restartButtonEl) {
-                this.restartButtonEl.setAttribute('visible', true);
-            }
-        },
-        hideRestartButton: function() {
-            if (this.restartButtonEl) {
-                this.restartButtonEl.setAttribute('visible', false);
-            }
-        },
-        resetGame: function() {
-            // Reset state variables
-            this.hits = 0;
-            this.isGameOverFlag = false;
-            this.hasWonFlag = false;
-            this.gameEnded = false;
-            this.gameStartTime = performance.now();
-
-            // Reset UI elements
-            this.updateDisplay();
-            if (this.gameOverTextEl) {
-                this.gameOverTextEl.setAttribute('visible', false);
-            }
-            if (this.winTextEl) {
-                this.winTextEl.setAttribute('visible', false);
-            }
-            this.hideRestartButton(); // Hide the restart button
-
-            // Re-enable the clickable sphere
-            if (this.clickableSphere) {
-                // Re-add components
-                this.clickableSphere.setAttribute('class', 'clickable');
-                this.clickableSphere.setAttribute('color', '#00FF00');
-                this.clickableSphere.setAttribute('toggle-color-on-click', '');
-                this.clickableSphere.setAttribute('shoot-on-click', '');
-            }
-
-            console.log("Game reset!");
         }
-        // --- End of New Methods ---
     });
     AFRAME.registerComponent('toggle-color-on-click', {
       schema: {
@@ -298,20 +244,6 @@
         }, 350);
       }
     });
-
-    // --- New Component: restart-game-on-click ---
-    AFRAME.registerComponent('restart-game-on-click', {
-      init: function () {
-        this.el.addEventListener('click', () => {
-          const gameManager = this.el.sceneEl.components['game-manager'];
-          if (gameManager) {
-              gameManager.resetGame();
-          }
-        });
-      }
-    });
-    // --- End of New Component ---
-
     AFRAME.registerComponent('shoot-on-click', {
       schema: {
         // Speed schema is no longer directly used here as it's dynamic from game-manager
@@ -380,9 +312,11 @@
             return;
         }
         if (!this.start) this.start = time;
+        
         // Update position based on current direction
         var move = this.directionVec.clone().multiplyScalar(this.speed * deltaTime / 1000);
         this.el.object3D.position.add(move);
+        
         // Homing behavior - adjust direction toward player
         if (this.data.homing) {
           var playerSphereEl = document.querySelector('#playerSphere');
@@ -391,13 +325,16 @@
             this.el.object3D.getWorldPosition(projectilePos);
             var playerPos = new THREE.Vector3();
             playerSphereEl.object3D.getWorldPosition(playerPos);
+            
             // Calculate direction to player
             var toPlayer = playerPos.clone().sub(projectilePos).normalize();
+            
             // Gradually rotate current direction toward player direction
             this.directionVec.lerp(toPlayer, this.homingStrength * (deltaTime/16));
             this.directionVec.normalize(); // Keep direction normalized
           }
         }
+        
         var playerSphereEl = document.querySelector('#playerSphere');
         if (playerSphereEl && playerSphereEl.components['player-hit-reaction']) {
           var projectilePos = new THREE.Vector3();
