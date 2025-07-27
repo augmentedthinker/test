@@ -1,93 +1,22 @@
-<!DOCTYPE html>
+<!-- This creates a simple VR scene you can look around in -->
 <html>
   <head>
-    <meta charset="utf-8">
-    <title>VR Weather Forest Surprise</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- A-Frame 1.5.0 (as per baseline PRP) -->
+    <title>Simple VR Experience</title>
+    <!-- This line loads A-Frame (the VR tool) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- A-Frame Extras for movement-controls (thumbstick locomotion) -->
-    <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-    <!-- Environment component (easy procedural sky/ground/lighting) -->
-    <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
-    <!-- Particle system for rain/snow -->
-    <script src="https://unpkg.com/aframe-particle-system-component@1.0.0/dist/aframe-particle-system-component.min.js"></script>
   </head>
   <body>
-    <a-scene stats>
-      <!-- Preload ambient and weather sounds -->
-      <a-assets>
-        <audio id="birds" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa2901.mp3"></audio>
-        <audio id="rain" src="https://cdn.pixabay.com/audio/2023/03/20/audio_12ed206e21.mp3"></audio>
-        <audio id="snow" src="https://cdn.pixabay.com/audio/2022/02/23/audio_116e2fc48e.mp3"></audio>
-      </a-assets>
-      <!-- Player rig with smooth locomotion and Quest controllers -->
-      <a-entity id="rig" movement-controls="fly:false; speed:0.2;">
-        <a-entity camera position="0 1.6 0" look-controls></a-entity>
-        <a-entity id="leftHand" meta-touch-controls="hand:left"></a-entity>
-        <a-entity id="rightHand" meta-touch-controls="hand:right"></a-entity>
-      </a-entity>
-      <!-- Gorgeous procedural environment -->
-      <a-entity id="env" environment="preset: forest; shadow:true; shadowSize:10; fog:0.6; dressingAmount:20"></a-entity>
-      <!-- Ambient sound, attaches to camera -->
-      <a-entity id="ambience" sound="src: #birds; autoplay:true; loop:true; volume:0.5; positional:false"></a-entity>
-      <!-- Rain particles & sound (hidden at start) -->
-      <a-entity id="rainFX" particle-system="preset: rain; particleCount:6000; color: #acdff9; enabled: false" visible="false"></a-entity>
-      <a-entity id="rainSound" sound="src: #rain; autoplay:false; loop:true; volume:0.6; positional:false"></a-entity>
-      <!-- Snow particles & sound (hidden at start) -->
-      <a-entity id="snowFX" particle-system="preset: snow; particleCount:2000; color: #FFFFFF; enabled: false" visible="false"></a-entity>
-      <a-entity id="snowSound" sound="src: #snow; autoplay:false; loop:true; volume:0.5; positional:false"></a-entity>
-      <!-- Weather toggle button floating in front of player -->
-      <a-entity id="weatherBtn" geometry="primitive:box; width:0.45; height:0.18; depth:0.05"
-        material="color: #e0e022; shader: flat"
-        position="0 1.4 -2"
-        class="clickable"
-        weather-toggle>
-        <a-text value="Change Weather" align="center" position="0 0 0.06" width="2" color="#333"></a-text>
-      </a-entity>
-      <!-- Show current weather -->
-      <a-text id="weatherLabel" value="Weather: Sunny" position="0 2.2 -2" color="#fff" width="4" align="center"></a-text>
-      <script>
-        // Custom component to handle weather switching and audio/particles
-        AFRAME.registerComponent('weather-toggle', {
-          init: function () {
-            const states = ['sunny', 'rain', 'snow'];
-            let idx = 0;
-            const ambience = document.querySelector('#ambience');
-            const rainFX = document.querySelector('#rainFX');
-            const rainSound = document.querySelector('#rainSound');
-            const snowFX = document.querySelector('#snowFX');
-            const snowSound = document.querySelector('#snowSound');
-            const label = document.querySelector('#weatherLabel');
-            this.el.addEventListener('click', () => {
-              idx = (idx + 1) % states.length;
-              // Stop all weather effects
-              rainFX.setAttribute('visible', false);
-              rainFX.setAttribute('particle-system', 'enabled', false);
-              rainSound.components.sound.stopSound();
-              snowFX.setAttribute('visible', false);
-              snowFX.setAttribute('particle-system', 'enabled', false);
-              snowSound.components.sound.stopSound();
-              ambience.components.sound.stopSound();
-              // Activate based on state
-              if (states[idx] === 'sunny') {
-                ambience.components.sound.playSound();
-                label.setAttribute('value', 'Weather: Sunny');
-              } else if (states[idx] === 'rain') {
-                rainFX.setAttribute('visible', true);
-                rainFX.setAttribute('particle-system', 'enabled', true);
-                rainSound.components.sound.playSound();
-                label.setAttribute('value', 'Weather: Rain');
-              } else if (states[idx] === 'snow') {
-                snowFX.setAttribute('visible', true);
-                snowFX.setAttribute('particle-system', 'enabled', true);
-                snowSound.components.sound.playSound();
-                label.setAttribute('value', 'Weather: Snow');
-              }
-            });
-          }
-        });
-      </script>
+    <a-scene>
+      <!-- The sky is blue -->
+      <a-sky color="#87CEEB"></a-sky>
+      <!-- The ground is green -->
+      <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#4CAF50"></a-plane>
+      <!-- Three boxes to look at -->
+      <a-box position="-1 0.5 -3" color="#FFC65D"></a-box>
+      <a-box position="0 0.5 -5" color="#7BC8A4"></a-box>
+      <a-box position="2 0.5 -4" color="#F16745"></a-box>
+      <!-- Camera (lets you look around) -->
+      <a-entity camera look-controls></a-entity>
     </a-scene>
   </body>
 </html>
