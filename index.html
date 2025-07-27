@@ -4,6 +4,7 @@
     <title>Simple VR Experience</title>
     <!-- This line loads A-Frame (the VR tool) -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.controls.min.js"></script>
   </head>
   <body>
     <a-scene>
@@ -16,7 +17,15 @@
       <a-box position="0 0.5 -5" color="#7BC8A4"></a-box>
       <a-box position="2 0.5 -4" color="#F16745"></a-box>
       <!-- Camera (lets you look around) -->
-      <a-entity camera look-controls wasd-controls></a-entity>
+
+      
+      <a-entity id="rig" movement-controls>
+  <a-entity camera look-controls></a-entity>
+  <a-entity laser-controls="hand: left"></a-entity>
+  <a-entity laser-controls="hand: right"></a-entity>
+</a-entity>
+
+      
     </a-scene>
   </body>
 </html>
