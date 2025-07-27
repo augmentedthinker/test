@@ -4,18 +4,14 @@
   <meta charset="UTF-8">
   <title>Advanced Interactive VR</title>
   <script src="https://aframe.io/releases/1.7.1/aframe.min.js"></script>
-  <!-- Teleportation -->
   <script src="https://unpkg.com/aframe-teleport-controls@latest/dist/aframe-teleport-controls.min.js"></script>
-  <!-- Grab & hand interactions -->
-  <script src="https://unpkg.com/[email protected]/dist/aframe-super-hands.min.js"></script>
-  <!-- Haptics vibration -->
+  <script src="https://unpkg.com/aframe-super-hands@^3.0.0/dist/aframe-super-hands.min.js"></script>
   <script src="https://unpkg.com/aframe-haptics-component/dist/aframe-haptics-component.min.js"></script>
 </head>
 <body style="margin:0; height:100vh;">
 
 <a-scene>
 
-  <!-- Hand controllers with teleport -->
   <a-entity hand-controls="hand: left"
             teleport-controls="cameraRig: #rig; button: trigger; collisionEntities: .floor"
             haptics="events: grab-start, triggerdown">
@@ -25,7 +21,6 @@
             haptics="events: grab-start, triggerdown">
   </a-entity>
 
-  <!-- Camera rig for teleport -->
   <a-entity id="rig" position="0 1.6 0">
     <a-entity camera look-controls>
       <a-entity cursor="rayOrigin: mouse; fuse: true; fuseTimeout: 1500"
@@ -33,11 +28,9 @@
     </a-entity>
   </a-entity>
 
-  <!-- Floor -->
   <a-plane class="floor" position="0 0 0" rotation="-90 0 0"
            width="10" height="10" color="#7BC8A4"></a-plane>
 
-  <!-- Interactive box with tooltip and grab -->
   <a-box class="interactive grabbable"
          position="-1 0.5 -3"
          color="#4CC3D9"
@@ -46,7 +39,6 @@
          tooltip="text: I am a box; color: black; background: white; width: auto">
   </a-box>
 
-  <!-- Sphere with bouncing animation, grab, and tooltip -->
   <a-sphere class="interactive grabbable"
             position="1 1.25 -4"
             radius="1.25"
@@ -55,7 +47,6 @@
             tooltip="text: Grab me and move me!">
   </a-sphere>
 
-  <!-- Non-interactive cylinder -->
   <a-cylinder position="0 0.75 -2" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
 
   <a-sky color="#ECECEC"></a-sky>
@@ -85,18 +76,6 @@
       el.appendChild(label);
       el.addEventListener('mouseenter', () => { bg.setAttribute('visible', true); label.setAttribute('visible', true); });
       el.addEventListener('mouseleave', () => { bg.setAttribute('visible', false); label.setAttribute('visible', false); });
-    }
-  });
-
-  // Haptic support listens to grab-start & triggerdown events
-  AFRAME.registerComponent('haptics-listener', {
-    init: function () {
-      this.el.addEventListener('grab-start', () => {
-        this.el.components.haptics.pulse();
-      });
-      this.el.addEventListener('triggerdown', () => {
-        this.el.components.haptics.pulse();
-      });
     }
   });
 </script>
