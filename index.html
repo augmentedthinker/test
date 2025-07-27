@@ -1,43 +1,85 @@
 <!DOCTYPE html>
 <html>
   <head>
-    <title>Quest 2 VR Scene with Controllers</title>
-    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <title>WebXR Controller Scene</title>
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   </head>
   <body>
     <a-scene>
-      <!-- Interactive Box -->
-      <a-box id="myBox"
-             position="0 1 -3"
-             color="#4CC3D9"
-             event-set__enter="_event: triggerdown; color: #FFC65D"
-             event-set__leave="_event: triggerup; color: #4CC3D9">
-      </a-box>
+      <a-entity
+        id="rig"
+        movement-controls="speed: 0.1"
+        position="0 0 0"
+      >
+        <a-camera
+          look-controls="enabled: false"
+          wasd-controls="enabled: false"
+          position="0 1.6 0"
+        ></a-camera>
 
-      <!-- Quest 2 Controllers -->
-      <a-entity oculus-touch-controls="hand: right"></a-entity>
-      <a-entity oculus-touch-controls="hand: left"></a-entity>
+        <a-entity
+          oculus-touch-controller="hand: right"
+          laser-controls="hand: right"
+          raycaster="objects: .collidable"
+          line="opacity: 0.8; color: blue"
+          id="right-hand"
+        ></a-entity>
 
-      <!-- Laser Pointers from controllers for pointing at objects -->
-      <a-entity laser-controls="hand: right"></a-entity>
-      <a-entity laser-controls="hand: left"></a-entity>
+        <a-entity
+          oculus-touch-controller="hand: left"
+          laser-controls="hand: left"
+          raycaster="objects: .collidable"
+          line="opacity: 0.8; color: red"
+          id="left-hand"
+        ></a-entity>
+      </a-entity>
 
-      <!-- Camera -->
-      <a-camera position="0 1.6 0"></a-camera>
+      <a-plane
+        position="0 0 -4"
+        rotation="-90 0 0"
+        width="10"
+        height="10"
+        color="#7BC8A4"
+        shadow
+      ></a-plane>
 
-      <!-- Sky background -->
-      <a-sky color="#ECECEC"></a-sky>
+      <a-box
+        position="0 1 -2"
+        rotation="0 45 0"
+        color="#4CC3D9"
+        shadow
+        class="collidable"
+        id="my-box"
+      ></a-box>
     </a-scene>
 
     <script>
-      // This lets the box change color when you pull the trigger while pointing at it
-      let box = document.querySelector('#myBox');
-      box.addEventListener('triggerdown', function () {
-        box.setAttribute('color', '#FFC65D'); // yellow when pressed
+      // A-Frame component for controller interaction
+      AFRAME.registerComponent('controller-listener', {
+        init: function () {
+          const el = this.el; // The controller entity
+          const box = document.getElementById('my-box'); // The target box
+
+          el.addEventListener('triggerdown', function () {
+            if (el.components.raycaster.intersectedEls.includes(box)) {
+              box.setAttribute('color', getRandomColor());
+            }
+          });
+
+          function getRandomColor() {
+            const letters = '0123456789ABCDEF';
+            let color = '#';
+            for (let i = 0; i < 6; i++) {
+              color += letters[Math.floor(Math.random() * 16)];
+            }
+            return color;
+          }
+        },
       });
-      box.addEventListener('triggerup', function () {
-        box.setAttribute('color', '#4CC3D9'); // blue when released
-      });
+
+      // Apply the component to both controllers
+      document.getElementById('right-hand').setAttribute('controller-listener', '');
+      document.getElementById('left-hand').setAttribute('controller-listener', '');
     </script>
   </body>
 </html>
