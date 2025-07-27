@@ -1,45 +1,297 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title>My First Quest VR Scene</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script>
-      // A simple component to change a box's color on 'click'
-      AFRAME.registerComponent('change-color-on-click', {
-        schema: {color: {default: 'red'}},
-        init: function () {
-          var data = this.data;
-          var el = this.el;
-          var defaultColor = el.getAttribute('material').color;
-
-          this.el.addEventListener('click', function () {
-            el.setAttribute('material', 'color', data.color);
-            // After a short delay, revert to original color
-            setTimeout(() => {
-              el.setAttribute('material', 'color', defaultColor);
-            }, 500);
-          });
+<head>
+    <meta charset="utf-8">
+    <title>WebXR VR Shooter</title>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.5.0/dist/aframe-extras.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
-      });
-    </script>
-  </head>
-  <body>
-    <a-scene>
-      <a-entity camera look-controls position="0 1.6 0"></a-entity>
+        #ui {
+            position: fixed;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 24px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 100;
+            pointer-events: none;
+        }
+        #startButton {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 20px 40px;
+            font-size: 24px;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        #startButton:hover {
+            background: #45a049;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>Score: <span id="score">0</span></div>
+        <div>Targets: <span id="targets">10</span></div>
+    </div>
+    <button id="startButton">START VR GAME</button>
 
-      <a-entity meta-touch-controls="hand: left"></a-entity>
-      <a-entity meta-touch-controls="hand: right" raycaster="objects: .clickable; far: 10;" line="color: #118A7E"></a-entity>
+    <a-scene 
+        vr-mode-ui="enabled: true"
+        renderer="antialias: true; colorManagement: true; sortObjects: true;"
+        background="color: #87CEEB">
+        
+        <!-- Assets -->
+        <a-assets>
+            <a-mixin id="target" geometry="primitive: sphere; radius: 0.5" material="color: red"></a-mixin>
+            <a-mixin id="hit" geometry="primitive: sphere; radius: 0.5" material="color: yellow; emissive: yellow; emissiveIntensity: 2"></a-mixin>
+            <a-sound id="shootSound" src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFd2xqZ2VlZmlqa2xtbm9wcHJ0dXZ3eHl6e3x9fn+AgYOFiIqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/"></a-sound>
+            <a-sound id="hitSound" src="data:audio/wav;base64,UklGRlwGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQYGAACBhYqFd2xqZ2VlZmlqa2xtbnBwcHJ0dXZ3eHl6e3x9fn+AgYOFiIqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/"></a-sound>
+            <a-sound id="spawnSound" src="data:audio/wav;base64,UklGRnQGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRoGAACBhYqFd2xqZ2VlZmlqa2xtbnBwcHJ0dXZ3eHl6e3x9fn+AgYOFiIqLjI2Oj5CRkpOUlZaXmJmam5ydnp+goaKjpKWmp6ipqqusra6vsLGys7S1tre4ubq7vL2+v8DBwsPExcbHyMnKy8zNzs/Q0dLT1NXW19jZ2tvc3d7f4OHi4+Tl5ufo6err7O3u7/Dx8vP09fb3+Pn6+/z9/v8AAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMkJSYnKCkqKywtLi8wMTIzNDU2Nzg5Ojs8PT4/QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZXWFlaW1xdXl9gYWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXp7fH1+f4CBgoOEhYaHiImKi4yNjo+QkZKTlJWWl5iZmpucnZ6foKGio6SlpqeoqaqrrK2ur7CxsrO0tba3uLm6u7y9vr/AwcLDxMXGx8jJysvMzc7P0NHS09TV1tfY2drb3N3e3+Dh4uPk5ebn6Onq6+zt7u/w8fLz9PX29/j5+vv8/f7/"></a-sound>
+        </a-assets>
 
-      <a-box position="-1 1.6 -3" rotation="0 45 0" color="#4CC3D9" shadow class="clickable" change-color-on-click="color: #FF0000"></a-box>
+        <!-- Player -->
+        <a-entity id="player" position="0 1.6 0">
+            <a-camera></a-camera>
+            
+            <!-- Right Hand Controller -->
+            <a-entity 
+                id="rightHand" 
+                laser-controls="hand: right"
+                raycaster="objects: [target]; far: 100"
+                line="color: #00FF00; opacity: 0.5"
+                cursor="fuse: false">
+                <a-sphere radius="0.02" color="#00FF00" position="0 0 -0.05"></a-sphere>
+            </a-entity>
+            
+            <!-- Left Hand Controller -->
+            <a-entity 
+                id="leftHand" 
+                laser-controls="hand: left"
+                raycaster="objects: [target]; far: 100"
+                line="color: #00FF00; opacity: 0.5"
+                cursor="fuse: false">
+                <a-sphere radius="0.02" color="#00FF00" position="0 0 -0.05"></a-sphere>
+            </a-entity>
+        </a-entity>
 
-      <a-sphere position="0 1.6 -5" radius="1.25" color="#EF2D5E" shadow></a-sphere>
+        <!-- Environment -->
+        <a-sky color="#87CEEB"></a-sky>
+        <a-plane 
+            position="0 0 0" 
+            rotation="-90 0 0" 
+            width="30" 
+            height="30" 
+            color="#2E8B57" 
+            shadow="receive: true">
+        </a-plane>
 
-      <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#7BC8A4" shadow></a-plane>
+        <!-- Targets Container -->
+        <a-entity id="targetsContainer"></a-entity>
 
-      <a-sky color="#ECECEC"></a-sky>
-
-      <a-entity light="type: ambient; color: #BBB"></a-entity>
-      <a-entity light="type: directional; color: #FFF; intensity: 0.6" position="-0.5 1 1"></a-entity>
+        <!-- Hit Effect -->
+        <a-entity id="hitEffect" visible="false">
+            <a-animation 
+                attribute="scale" 
+                from="1 1 1" 
+                to="3 3 3" 
+                dur="300" 
+                easing="easeOutQuad">
+            </a-animation>
+            <a-animation 
+                attribute="material.opacity" 
+                from="1" 
+                to="0" 
+                dur="300" 
+                easing="easeOutQuad">
+            </a-animation>
+        </a-entity>
     </a-scene>
-  </body>
+
+    <script>
+        // Game variables
+        let score = 0;
+        let targetsRemaining = 10;
+        let gameActive = false;
+        const MAX_TARGETS = 10;
+        const TARGET_SPAWN_INTERVAL = 1500; // ms
+        let targetSpawnInterval;
+
+        // DOM Elements
+        const startButton = document.getElementById('startButton');
+        const scoreElement = document.getElementById('score');
+        const targetsElement = document.getElementById('targets');
+
+        // A-Frame Components
+        AFRAME.registerComponent('target', {
+            init: function() {
+                this.el.setAttribute('mixin', 'target');
+                this.el.setAttribute('target', '');
+                
+                // Add shooting event listener
+                this.el.addEventListener('click', this.shootTarget.bind(this));
+            },
+            
+            shootTarget: function() {
+                if (!gameActive) return;
+                
+                // Play hit sound
+                const sound = document.getElementById('hitSound');
+                if (sound) {
+                    sound.currentTime = 0;
+                    sound.play();
+                }
+                
+                // Show hit effect
+                const hitEffect = document.querySelector('#hitEffect');
+                const targetPos = this.el.getAttribute('position');
+                hitEffect.setAttribute('position', targetPos);
+                hitEffect.setAttribute('visible', true);
+                
+                // Reset hit effect after animation
+                setTimeout(() => {
+                    hitEffect.setAttribute('visible', false);
+                }, 300);
+                
+                // Remove target
+                this.el.parentNode.removeChild(this.el);
+                
+                // Update score
+                score += 10;
+                targetsRemaining--;
+                updateUI();
+                
+                // Check win condition
+                if (targetsRemaining <= 0) {
+                    endGame();
+                }
+            }
+        });
+
+        // Initialize game
+        function initGame() {
+            score = 0;
+            targetsRemaining = MAX_TARGETS;
+            gameActive = true;
+            updateUI();
+            
+            // Clear existing targets
+            const targetsContainer = document.querySelector('#targetsContainer');
+            while (targetsContainer.firstChild) {
+                targetsContainer.removeChild(targetsContainer.firstChild);
+            }
+            
+            // Start target spawning
+            targetSpawnInterval = setInterval(spawnTarget, TARGET_SPAWN_INTERVAL);
+            
+            // Spawn initial targets
+            for (let i = 0; i < 3; i++) {
+                spawnTarget();
+            }
+            
+            // Hide start button
+            startButton.style.display = 'none';
+        }
+
+        // Spawn a new target
+        function spawnTarget() {
+            if (!gameActive || document.querySelectorAll('[target]').length >= 10) return;
+            
+            const target = document.createElement('a-entity');
+            target.setAttribute('target', '');
+            target.setAttribute('mixin', 'target');
+            
+            // Random position within play area
+            const x = (Math.random() - 0.5) * 20;
+            const y = 1 + Math.random() * 3;
+            const z = -3 - Math.random() * 15;
+            
+            target.setAttribute('position', `${x} ${y} ${z}`);
+            
+            // Add to scene
+            document.querySelector('#targetsContainer').appendChild(target);
+            
+            // Play spawn sound
+            const sound = document.getElementById('spawnSound');
+            if (sound) {
+                sound.currentTime = 0;
+                sound.play();
+            }
+        }
+
+        // Update UI elements
+        function updateUI() {
+            scoreElement.textContent = score;
+            targetsElement.textContent = targetsRemaining;
+        }
+
+        // End the game
+        function endGame() {
+            gameActive = false;
+            clearInterval(targetSpawnInterval);
+            
+            // Show game over message
+            const gameOver = document.createElement('div');
+            gameOver.innerHTML = `
+                <div style="
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0,0,0,0.8);
+                    color: white;
+                    padding: 30px;
+                    border-radius: 10px;
+                    text-align: center;
+                    font-size: 24px;
+                    z-index: 1000;
+                ">
+                    <h1>GAME COMPLETE!</h1>
+                    <p>Final Score: ${score}</p>
+                    <button onclick="this.parentElement.parentElement.remove(); startButton.style.display='block';" 
+                            style="padding: 10px 20px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        PLAY AGAIN
+                    </button>
+                </div>
+            `;
+            document.body.appendChild(gameOver);
+        }
+
+        // Event Listeners
+        startButton.addEventListener('click', initGame);
+
+        // Add shooting sound to controllers
+        document.querySelector('#rightHand').addEventListener('click', function() {
+            if (gameActive) {
+                const sound = document.getElementById('shootSound');
+                if (sound) {
+                    sound.currentTime = 0;
+                    sound.play();
+                }
+            }
+        });
+
+        document.querySelector('#leftHand').addEventListener('click', function() {
+            if (gameActive) {
+                const sound = document.getElementById('shootSound');
+                if (sound) {
+                    sound.currentTime = 0;
+                    sound.play();
+                }
+            }
+        });
+    </script>
+</body>
 </html>
