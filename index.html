@@ -1,90 +1,378 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
-    <title>Immersive VR Forest</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-environment-component@1.3.2/dist/aframe-environment-component.min.js"></script>
-    <script src="https://unpkg.com/aframe-particle-system-component@1.3.0/dist/aframe-particle-system-component.min.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Immersive Space VR Environment</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/controls/OrbitControls.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128/examples/js/loaders/GLTFLoader.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Arial', sans-serif;
+            color: white;
+        }
+        canvas {
+            display: block;
+        }
+        #info {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            font-size: 18px;
+            text-shadow: 0 0 5px rgba(0, 150, 255, 0.8);
+        }
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #4fc3f7;
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 20, 40, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+        }
+        .control-item {
+            margin: 8px 0;
+        }
+        button {
+            background: #0288d1;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #039be5;
+        }
+    </style>
 </head>
 <body>
-    <a-scene environment="preset: forest; dressingAmount: 500; playArea: 20" 
-             renderer="colorManagement: true; physicallyCorrectLights: true"
-             background="color: #87CEEB">
-        
-        <!-- Player setup with movement controls -->
-        <a-entity id="player" 
-                  position="0 1.6 0"
-                  camera="active: true"
-                  look-controls
-                  wasd-controls>
-            <!-- Particle system for fireflies -->
-            <a-entity particle-system="preset: dust; particleCount: 1000; color: #FFFF99; size: 0.05; maxAge: 5"></a-entity>
-        </a-entity>
-        
-        <!-- Sun -->
-        <a-entity light="type: directional; color: #FFCCAA; intensity: 0.8" position="-1 3 -1"></a-entity>
-        
-        <!-- Ambient light -->
-        <a-entity light="type: ambient; color: #88BBFF; intensity: 0.3"></a-entity>
-        
-        <!-- Floating butterflies -->
-        <a-entity id="butterflies" position="0 2 -5">
-            <a-entity gltf-model="https://cdn.glitch.com/69854e5f-05e2-49b8-85e0-4a70b5f97228%2Fbutterfly.glb?v=1625425677079" 
-                      scale="0.5 0.5 0.5" 
-                      position="-2 0 0"
-                      animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear"></a-entity>
-            <a-entity gltf-model="https://cdn.glitch.com/69854e5f-05e2-49b8-85e0-4a70b5f97228%2Fbutterfly.glb?v=1625425677079" 
-                      scale="0.5 0.5 0.5" 
-                      position="2 0.5 1"
-                      animation="property: rotation; to: 0 360 0; loop: true; dur: 6000; easing: linear"></a-entity>
-        </a-entity>
-        
-        <!-- Interactive mushrooms -->
-        <a-entity id="mushrooms" position="0 0 -8">
-            <a-entity geometry="primitive: cylinder; radius: 0.3; height: 0.1" 
-                      material="color: #8B4513" 
-                      position="-1.5 0.05 0"></a-entity>
-            <a-entity geometry="primitive: sphere; radius: 0.4" 
-                      material="color: #FF6347" 
-                      position="-1.5 0.3 0"
-                      animation="property: scale; to: 1.2 1.2 1.2; dir: alternate; loop: true; dur: 1500"></a-entity>
-            
-            <a-entity geometry="primitive: cylinder; radius: 0.25; height: 0.08" 
-                      material="color: #8B4513" 
-                      position="1.5 0.04 0"></a-entity>
-            <a-entity geometry="primitive: sphere; radius: 0.35" 
-                      material="color: #9370DB" 
-                      position="1.5 0.25 0"
-                      animation="property: scale; to: 1.1 1.1 1.1; dir: alternate; loop: true; dur: 1800"></a-entity>
-        </a-entity>
-        
-        <!-- Sound effects -->
-        <a-entity sound="src: url(https://cdn.glitch.com/69854e5f-05e2-49b8-85e0-4a70b5f97228%2Fforest-ambience.mp3?v=1625425677079); autoplay: true; loop: true; volume: 0.3"></a-entity>
-        
-        <!-- Teleportation points -->
-        <a-entity id="teleport-points">
-            <a-entity geometry="primitive: ring; radiusInner: 0.5; radiusOuter: 1" 
-                      material="color: #00FF00; shader: flat; transparent: true; opacity: 0.5"
-                      position="0 0.01 -10"
-                      rotation="-90 0 0"
-                      event-set__enter="_event: mouseenter; material.opacity: 0.8"
-                      event-set__leave="_event: mouseleave; material.opacity: 0.5"
-                      teleport-controls="cameraRig: #player; button: trigger"></a-entity>
-            
-            <a-entity geometry="primitive: ring; radiusInner: 0.5; radiusOuter: 1" 
-                      material="color: #00FF00; shader: flat; transparent: true; opacity: 0.5"
-                      position="5 0.01 -5"
-                      rotation="-90 0 0"
-                      event-set__enter="_event: mouseenter; material.opacity: 0.8"
-                      event-set__leave="_event: mouseleave; material.opacity: 0.5"
-                      teleport-controls="cameraRig: #player; button: trigger"></a-entity>
-        </a-entity>
-    </a-scene>
-    
-    <!-- Instructions for desktop users -->
-    <div style="position: absolute; bottom: 20px; left: 0; width: 100%; text-align: center; color: white; font-family: Arial, sans-serif; font-size: 18px; text-shadow: 1px 1px 2px black; pointer-events: none;">
-        <p>Enter VR: Look around with mouse, WASD to move. On Quest 2: Put on headset and explore!</p>
+    <div id="info">Immersive Space VR Environment</div>
+    <div id="loading">Generating Cosmic Scene...</div>
+    <div id="controls">
+        <div class="control-item">
+            <button id="toggleStars">Toggle Stars</button>
+            <button id="togglePlanets">Toggle Planets</button>
+        </div>
+        <div class="control-item">
+            <button id="addPlanet">Add Random Planet</button>
+            <button id="resetScene">Reset Scene</button>
+        </div>
+        <div class="control-item">
+            <small>Use mouse to look around, scroll to zoom</small>
+        </div>
     </div>
+
+    <script>
+        // Main variables
+        let scene, camera, renderer, controls;
+        let stars, planets = [];
+        let sun, sunLight;
+        let clock = new THREE.Clock();
+        
+        // Initialize the scene
+        function init() {
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000022);
+            scene.fog = new THREE.Fog(0x000022, 500, 2000);
+            
+            // Create camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
+            camera.position.set(0, 50, 150);
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+            
+            // Add orbit controls for navigation
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.dampingFactor = 0.05;
+            controls.minDistance = 50;
+            controls.maxDistance = 1000;
+            
+            // Create lighting
+            createLighting();
+            
+            // Create celestial bodies
+            createSun();
+            createPlanets();
+            createStarField();
+            
+            // Handle window resize
+            window.addEventListener('resize', onWindowResize);
+            
+            // Hide loading message
+            document.getElementById('loading').style.display = 'none';
+            
+            // Setup UI controls
+            setupControls();
+            
+            // Start animation loop
+            animate();
+        }
+        
+        // Create lighting for the scene
+        function createLighting() {
+            // Ambient light
+            const ambientLight = new THREE.AmbientLight(0x333333);
+            scene.add(ambientLight);
+            
+            // Directional light (sun)
+            sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+            sunLight.position.set(0, 0, 0);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+        }
+        
+        // Create the central sun
+        function createSun() {
+            // Sun geometry and material
+            const sunGeometry = new THREE.SphereGeometry(30, 64, 64);
+            const sunMaterial = new THREE.MeshBasicMaterial({
+                color: 0xffaa33,
+                emissive: 0xff6600,
+                emissiveIntensity: 1.5
+            });
+            
+            // Create sun mesh
+            sun = new THREE.Mesh(sunGeometry, sunMaterial);
+            scene.add(sun);
+            
+            // Sun glow effect
+            const sunGlowGeometry = new THREE.SphereGeometry(32, 32, 32);
+            const sunGlowMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff6600,
+                transparent: true,
+                opacity: 0.3
+            });
+            const sunGlow = new THREE.Mesh(sunGlowGeometry, sunGlowMaterial);
+            sun.add(sunGlow);
+            
+            // Sun corona
+            const coronaGeometry = new THREE.SphereGeometry(40, 32, 32);
+            const coronaMaterial = new THREE.MeshBasicMaterial({
+                color: 0xff3300,
+                transparent: true,
+                opacity: 0.1
+            });
+            const corona = new THREE.Mesh(coronaGeometry, coronaMaterial);
+            sun.add(corona);
+        }
+        
+        // Create planets
+        function createPlanets() {
+            // Planet configurations
+            const planetConfigs = [
+                { size: 15, distance: 120, speed: 0.2, color: 0x3366ff, name: "Aquaria" },
+                { size: 12, distance: 180, speed: 0.15, color: 0xff6633, name: "Pyron" },
+                { size: 18, distance: 250, speed: 0.1, color: 0x33ff66, name: "Verdant" },
+                { size: 10, distance: 320, speed: 0.08, color: 0xcc33ff, name: "Mystara" },
+                { size: 20, distance: 400, speed: 0.05, color: 0xffff33, name: "Solaris" }
+            ];
+            
+            planetConfigs.forEach(config => {
+                createPlanet(config);
+            });
+        }
+        
+        // Create a single planet
+        function createPlanet(config) {
+            // Planet geometry and material
+            const planetGeometry = new THREE.SphereGeometry(config.size, 32, 32);
+            const planetMaterial = new THREE.MeshPhongMaterial({
+                color: config.color,
+                shininess: 30,
+                emissive: config.color,
+                emissiveIntensity: 0.1
+            });
+            
+            // Create planet mesh
+            const planet = new THREE.Mesh(planetGeometry, planetMaterial);
+            planet.castShadow = true;
+            planet.receiveShadow = true;
+            
+            // Position planet in orbit
+            const angle = Math.random() * Math.PI * 2;
+            planet.position.x = Math.cos(angle) * config.distance;
+            planet.position.z = Math.sin(angle) * config.distance;
+            
+            // Add to scene and tracking array
+            scene.add(planet);
+            planets.push({
+                mesh: planet,
+                distance: config.distance,
+                speed: config.speed,
+                angle: angle,
+                name: config.name
+            });
+            
+            // Add planet rings (for some planets)
+            if (Math.random() > 0.5) {
+                const ringGeometry = new THREE.RingGeometry(config.size * 1.5, config.size * 2, 64);
+                const ringMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    side: THREE.DoubleSide,
+                    transparent: true,
+                    opacity: 0.7
+                });
+                const ring = new THREE.Mesh(ringGeometry, ringMaterial);
+                ring.rotation.x = Math.PI / 2;
+                planet.add(ring);
+            }
+        }
+        
+        // Create star field
+        function createStarField() {
+            const starCount = 10000;
+            const starGeometry = new THREE.BufferGeometry();
+            const starPositions = new Float32Array(starCount * 3);
+            const starSizes = new Float32Array(starCount);
+            const starColors = new Float32Array(starCount * 3);
+            
+            // Generate star positions and properties
+            for (let i = 0; i < starCount; i++) {
+                const i3 = i * 3;
+                
+                // Position (in a sphere around the scene)
+                const radius = 800 + Math.random() * 700;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
+                
+                starPositions[i3] = radius * Math.sin(phi) * Math.cos(theta);
+                starPositions[i3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+                starPositions[i3 + 2] = radius * Math.cos(phi);
+                
+                // Size (random between 0.5 and 2)
+                starSizes[i] = Math.random() * 1.5 + 0.5;
+                
+                // Color (mostly white with some variation)
+                const colorVariation = 0.2;
+                const r = 0.8 + Math.random() * colorVariation;
+                const g = 0.8 + Math.random() * colorVariation;
+                const b = 0.9 + Math.random() * 0.1;
+                
+                starColors[i3] = r;
+                starColors[i3 + 1] = g;
+                starColors[i3 + 2] = b;
+            }
+            
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+            starGeometry.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+            
+            // Star material
+            const starMaterial = new THREE.PointsMaterial({
+                size: 1.5,
+                sizeAttenuation: true,
+                color: 0xffffff,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.9
+            });
+            
+            // Create star system
+            stars = new THREE.Points(starGeometry, starMaterial);
+            scene.add(stars);
+        }
+        
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta();
+            const time = clock.getElapsedTime();
+            
+            // Rotate sun
+            if (sun) {
+                sun.rotation.y += 0.001;
+            }
+            
+            // Move planets in orbit
+            planets.forEach(planet => {
+                planet.angle += planet.speed * delta * 0.1;
+                planet.mesh.position.x = Math.cos(planet.angle) * planet.distance;
+                planet.mesh.position.z = Math.sin(planet.angle) * planet.distance;
+                planet.mesh.rotation.y += 0.005;
+            });
+            
+            // Rotate stars slightly for parallax effect
+            if (stars) {
+                stars.rotation.y += 0.0001;
+            }
+            
+            // Update controls
+            controls.update();
+            
+            // Render scene
+            renderer.render(scene, camera);
+        }
+        
+        // Handle window resize
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // Setup UI controls
+        function setupControls() {
+            document.getElementById('toggleStars').addEventListener('click', () => {
+                stars.visible = !stars.visible;
+            });
+            
+            document.getElementById('togglePlanets').addEventListener('click', () => {
+                planets.forEach(planet => {
+                    planet.mesh.visible = !planet.mesh.visible;
+                });
+            });
+            
+            document.getElementById('addPlanet').addEventListener('click', () => {
+                const config = {
+                    size: 5 + Math.random() * 15,
+                    distance: 100 + Math.random() * 400,
+                    speed: 0.02 + Math.random() * 0.18,
+                    color: Math.random() * 0xffffff,
+                    name: "Planet " + (planets.length + 1)
+                };
+                createPlanet(config);
+            });
+            
+            document.getElementById('resetScene').addEventListener('click', () => {
+                // Remove existing planets
+                planets.forEach(planet => {
+                    scene.remove(planet.mesh);
+                });
+                planets = [];
+                
+                // Create new planets
+                createPlanets();
+            });
+        }
+        
+        // Start everything
+        init();
+    </script>
 </body>
 </html>
