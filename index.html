@@ -1,168 +1,77 @@
 <!DOCTYPE html>
-<html>
-  <head>
-    <title>WebXR Controller Scene - Enhanced Robustness</title>
-    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  </head>
-  <body>
-    <a-scene>
-      <a-entity
-        id="rig"
-        movement-controls="speed: 0.1"
-        position="0 0 0"
-      >
-        <a-camera
-          look-controls="enabled: false"
-          wasd-controls="enabled: false"
-          position="0 1.6 0"
-        ></a-camera>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic VR Scene with Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://unpkg.com/three@0.165.0/build/three.module.js';
+        import { XRButton } from 'https://unpkg.com/three@0.165.0/examples/jsm/webxr/XRButton.js';
 
-        <a-entity
-          oculus-touch-controller="hand: right"
-          laser-controls="hand: right"
-          raycaster="objects: .collidable"
-          line="opacity: 0.8; color: blue"
-          id="right-hand"
-        ></a-entity>
+        let scene, camera, renderer;
 
-        <a-entity
-          oculus-touch-controller="hand: left"
-          laser-controls="hand: left"
-          raycaster="objects: .collidable"
-          line="opacity: 0.8; color: red"
-          id="left-hand"
-        ></a-entity>
-      </a-entity>
+        function init() {
+            // Scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x87CEEB); // Blue sky
 
-      <a-plane
-        position="0 0 -4"
-        rotation="-90 0 0"
-        width="10"
-        height="10"
-        color="#7BC8A4"
-        shadow
-      ></a-plane>
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.6, 0); // Standard height for VR
 
-      <a-box
-        position="0 1 -2"
-        rotation="0 45 0"
-        color="#4CC3D9"
-        shadow
-        class="collidable"
-        id="my-box"
-      ></a-box>
-    </a-scene>
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true; // Enable WebXR
+            document.body.appendChild(renderer.domElement);
 
-    <script>
-      // A-Frame component for controller interaction
-      AFRAME.registerComponent('controller-listener', {
-        init: function () {
-          const el = this.el; // The controller entity
-          const box = document.getElementById('my-box'); // The target box
+            // XR Button
+            document.body.appendChild(XRButton.createButton(renderer));
 
-          el.addEventListener('triggerdown', function () {
-            if (el.components.raycaster.intersectedEls.includes(box)) {
-              box.setAttribute('color', getRandomColor());
-            }
-          });
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
 
-          function getRandomColor() {
-            const letters = '0123456789ABCDEF';
-            let color = '#';
-            for (let i = 0; i < 6; i++) {
-              color += letters[Math.floor(Math.random() * 16)];
-            }
-            return color;
-          }
-        },
-      });
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight);
 
-      // Apply the component to both controllers
-      document.getElementById('right-hand').setAttribute('controller-listener', '');
-      document.getElementById('left-hand').setAttribute('controller-listener', '');
+            // Floor (Green Plane)
+            const floorGeometry = new THREE.PlaneGeometry(100, 100);
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x00FF00 }); // Green
+            const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+            floor.rotation.x = -Math.PI / 2; // Rotate to be flat on the ground
+            floor.position.y = -0.01; // Slightly below camera to avoid z-fighting with origin
+            scene.add(floor);
 
-      // --- NEW CODE FOR ROBUSTNESS ---
+            // Handle window resizing
+            window.addEventListener('resize', onWindowResize, false);
+        }
 
-      AFRAME.registerComponent('webxr-session-monitor', {
-        init: function () {
-          const scene = this.el;
-          const rightHand = document.getElementById('right-hand');
-          const leftHand = document.getElementById('left-hand');
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
 
-          // Listen for VR entry
-          scene.addEventListener('enter-vr', function () {
-            console.log('Entered VR! Checking controller status...');
-            // Give a small delay for controllers to fully initialize
-            setTimeout(() => {
-              checkControllerStatus();
-            }, 1000); // 1 second delay
-          });
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
 
-          // Listen for VR exit
-          scene.addEventListener('exit-vr', function () {
-            console.log('Exited VR.');
-          });
+        function render() {
+            renderer.render(scene, camera);
+        }
 
-          // Listen for individual controller connection
-          rightHand.addEventListener('controllerconnected', function () {
-            console.log('Right controller connected and ready.');
-          });
-          leftHand.addEventListener('controllerconnected', function () {
-            console.log('Left controller connected and ready.');
-          });
+        init();
+        animate();
 
-          // Listen for individual controller disconnection
-          rightHand.addEventListener('controllerdisconnected', function () {
-            console.warn('Right controller disconnected!');
-            displayControllerWarning('Right controller disconnected. Please check your controller.');
-          });
-          leftHand.addEventListener('controllerdisconnected', function () {
-            console.warn('Left controller disconnected!');
-            displayControllerWarning('Left controller disconnected. Please check your controller.');
-          });
-
-          function checkControllerStatus() {
-            // A-Frame's internal components might not be fully initialized immediately.
-            // Check if the controller models are loaded and if they are reporting a pose.
-            const rightControllerReady = rightHand.components['oculus-touch-controller'] && rightHand.components['oculus-touch-controller'].controller;
-            const leftControllerReady = leftHand.components['oculus-touch-controller'] && leftHand.components['oculus-touch-controller'].controller;
-
-            if (!rightControllerReady || !leftControllerReady) {
-              console.warn('One or both controllers not detected or fully initialized after entering VR.');
-              displayControllerWarning('Controllers not detected. Please ensure they are on and try re-entering VR.');
-            } else {
-              console.log('Both controllers appear to be ready.');
-              hideControllerWarning();
-            }
-          }
-
-          // Simple UI for warning messages (you can enhance this)
-          let warningText = null;
-          function displayControllerWarning(message) {
-            if (!warningText) {
-              warningText = document.createElement('a-text');
-              warningText.setAttribute('value', '');
-              warningText.setAttribute('position', '0 1.6 -1'); // Position in front of the camera
-              warningText.setAttribute('align', 'center');
-              warningText.setAttribute('color', '#FF0000');
-              warningText.setAttribute('wrap-count', '30');
-              scene.appendChild(warningText);
-            }
-            warningText.setAttribute('value', message);
-            warningText.setAttribute('visible', 'true');
-            console.error('VR Warning:', message);
-          }
-
-          function hideControllerWarning() {
-            if (warningText) {
-              warningText.setAttribute('visible', 'false');
-            }
-          }
-        },
-      });
-
-      // Attach the session monitor to the scene
-      document.querySelector('a-scene').setAttribute('webxr-session-monitor', '');
     </script>
-  </body>
+</body>
 </html>
