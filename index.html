@@ -1,24 +1,29 @@
+<!DOCTYPE html>
 <html>
   <head>
-    <title>Simple VR Experience</title>
+    <title>Simple VR Scene (Oculus Quest 2 Movement)</title>
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-extras@6.1.1/dist/aframe-extras.min.js"></script> <!-- Add this line -->
+    <!-- Add the controller-controls component -->
+    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@6.1.1/dist/aframe-extras.controls.min.js"></script>
   </head>
   <body>
     <a-scene>
-      <a-sky color="#87CEEB"></a-sky>
-      <a-plane position="0 0 -4" rotation="-90 0 0" width="10" height="10" color="#4CAF50"></a-plane>
-      <a-box position="-1 0.5 -3" color="#FFC65D"></a-box>
-      <a-box position="0 0.5 -5" color="#7BC8A4"></a-box>
-      <a-box position="2 0.5 -4" color="#F16745"></a-box>
-      <!-- Camera with smooth controller movement -->
-      
-      <a-entity id="rig" movement-controls="speed: 0.1">
-        <a-entity camera look-controls></a-entity>
-        <a-entity meta-touch-controls="hand: left"></a-entity>
-        <a-entity meta-touch-controls="hand: right"></a-entity>
+      <!-- The ground -->
+      <a-plane color="#7BC8A4" width="20" height="20" rotation="-90 0 0"></a-plane>
+
+      <!-- A few objects to look at -->
+      <a-box position="0 0.5 -3" color="#4CC3D9"></a-box>
+      <a-sphere position="2 1 -5" radius="1" color="#EF2D5E"></a-sphere>
+      <a-cylinder position="-2 0.75 -4" radius="0.5" height="1.5" color="#FFC65D"></a-cylinder>
+
+      <!-- Camera rig for movement -->
+      <a-entity id="rig" movement-controls position="0 1.6 0">
+        <!-- Camera -->
+        <a-entity camera look-controls wasd-controls-enabled="false"></a-entity>
+        <!-- Oculus Quest 2 hand controllers -->
+        <a-entity oculus-touch-controls="hand: left"></a-entity>
+        <a-entity oculus-touch-controls="hand: right"></a-entity>
       </a-entity>
-      
     </a-scene>
   </body>
 </html>
