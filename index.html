@@ -12,7 +12,9 @@
       <a-box position="0 0.5 -5" color="#7BC8A4"></a-box>
       <a-box position="2 0.5 -4" color="#F16745"></a-box>
       <!-- Camera with smooth controller movement -->
-      <a-entity camera look-controls wasd-controls="acceleration: 30" movement-controls="controls: gamepad"></a-entity>
+      
+      <a-entity camera look-controls movement-controls="controls: gamepad, keyboard; speed: 0.1"></a-entity>
+      
     </a-scene>
   </body>
 </html>
