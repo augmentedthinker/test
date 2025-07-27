@@ -1,223 +1,93 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>WebXR VR Experience - Meta Quest 2</title>
-    <meta charset="UTF-8">
-    <meta name="description" content="A performant and comfortable WebXR VR experience for the Meta Quest 2 browser, built according to the provided PRD.">
-    
-    <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-    
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>VR Weather Forest Surprise</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- A-Frame 1.5.0 (as per baseline PRP) -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- A-Frame Extras for movement-controls (thumbstick locomotion) -->
     <script src="https://cdn.jsdelivr.net/gh/c-frame/aframe-extras@7.2.0/dist/aframe-extras.min.js"></script>
-
-    <script>
-        // --- Component: Grabbable Objects ---
-        // Implements <COMMAND: Interaction>: Grabbable/Inspectable 3D objects.
-        AFRAME.registerComponent('grabbable', {
-            schema: {
-                highlightColor: { type: 'color', default: '#22a7f0' }
-            },
-            init: function () {
-                this.originalColor = null;
-                this.grabbing = false;
-                this.grabber = null; // The controller grabbing the object
-
-                // --- Event Listeners for Highlighting ---
-                this.el.addEventListener('raycaster-intersected', (e) => {
-                    if (!this.grabbing) {
-                        const material = this.el.getObject3D('mesh').material;
-                        this.originalColor = material.color.clone();
-                        material.color.set(this.data.highlightColor);
-                    }
-                });
-
-                this.el.addEventListener('raycaster-intersected-cleared', () => {
-                    if (!this.grabbing && this.originalColor) {
-                        this.el.getObject3D('mesh').material.color.copy(this.originalColor);
-                        this.originalColor = null;
-                    }
-                });
-
-                // --- Event Listeners for Grabbing ---
-                this.el.addEventListener('gripdown', (e) => {
-                    this.grabbing = true;
-                    this.grabber = e.detail.hand;
-                    this.el.getObject3D('mesh').material.color.copy(this.originalColor || this.el.getObject3D('mesh').material.color);
-                    console.log("Analytics Hook: object_grab_count incremented for #" + this.el.id);
-                });
-
-                this.el.addEventListener('gripup', () => {
-                    this.grabbing = false;
-                    this.grabber = null;
-                });
-            },
-            tick: function () {
-                if (this.grabbing && this.grabber) {
-                    this.el.object3D.position.copy(this.grabber.object3D.position);
-                    this.el.object3D.quaternion.copy(this.grabber.object3D.quaternion);
-                }
-            }
+    <!-- Environment component (easy procedural sky/ground/lighting) -->
+    <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
+    <!-- Particle system for rain/snow -->
+    <script src="https://unpkg.com/aframe-particle-system-component@1.0.0/dist/aframe-particle-system-component.min.js"></script>
+  </head>
+  <body>
+    <a-scene stats>
+      <!-- Preload ambient and weather sounds -->
+      <a-assets>
+        <audio id="birds" src="https://cdn.pixabay.com/audio/2022/07/26/audio_124bfa2901.mp3"></audio>
+        <audio id="rain" src="https://cdn.pixabay.com/audio/2023/03/20/audio_12ed206e21.mp3"></audio>
+        <audio id="snow" src="https://cdn.pixabay.com/audio/2022/02/23/audio_116e2fc48e.mp3"></audio>
+      </a-assets>
+      <!-- Player rig with smooth locomotion and Quest controllers -->
+      <a-entity id="rig" movement-controls="fly:false; speed:0.2;">
+        <a-entity camera position="0 1.6 0" look-controls></a-entity>
+        <a-entity id="leftHand" meta-touch-controls="hand:left"></a-entity>
+        <a-entity id="rightHand" meta-touch-controls="hand:right"></a-entity>
+      </a-entity>
+      <!-- Gorgeous procedural environment -->
+      <a-entity id="env" environment="preset: forest; shadow:true; shadowSize:10; fog:0.6; dressingAmount:20"></a-entity>
+      <!-- Ambient sound, attaches to camera -->
+      <a-entity id="ambience" sound="src: #birds; autoplay:true; loop:true; volume:0.5; positional:false"></a-entity>
+      <!-- Rain particles & sound (hidden at start) -->
+      <a-entity id="rainFX" particle-system="preset: rain; particleCount:6000; color: #acdff9; enabled: false" visible="false"></a-entity>
+      <a-entity id="rainSound" sound="src: #rain; autoplay:false; loop:true; volume:0.6; positional:false"></a-entity>
+      <!-- Snow particles & sound (hidden at start) -->
+      <a-entity id="snowFX" particle-system="preset: snow; particleCount:2000; color: #FFFFFF; enabled: false" visible="false"></a-entity>
+      <a-entity id="snowSound" sound="src: #snow; autoplay:false; loop:true; volume:0.5; positional:false"></a-entity>
+      <!-- Weather toggle button floating in front of player -->
+      <a-entity id="weatherBtn" geometry="primitive:box; width:0.45; height:0.18; depth:0.05"
+        material="color: #e0e022; shader: flat"
+        position="0 1.4 -2"
+        class="clickable"
+        weather-toggle>
+        <a-text value="Change Weather" align="center" position="0 0 0.06" width="2" color="#333"></a-text>
+      </a-entity>
+      <!-- Show current weather -->
+      <a-text id="weatherLabel" value="Weather: Sunny" position="0 2.2 -2" color="#fff" width="4" align="center"></a-text>
+      <script>
+        // Custom component to handle weather switching and audio/particles
+        AFRAME.registerComponent('weather-toggle', {
+          init: function () {
+            const states = ['sunny', 'rain', 'snow'];
+            let idx = 0;
+            const ambience = document.querySelector('#ambience');
+            const rainFX = document.querySelector('#rainFX');
+            const rainSound = document.querySelector('#rainSound');
+            const snowFX = document.querySelector('#snowFX');
+            const snowSound = document.querySelector('#snowSound');
+            const label = document.querySelector('#weatherLabel');
+            this.el.addEventListener('click', () => {
+              idx = (idx + 1) % states.length;
+              // Stop all weather effects
+              rainFX.setAttribute('visible', false);
+              rainFX.setAttribute('particle-system', 'enabled', false);
+              rainSound.components.sound.stopSound();
+              snowFX.setAttribute('visible', false);
+              snowFX.setAttribute('particle-system', 'enabled', false);
+              snowSound.components.sound.stopSound();
+              ambience.components.sound.stopSound();
+              // Activate based on state
+              if (states[idx] === 'sunny') {
+                ambience.components.sound.playSound();
+                label.setAttribute('value', 'Weather: Sunny');
+              } else if (states[idx] === 'rain') {
+                rainFX.setAttribute('visible', true);
+                rainFX.setAttribute('particle-system', 'enabled', true);
+                rainSound.components.sound.playSound();
+                label.setAttribute('value', 'Weather: Rain');
+              } else if (states[idx] === 'snow') {
+                snowFX.setAttribute('visible', true);
+                snowFX.setAttribute('particle-system', 'enabled', true);
+                snowSound.components.sound.playSound();
+                label.setAttribute('value', 'Weather: Snow');
+              }
+            });
+          }
         });
-        
-        // --- Component to handle VR session start ---
-        AFRAME.registerComponent('session-manager', {
-            init: function() {
-                const enterVrButton = document.getElementById('enter-vr-button');
-                const unsupportedBrowserMessage = document.getElementById('unsupported-browser');
-                
-                this.el.sceneEl.addEventListener('loaded', () => {
-                    navigator.xr?.isSessionSupported('immersive-vr').then((supported) => {
-                        if (supported) {
-                            console.log("WebXR session is supported.");
-                            enterVrButton.style.display = 'block';
-                        } else {
-                            unsupportedBrowserMessage.style.display = 'block';
-                            console.log("WebXR immersive-vr session not supported.");
-                        }
-                    });
-                });
-
-                enterVrButton.addEventListener('click', () => {
-                    console.log("VALIDATION: 'Enter VR' button clicked, requesting session.");
-                    this.el.sceneEl.enterVR();
-                });
-
-                this.el.sceneEl.addEventListener('enter-vr', () => {
-                    console.log("ANALYTICS: webxr_session_start");
-                    // This also handles the browser's autoplay policy for audio.
-                    const ambientSound = document.querySelector('[sound]');
-                    if (ambientSound) {
-                        ambientSound.components.sound.playSound();
-                        console.log("VALIDATION: Audio playback initiated by user gesture.");
-                    }
-                });
-                
-                this.el.sceneEl.addEventListener('exit-vr', () => {
-                    console.log("ANALYTICS: webxr_session_end");
-                });
-            }
-        });
-
-    </script>
-</head>
-<body>
-    <style>
-        body { margin: 0; font-family: sans-serif; }
-        .vr-button-container {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 10;
-            text-align: center;
-        }
-        #enter-vr-button, #unsupported-browser {
-            display: none;
-            padding: 12px 24px;
-            font-size: 18px;
-            border: none;
-            background-color: #007bff;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #unsupported-browser {
-            background-color: #dc3545;
-            cursor: default;
-        }
-        .testing-instructions {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
-            max-width: 350px;
-            font-size: 14px;
-            z-index: 10;
-        }
-        .testing-instructions h2 { margin-top: 0; }
-        .testing-instructions ul { padding-left: 20px; }
-    </style>
-
-    <div class="testing-instructions">
-        <h2>VR Experience Testing Instructions</h2>
-        <p>Follow these steps to test the core functionalities of the experience.</p>
-        <ul>
-            <li><strong>Accessing the Experience:</strong> Navigate to the GitHub Pages URL using the Meta Quest 2 Browser.</li>
-            <li><strong>Initiating VR:</strong> Click the "Enter VR" button to start the immersive session.</li>
-            <li><strong>Teleportation:</strong>
-                <ul>
-                    <li>Push the <strong>right controller's thumbstick</strong> forward. You should see a parabolic arc.</li>
-                    <li>Aim the arc at a valid spot on the ground (it should turn green).</li>
-                    <li>Release the thumbstick to teleport to the new location.</li>
-                </ul>
-            </li>
-            <li><strong>Object Interaction:</strong>
-                <ul>
-                    <li>Aim the <strong>left controller's ray</strong> at the blue cube or the red sphere. The object should highlight.</li>
-                    <li>Press and hold the <strong>left controller's grip button</strong> to grab the object. It should attach to your controller.</li>
-                    <li>Release the grip button to let go of the object.</li>
-                </ul>
-            </li>
-             <li><strong>Audio Verification:</strong> Upon entering VR, you should hear ambient background sound.</li>
-            <li><strong>Performance Check:</strong> Move your head and teleport around the scene. Look for any stuttering, black bars at the edge of your vision, or visual artifacts. The experience should feel smooth.</li>
-        </ul>
-        <hr>
-        <h4>Open Questions from the PRD:</h4>
-        <ol>
-            <li>Are there specific font choices or UI color schemes required?</li>
-            <li>Are interactions beyond grab/release needed (e.g., pushing)?</li>
-            <li>What is the target average session duration in minutes?</li>
-        </ol>
-    </div>
-
-
-    <div class="vr-button-container">
-        <button id="enter-vr-button">Enter VR</button>
-        <div id="unsupported-browser">
-            WebXR Not Supported. Please use the Meta Quest Browser on a Quest 2 device.
-        </div>
-    </div>
-
-    <a-scene session-manager webxr="referenceSpaceType: local-floor;" renderer="colorManagement: true;">
-
-        <a-assets>
-            <audio id="ambient-sound" src="https://cdn.aframe.io/basic-guide/audio/background.mp3" preload="auto"></audio>
-        </a-assets>
-
-        <a-plane position="0 0 -4" rotation="-90 0 0" width="20" height="20" color="#7BC8A4" shadow></a-plane>
-        <a-sky color="#ECECEC"></a-sky>
-
-        <a-entity
-            text="value: Grabbable Objects: 2; color: #333; align: center; width: 4;"
-            position="0 1.8 -2"
-            rotation="0 0 0">
-        </a-entity>
-
-        <a-box id="cube1" position="-1 0.75 -3" rotation="0 45 0" color="#4CC3D9" shadow grabbable></a-box>
-        <a-sphere id="sphere2" position="1 0.75 -3" radius="0.5" color="#EF2D5E" shadow grabbable></a-sphere>
-
-        <a-entity id="player" position="0 0 0">
-            <a-camera position="0 1.6 0"></a-camera>
-            
-            <a-entity id="leftHand" oculus-touch-controls="hand: left"
-                      raycaster="objects: [grabbable]; far: 5;"
-                      line="color: #118A7E; opacity: 0.75">
-            </a-entity>
-
-            <a-entity id="rightHand" oculus-touch-controls="hand: right"
-                      teleport-controls="cameraRig: #player;
-                                         teleportOrigin: #player;
-                                         button: thumbstick;
-                                         collisionEntities: a-plane;
-                                         curveShootingSpeed: 10;
-                                         curveColor: #22a7f0;
-                                         curveHitColor: #50c878;">
-            </a-entity>
-        </a-entity>
-        
-        <a-entity sound="src: #ambient-sound; autoplay: false; loop: true; volume: 0.1"></a-entity>
+      </script>
     </a-scene>
-</body>
+  </body>
 </html>
