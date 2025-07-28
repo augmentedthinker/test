@@ -1,7 +1,22 @@
-<!DOCTYPE html>
+
+                        <!DOCTYPE html>
+                        <html lang="en">
+                        <head>
+                            <meta charset="UTF-8">
+                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <style>
+                body {
+                  background-color: white; /* Ensure the iframe has a white background */
+                }
+    
+                
+              </style>
+                        </head>
+                        <body>
+                            <!DOCTYPE html>
 <html>
 <head>
-  <title>AR Sphere with Laser & Color Change</title>
+  <title>AR Sphere Shooter</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -27,7 +42,7 @@
 </head>
 <body>
   <div id="info">
-    A WebXR Demo: Click Sphere with Laser to Change Color
+    A WebXR Demo: Click Sphere to Fire Projectiles!
   </div>
   <!-- Using an import map is a modern way to define module locations -->
   <script type="importmap">
@@ -71,6 +86,11 @@
             if (controllerGrip2) scene.remove(controllerGrip2);
             // Reset pointers array
             pointers.length = 0;
+            // Cleanup projectiles
+            for (const proj of projectiles) {
+                scene.remove(proj.mesh);
+            }
+            projectiles.length = 0;
           }
           button.style.cssText = `
             position: absolute;
@@ -150,7 +170,9 @@
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
-    let sphere; // Changed from cube to sphere
+    let targetSphere; // The main target sphere
+    const projectiles = []; // Array to hold active projectile spheres
+    const PROJECTILE_SPEED = 0.05; // Units per frame
 
     // --- Controller & Laser Variables ---
     let controller1, controller2;
@@ -159,6 +181,7 @@
     const pointers = []; // Array to store pointer data for each controller
     const tempMatrix = new THREE.Matrix4(); // Reusable matrix for calculations
     const raycaster = new THREE.Raycaster(); // Raycaster for intersection testing
+    const tempVector = new THREE.Vector3(); // Reusable vector
     // ---------------------------
 
     init();
@@ -166,6 +189,7 @@
 
     function init() {
       scene = new THREE.Scene();
+      // Note: In WebXR, the camera is managed by the XR system, but we still need one for non-XR rendering
       camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
       renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -175,23 +199,27 @@
 
       document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-      // --- Create the SPHERE ---
-      const geometry = new THREE.SphereGeometry(0.1, 32, 32); // Radius 0.1, segments for smoothness
+      // --- Create the TARGET SPHERE ---
+      // 1. Move it 3x further: -1 * 3 = -3
+      // 2. Make it 2x larger: radius 0.1 * 2 = 0.2
+      const geometry = new THREE.SphereGeometry(0.2, 32, 32);
       const material = new THREE.MeshStandardMaterial({
-        color: 0x0000ff, // Initial color: Blue
-        roughness: 0.5,
-        metalness: 0.1
+        color: 0xff3300, // Initial color: Orange-Red
+        roughness: 0.3,
+        metalness: 0.2,
+        emissive: 0x331100, // Slight glow
+        emissiveIntensity: 0.5
       });
-      sphere = new THREE.Mesh(geometry, material);
-      sphere.position.set(0, 0, -1); // Position 1 meter in front
-      scene.add(sphere);
+      targetSphere = new THREE.Mesh(geometry, material);
+      targetSphere.position.set(0, 0, -3); // Moved 3x further
+      scene.add(targetSphere);
       // ------------------------
 
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
       scene.add(light);
 
-      // Add a directional light for better 3D perception with MeshStandardMaterial
+      // Add a directional light for better 3D perception
       const dirLight = new THREE.DirectionalLight(0xffffff, 1);
       dirLight.position.set(1, 1, 1).normalize();
       scene.add(dirLight);
@@ -206,7 +234,6 @@
     }
 
     function setupControllers() {
-        // --- Initialize Controllers and Models ---
         controller1 = renderer.xr.getController(0);
         controller1.addEventListener('selectstart', onSelectStart);
         controller1.addEventListener('selectend', onSelectEnd);
@@ -231,18 +258,14 @@
         const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
         controllerGrip2.add(controllerModel2);
 
-        // --- Setup Laser Pointers ---
-        setupLaserPointer(controller1, 0); // Index 0 for controller 1
-        setupLaserPointer(controller2, 1); // Index 1 for controller 2
-        // ----------------------------
+        setupLaserPointer(controller1, 0);
+        setupLaserPointer(controller2, 1);
     }
 
     function setupLaserPointer(controller, index) {
-        // Create a line geometry for the laser
         const geometry = new THREE.BufferGeometry();
         geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-        // Use a distinct color for the laser
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute([1, 0, 0, 1, 0, 0], 3)); // Red
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
 
         const material = new THREE.LineBasicMaterial({
             vertexColors: true,
@@ -252,20 +275,17 @@
         });
 
         const line = new THREE.Line(geometry, material);
-        line.scale.z = 5; // Set initial length (5 meters)
-        line.visible = false; // Start hidden
+        line.scale.z = 5;
+        line.visible = false;
 
-        // Create a small sphere for the hit point indicator
-        const hitSphereGeometry = new THREE.SphereGeometry(0.01, 8, 8);
+        const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
         const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
         const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
-        hitPoint.visible = false; // Start hidden
+        hitPoint.visible = false;
 
-        // Add line and hit point to the controller
         controller.add(line);
         controller.add(hitPoint);
 
-        // Store pointer data
         pointers[index] = {
             controller: controller,
             line: line,
@@ -274,11 +294,11 @@
         };
 
         controller.addEventListener('connected', function () {
-             line.visible = true; // Show laser when controller connects
+             line.visible = true;
         });
 
         controller.addEventListener('disconnected', function () {
-            line.visible = false; // Hide laser when controller disconnects
+            line.visible = false;
             hitPoint.visible = false;
         });
     }
@@ -289,11 +309,8 @@
         if (pointers[index]) {
             pointers[index].isSelecting = true;
         }
-        // --- Check for sphere interaction on Select Start ---
-        // Note: This check is also in updateLasers, but checking here ensures
-        // the action happens immediately on the frame the button is pressed.
+        // Check for target sphere interaction on Select Start
         checkAndInteract(controller, index);
-        // ---------------------------------------------------
     }
 
     function onSelectEnd(event) {
@@ -305,29 +322,55 @@
     }
 
     function checkAndInteract(controller, index) {
-         // This function checks if the controller's ray is hitting the sphere
-         // and triggers the color change if it is.
          const pointer = pointers[index];
          if (!pointer) return;
 
-         // Get controller world matrix for ray direction
          tempMatrix.identity().extractRotation(controller.matrixWorld);
          raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
          raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-         const intersects = raycaster.intersectObject(sphere);
+         const intersects = raycaster.intersectObject(targetSphere);
          if (intersects.length > 0 && pointer.isSelecting) {
-             changeSphereColor();
+             fireProjectile(controller); // Fire towards the camera
          }
     }
 
-    function changeSphereColor() {
-        // Generates a random hex color
-        const newColor = Math.random() * 0xffffff;
-        if (sphere && sphere.material) {
-            sphere.material.color.setHex(newColor);
-        }
+    function fireProjectile(fromController) {
+        // 1. Create projectile geometry and material
+        const projGeometry = new THREE.SphereGeometry(0.05, 16, 16); // Smaller sphere
+        const projMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan
+        const projectileMesh = new THREE.Mesh(projGeometry, projMaterial);
+
+        // 2. Set initial position (at the target sphere)
+        // We'll make it spawn slightly in front of the target sphere
+        // to avoid immediate collision.
+        projectileMesh.position.copy(targetSphere.position);
+        // Get direction from target sphere to controller (roughly backwards)
+        tempVector.setFromMatrixPosition(fromController.matrixWorld);
+        tempVector.sub(targetSphere.position).normalize();
+        // Offset initial position slightly along this direction
+        projectileMesh.position.add(tempVector.multiplyScalar(0.25));
+
+        // 3. Add to scene
+        scene.add(projectileMesh);
+
+        // 4. Store projectile data
+        projectiles.push({
+            mesh: projectileMesh,
+            // 5. Calculate velocity: towards the controller's current position
+            velocity: new THREE.Vector3().subVectors(
+                tempVector.setFromMatrixPosition(fromController.matrixWorld), // Target: Controller pos
+                projectileMesh.position // Origin: Projectile start pos
+            ).normalize().multiplyScalar(PROJECTILE_SPEED)
+        });
+
+        // Optional: Visual feedback on target sphere
+        targetSphere.material.color.setHex(0xff9900); // Flash orange
+        setTimeout(() => {
+            if (targetSphere) targetSphere.material.color.setHex(0xff3300);
+        }, 100);
     }
+
 
     function animate() {
       renderer.setAnimationLoop(render);
@@ -337,12 +380,31 @@
         // Update laser pointers every frame
         updateLasers();
 
-        // Rotate the sphere slowly
-        if (sphere) {
-            sphere.rotation.y += 0.005;
-            sphere.rotation.x += 0.0025;
+        // Slowly rotate the target sphere
+        if (targetSphere) {
+            targetSphere.rotation.y += 0.005;
+            targetSphere.rotation.x += 0.0025;
         }
-        // Render the scene.
+
+        // --- Update Projectiles ---
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            const proj = projectiles[i];
+
+            // Update position
+            proj.mesh.position.add(proj.velocity);
+
+            // Simple boundary check (remove if too far)
+            // A more robust check could use distance from origin
+            if (proj.mesh.position.length() > 10) {
+                scene.remove(proj.mesh);
+                projectiles.splice(i, 1); // Remove from array
+            }
+            // Note: For collision with camera/user, you'd need complex logic
+            // involving the WebXR reference space and potentially the device pose.
+            // For simplicity, we just let them fly until they are far away.
+        }
+        // --------------------------
+
         renderer.render(scene, camera);
     }
 
@@ -355,8 +417,7 @@
             raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            // --- Perform Intersection Test ---
-            const intersects = raycaster.intersectObject(sphere); // Check only against the sphere
+            const intersects = raycaster.intersectObject(targetSphere);
 
             if (intersects.length > 0) {
                 const distance = intersects[0].distance;
@@ -364,14 +425,6 @@
                 pointer.line.scale.z = clampedDistance;
                 pointer.hitPoint.position.z = -clampedDistance;
                 pointer.hitPoint.visible = true;
-
-                // --- Handle Interaction on Select (Alternative location) ---
-                // This check happens every frame while pointing and selecting
-                // if (pointer.isSelecting) {
-                //     changeSphereColor(); // This would change color every frame while held
-                // }
-                // ----------------------------------------------------------
-
             } else {
                 pointer.line.scale.z = 5;
                 pointer.hitPoint.visible = false;
@@ -382,3 +435,12 @@
   </script>
 </body>
 </html>
+
+
+    
+              <script>
+                              
+              </script>
+                        </body>
+                        </html>
+                    
