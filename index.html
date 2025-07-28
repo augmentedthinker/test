@@ -1,22 +1,7 @@
-
-                        <!DOCTYPE html>
-                        <html lang="en">
-                        <head>
-                            <meta charset="UTF-8">
-                            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <style>
-                body {
-                  background-color: white; /* Ensure the iframe has a white background */
-                }
-    
-                
-              </style>
-                        </head>
-                        <body>
-                            <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
-  <title>AR Sphere Shooter</title>
+  <title>AR Sphere Shooter - Encapsulated</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -42,7 +27,7 @@
 </head>
 <body>
   <div id="info">
-    A WebXR Demo: Click Sphere to Fire Projectiles!
+    A WebXR Demo: Encapsulated Sphere Shooter
   </div>
   <!-- Using an import map is a modern way to define module locations -->
   <script type="importmap">
@@ -171,6 +156,7 @@
     // --- Main Application Logic ---
     let camera, scene, renderer;
     let targetSphere; // The main target sphere
+    let containmentGrid; // The new spherical grid
     const projectiles = []; // Array to hold active projectile spheres
     const PROJECTILE_SPEED = 0.05; // Units per frame
 
@@ -214,6 +200,21 @@
       targetSphere.position.set(0, 0, -3); // Moved 3x further
       scene.add(targetSphere);
       // ------------------------
+
+      // --- Create the SPHERICAL CONTAINMENT GRID ---
+      const gridGeometry = new THREE.SphereGeometry(5, 32, 32); // Large radius (5 units)
+      const gridMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00aaff, // Blue-ish color
+        wireframe: true, // Make it a wireframe
+        transparent: true,
+        opacity: 0.2 // Make it semi-transparent
+      });
+      containmentGrid = new THREE.Mesh(gridGeometry, gridMaterial);
+      // Optional: Rotate the grid slightly for visual interest
+      containmentGrid.rotation.x = Math.PI / 4;
+      containmentGrid.rotation.y = Math.PI / 6;
+      scene.add(containmentGrid);
+      // ---------------------------------------------
 
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
@@ -342,8 +343,6 @@
         const projectileMesh = new THREE.Mesh(projGeometry, projMaterial);
 
         // 2. Set initial position (at the target sphere)
-        // We'll make it spawn slightly in front of the target sphere
-        // to avoid immediate collision.
         projectileMesh.position.copy(targetSphere.position);
         // Get direction from target sphere to controller (roughly backwards)
         tempVector.setFromMatrixPosition(fromController.matrixWorld);
@@ -386,6 +385,13 @@
             targetSphere.rotation.x += 0.0025;
         }
 
+        // --- Slowly Rotate the Containment Grid for Visual Interest ---
+        if (containmentGrid) {
+            containmentGrid.rotation.y += 0.0005;
+            containmentGrid.rotation.x += 0.0003;
+        }
+        // -------------------------------------------------------------
+
         // --- Update Projectiles ---
         for (let i = projectiles.length - 1; i >= 0; i--) {
             const proj = projectiles[i];
@@ -393,15 +399,14 @@
             // Update position
             proj.mesh.position.add(proj.velocity);
 
-            // Simple boundary check (remove if too far)
-            // A more robust check could use distance from origin
-            if (proj.mesh.position.length() > 10) {
+            // --- Boundary Check with Grid ---
+            // Check if projectile is outside the grid (radius 5)
+            // We use a slightly smaller radius (4.9) to ensure it's removed before visual clipping
+            if (proj.mesh.position.length() > 4.9) {
                 scene.remove(proj.mesh);
                 projectiles.splice(i, 1); // Remove from array
             }
-            // Note: For collision with camera/user, you'd need complex logic
-            // involving the WebXR reference space and potentially the device pose.
-            // For simplicity, we just let them fly until they are far away.
+            // -------------------------------
         }
         // --------------------------
 
@@ -435,12 +440,3 @@
   </script>
 </body>
 </html>
-
-
-    
-              <script>
-                              
-              </script>
-                        </body>
-                        </html>
-                    
