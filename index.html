@@ -3,156 +3,200 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Space Exploration</title>
+    <title>VR Space Explorer</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-extras@7.0.0/dist/aframe-extras.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-controller-cursor-component@1.0.1/dist/aframe-controller-cursor-component.min.js"></script>
+    <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
     <style>
         body {
             margin: 0;
             overflow: hidden;
             background: #000;
+            font-family: 'Arial', sans-serif;
         }
-        #ui {
+        #enterVR {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 100, 255, 0.7);
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 24px;
+            border-radius: 10px;
+            cursor: pointer;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            transition: all 0.3s ease;
+        }
+        #enterVR:hover {
+            background: rgba(0, 150, 255, 0.9);
+            transform: translate(-50%, -50%) scale(1.05);
+        }
+        #instructions {
             position: fixed;
             bottom: 20px;
             left: 0;
             width: 100%;
             text-align: center;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 18px;
+            z-index: 10;
+            text-shadow: 0 0 5px rgba(0, 100, 255, 0.8);
+        }
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 200;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid rgba(0, 150, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #0af;
+            animation: spin 1s ease-in-out infinite;
+            margin-bottom: 20px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        h1 {
             color: white;
-            font-family: 'Arial', sans-serif;
-            z-index: 100;
-            pointer-events: none;
-            text-shadow: 0 0 5px #000;
-        }
-        #title {
-            font-size: 24px;
-            margin-bottom: 10px;
-            color: #4fc3f7;
-        }
-        #instructions {
-            font-size: 16px;
-            max-width: 600px;
-            margin: 0 auto;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 10px;
+            margin-bottom: 30px;
+            text-align: center;
+            text-shadow: 0 0 10px rgba(0, 150, 255, 0.8);
         }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <div id="title">VR SPACE EXPLORATION</div>
-        <div id="instructions">Use controller joysticks to navigate. Point and grab to interact with objects.</div>
+    <div id="loading">
+        <div class="spinner"></div>
+        <h1>Generating Cosmic Space...</h1>
+        <p>Creating thousands of procedural stars</p>
     </div>
     
-    <a-scene 
-        renderer="antialias: true; colorManagement: true; sortObjects: true"
-        background="color: #000022"
-        vr-mode-ui="enabled: true"
-        device-orientation-permission-ui="enabled: true">
+    <button id="enterVR">Enter VR Space</button>
+    
+    <div id="instructions">
+        Look around to steer your ship | Press trigger to accelerate
+    </div>
+    
+    <a-scene vr-mode-ui="enabled: false" 
+             renderer="antialias: true; colorManagement: true; sortObjects: true;"
+             background="color: #000011">
         
-        <!-- Camera with controller support -->
-        <a-entity id="rig" movement-controls="fly: true; speed: 0.2">
-            <a-entity id="camera" camera="active: true" position="0 1.6 0" look-controls="pointerLockEnabled: false">
-                <!-- Controller cursors -->
-                <a-entity laser-controls="hand: left" raycaster="objects: .interactable"></a-entity>
-                <a-entity laser-controls="hand: right" raycaster="objects: .interactable"></a-entity>
+        <!-- Camera with movement controls -->
+        <a-entity id="cameraRig" 
+                  movement-controls="fly: true; speed: 0.2;"
+                  position="0 1.6 0">
+            <a-entity id="head" 
+                      camera="active: true" 
+                      look-controls="pointerLockEnabled: false"
+                      position="0 0 0">
+                <!-- Spaceship model -->
+                <a-entity id="spaceship"
+                          position="0 -0.3 -1.5"
+                          rotation="0 180 0"
+                          scale="0.3 0.3 0.3">
+                    <!-- Ship body -->
+                    <a-box color="#444" width="1" height="0.3" depth="2" position="0 0 0"></a-box>
+                    <!-- Cockpit -->
+                    <a-cylinder color="#222" radius="0.4" height="0.3" position="0 0.15 0.5" rotation="90 0 0"></a-cylinder>
+                    <!-- Wings -->
+                    <a-box color="#555" width="2" height="0.1" depth="0.5" position="0 0 -0.5"></a-box>
+                    <!-- Engine glow -->
+                    <a-entity position="0 0 -1">
+                        <a-entity 
+                            geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 0.8"
+                            material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
+                            position="0.3 0 0"
+                            rotation="0 0 0">
+                            <a-animation attribute="material.opacity"
+                                         from="0.7" to="0.3" dur="500"
+                                         direction="alternate" repeat="indefinite"></a-animation>
+                        </a-entity>
+                        <a-entity 
+                            geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 0.8"
+                            material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
+                            position="-0.3 0 0"
+                            rotation="0 0 0">
+                            <a-animation attribute="material.opacity"
+                                         from="0.7" to="0.3" dur="500"
+                                         direction="alternate" repeat="indefinite"></a-animation>
+                        </a-entity>
+                    </a-entity>
+                </a-entity>
             </a-entity>
-        </a-entity>
-        
-        <!-- Spaceship -->
-        <a-entity id="spaceship" position="0 0 -5" rotation="0 0 0">
-            <!-- Cockpit -->
-            <a-box position="0 0 0" width="0.8" height="0.4" depth="1.5" color="#333333" 
-                   material="metalness: 0.8; roughness: 0.2"></a-box>
-            
-            <!-- Wings -->
-            <a-box position="-0.6 0 -0.2" width="0.4" height="0.1" depth="0.8" color="#444444" 
-                   rotation="0 0 10"></a-box>
-            <a-box position="0.6 0 -0.2" width="0.4" height="0.1" depth="0.8" color="#444444" 
-                   rotation="0 0 -10"></a-box>
-            
-            <!-- Engines -->
-            <a-cylinder position="-0.3 -0.1 -0.7" radius="0.1" height="0.2" color="#555555" 
-                        rotation="90 0 0"></a-cylinder>
-            <a-cylinder position="0.3 -0.1 -0.7" radius="0.1" height="0.2" color="#555555" 
-                        rotation="90 0 0"></a-cylinder>
-            
-            <!-- Engine glow -->
-            <a-entity position="-0.3 -0.2 -0.7">
-                <a-light type="point" color="#4fc3f7" intensity="0.5" distance="1"></a-light>
-                <a-ring radius-inner="0.05" radius-outer="0.15" color="#4fc3f7" 
-                        material="shader: flat; opacity: 0.7" rotation="-90 0 0"></a-ring>
-            </a-entity>
-            <a-entity position="0.3 -0.2 -0.7">
-                <a-light type="point" color="#4fc3f7" intensity="0.5" distance="1"></a-light>
-                <a-ring radius-inner="0.05" radius-outer="0.15" color="#4fc3f7" 
-                        material="shader: flat; opacity: 0.7" rotation="-90 0 0"></a-ring>
-            </a-entity>
-            
-            <!-- Cockpit glass -->
-            <a-box position="0 0.1 0.3" width="0.6" height="0.3" depth="0.1" color="#a0d8ef" 
-                   material="transparent: true; opacity: 0.4"></a-box>
         </a-entity>
         
         <!-- Procedurally generated stars -->
         <a-entity id="stars"></a-entity>
         
         <!-- Distant planets -->
-        <a-sphere position="15 5 -20" radius="4" color="#8e44ad" 
-                  material="shader: flat"></a-sphere>
-        <a-sphere position="-20 -8 -30" radius="6" color="#2980b9" 
-                  material="shader: flat"></a-sphere>
-        <a-sphere position="0 15 -40" radius="3" color="#c0392b" 
-                  material="shader: flat"></a-sphere>
+        <a-sphere color="#3366aa" radius="5" position="20 5 -30"></a-sphere>
+        <a-sphere color="#aa6633" radius="7" position="-25 -10 -50"></a-sphere>
+        <a-sphere color="#66aa33" radius="4" position="0 20 -40"></a-sphere>
         
         <!-- Ambient light -->
-        <a-light type="ambient" color="#333344"></a-light>
+        <a-entity light="type: ambient; color: #333"></a-entity>
         
         <!-- Directional light (sun) -->
-        <a-light type="directional" color="#ffffff" intensity="0.5" position="10 20 10"></a-light>
+        <a-entity light="type: directional; color: #ffddaa; intensity: 0.5" position="-1 1 0"></a-entity>
     </a-scene>
 
     <script>
-        // Procedurally generate stars
+        // Generate procedural stars
         function generateStars() {
             const starsEntity = document.getElementById('stars');
-            const starCount = 2000;
-            const spread = 100;
+            const starCount = 2000; // Number of stars to generate
             
             for (let i = 0; i < starCount; i++) {
-                const star = document.createElement('a-entity');
+                // Random position in a sphere around the origin
+                const radius = 100 + Math.random() * 900;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.acos(2 * Math.random() - 1);
                 
-                // Random position
-                const x = (Math.random() - 0.5) * spread * 2;
-                const y = (Math.random() - 0.5) * spread * 2;
-                const z = (Math.random() - 0.5) * spread * 2 - spread;
+                const x = radius * Math.sin(phi) * Math.cos(theta);
+                const y = radius * Math.sin(phi) * Math.sin(theta);
+                const z = radius * Math.cos(phi);
                 
-                // Random size and color
-                const size = Math.random() * 0.1 + 0.02;
-                const colors = ['#ffffff', '#ffffcc', '#ffd700', '#ffaa33'];
+                // Random size and color for variety
+                const size = 0.05 + Math.random() * 0.2;
+                const colors = ['#ffffff', '#ffffaa', '#ffaaff', '#aaffff'];
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 
+                // Create star entity
+                const star = document.createElement('a-entity');
                 star.setAttribute('geometry', {
                     primitive: 'sphere',
                     radius: size
                 });
-                
                 star.setAttribute('material', {
                     color: color,
                     shader: 'flat'
                 });
-                
                 star.setAttribute('position', `${x} ${y} ${z}`);
                 
-                // Twinkle effect
+                // Add twinkle animation to some stars
                 if (Math.random() > 0.7) {
+                    const minOpacity = 0.3 + Math.random() * 0.4;
+                    const maxOpacity = 0.8 + Math.random() * 0.2;
+                    const duration = 2000 + Math.random() * 3000;
+                    
                     star.setAttribute('animation', {
                         property: 'components.material.material.opacity',
-                        from: 0.2,
-                        to: 1,
-                        dur: 2000 + Math.random() * 3000,
+                        from: minOpacity,
+                        to: maxOpacity,
+                        dur: duration,
                         dir: 'alternate',
                         loop: true,
                         easing: 'easeInOutSine'
@@ -161,120 +205,39 @@
                 
                 starsEntity.appendChild(star);
             }
-        }
-        
-        // Spaceship controls
-        function setupSpaceshipControls() {
-            const spaceship = document.getElementById('spaceship');
-            const rig = document.getElementById('rig');
             
-            // Movement variables
-            let velocity = new THREE.Vector3();
-            let rotationSpeed = 0.02;
-            let maxSpeed = 0.1;
-            
-            // Handle controller input
-            document.addEventListener('controllerconnected', function(evt) {
-                const controller = evt.detail.component;
-                controller.addEventListener('axismove', function(e) {
-                    const axes = e.detail.axis;
-                    if (axes.length >= 2) {
-                        // Left joystick - rotation
-                        const x = axes[0];
-                        const y = axes[1];
-                        
-                        // Apply rotation to spaceship
-                        if (Math.abs(x) > 0.1) {
-                            spaceship.object3D.rotation.y -= x * rotationSpeed;
-                        }
-                        
-                        // Apply forward/backward movement
-                        if (Math.abs(y) > 0.1) {
-                            // Calculate forward direction based on spaceship rotation
-                            const direction = new THREE.Vector3(0, 0, -1);
-                            direction.applyQuaternion(spaceship.object3D.quaternion);
-                            
-                            // Apply velocity in that direction
-                            velocity.add(direction.multiplyScalar(-y * 0.01));
-                            
-                            // Clamp velocity
-                            if (velocity.length() > maxSpeed) {
-                                velocity.normalize().multiplyScalar(maxSpeed);
-                            }
-                        }
-                    }
-                });
-            });
-            
-            // Apply movement
-            rig.addEventListener('componentchanged', function(evt) {
-                if (evt.detail.name === 'position') {
-                    // Apply velocity to rig position
-                    const position = rig.getAttribute('position');
-                    rig.setAttribute('position', {
-                        x: position.x + velocity.x,
-                        y: position.y + velocity.y,
-                        z: position.z + velocity.z
-                    });
-                    
-                    // Apply spaceship position relative to rig
-                    spaceship.setAttribute('position', {
-                        x: 0,
-                        y: 0,
-                        z: -5
-                    });
-                    
-                    // Slow down over time (damping)
-                    velocity.multiplyScalar(0.95);
-                }
-            });
+            // Hide loading screen
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 1000);
         }
         
         // Initialize when scene is loaded
         document.querySelector('a-scene').addEventListener('loaded', function() {
             generateStars();
-            setupSpaceshipControls();
-            
-            // Add some interactive objects
+        });
+        
+        // Enter VR button functionality
+        document.getElementById('enterVR').addEventListener('click', function() {
             const scene = document.querySelector('a-scene');
+            scene.enterVR();
+            this.style.display = 'none';
+        });
+        
+        // Handle controller input for acceleration
+        document.querySelector('a-scene').addEventListener('controllerconnected', function(e) {
+            const controller = e.detail.component;
+            controller.addEventListener('triggerdown', function() {
+                // Increase speed when trigger is pressed
+                const rig = document.getElementById('cameraRig');
+                rig.setAttribute('movement-controls', 'speed', 0.5);
+            });
             
-            // Create some asteroids
-            for (let i = 0; i < 15; i++) {
-                const asteroid = document.createElement('a-entity');
-                const size = Math.random() * 0.5 + 0.2;
-                const distance = 10 + Math.random() * 30;
-                const angle = Math.random() * Math.PI * 2;
-                
-                asteroid.setAttribute('geometry', {
-                    primitive: 'sphere',
-                    radius: size
-                });
-                
-                asteroid.setAttribute('material', {
-                    color: '#7f8c8d',
-                    metalness: 0.8,
-                    roughness: 0.5
-                });
-                
-                asteroid.setAttribute('position', {
-                    x: Math.cos(angle) * distance,
-                    y: (Math.random() - 0.5) * 10,
-                    z: Math.sin(angle) * distance - 10
-                });
-                
-                asteroid.setAttribute('class', 'interactable');
-                
-                // Rotation animation
-                asteroid.setAttribute('animation', {
-                    property: 'rotation',
-                    to: {x: 360, y: 360, z: 360},
-                    dur: 10000 + Math.random() * 20000,
-                    loop: true,
-                    easing: 'linear'
-                });
-                
-                scene.appendChild(asteroid);
-            }
+            controller.addEventListener('triggerup', function() {
+                // Return to normal speed
+                const rig = document.getElementById('cameraRig');
+                rig.setAttribute('movement-controls', 'speed', 0.2);
+            });
         });
     </script>
 </body>
