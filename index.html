@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Space Explorer</title>
+    <title>VR Space Explorer with Premade Assets</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
     <style>
@@ -75,19 +75,33 @@
             text-align: center;
             text-shadow: 0 0 10px rgba(0, 150, 255, 0.8);
         }
+        .asset-credit {
+            position: fixed;
+            bottom: 60px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            color: rgba(200, 200, 255, 0.6);
+            font-size: 14px;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <h1>Generating Cosmic Space...</h1>
-        <p>Creating thousands of procedural stars</p>
+        <h1>Loading Space Assets...</h1>
+        <p>Preparing spaceship and planetary systems</p>
     </div>
     
     <button id="enterVR">Enter VR Space</button>
     
     <div id="instructions">
         Look around to steer your ship | Press trigger to accelerate
+    </div>
+    
+    <div class="asset-credit">
+        Spaceship Model: NASA | Planet Textures: NASA/ESA | Stars: Procedurally Generated
     </div>
     
     <a-scene vr-mode-ui="enabled: false" 
@@ -102,38 +116,12 @@
                       camera="active: true" 
                       look-controls="pointerLockEnabled: false"
                       position="0 0 0">
-                <!-- Spaceship model -->
+                <!-- Spaceship model from NASA -->
                 <a-entity id="spaceship"
                           position="0 -0.3 -1.5"
                           rotation="0 180 0"
-                          scale="0.3 0.3 0.3">
-                    <!-- Ship body -->
-                    <a-box color="#444" width="1" height="0.3" depth="2" position="0 0 0"></a-box>
-                    <!-- Cockpit -->
-                    <a-cylinder color="#222" radius="0.4" height="0.3" position="0 0.15 0.5" rotation="90 0 0"></a-cylinder>
-                    <!-- Wings -->
-                    <a-box color="#555" width="2" height="0.1" depth="0.5" position="0 0 -0.5"></a-box>
-                    <!-- Engine glow -->
-                    <a-entity position="0 0 -1">
-                        <a-entity 
-                            geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 0.8"
-                            material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
-                            position="0.3 0 0"
-                            rotation="0 0 0">
-                            <a-animation attribute="material.opacity"
-                                         from="0.7" to="0.3" dur="500"
-                                         direction="alternate" repeat="indefinite"></a-animation>
-                        </a-entity>
-                        <a-entity 
-                            geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 0.8"
-                            material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
-                            position="-0.3 0 0"
-                            rotation="0 0 0">
-                            <a-animation attribute="material.opacity"
-                                         from="0.7" to="0.3" dur="500"
-                                         direction="alternate" repeat="indefinite"></a-animation>
-                        </a-entity>
-                    </a-entity>
+                          scale="0.5 0.5 0.5"
+                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/spaceship.glb?v=1623456789000">
                 </a-entity>
             </a-entity>
         </a-entity>
@@ -141,23 +129,59 @@
         <!-- Procedurally generated stars -->
         <a-entity id="stars"></a-entity>
         
-        <!-- Distant planets -->
-        <a-sphere color="#3366aa" radius="5" position="20 5 -30"></a-sphere>
-        <a-sphere color="#aa6633" radius="7" position="-25 -10 -50"></a-sphere>
-        <a-sphere color="#66aa33" radius="4" position="0 20 -40"></a-sphere>
+        <!-- Premade planets with NASA textures -->
+        <a-entity>
+            <!-- Earth-like planet -->
+            <a-sphere 
+                radius="5" 
+                position="20 5 -30"
+                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg; 
+                         normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg;
+                         emissive: #333;
+                         emissiveIntensity: 0.2">
+                <a-animation attribute="rotation" to="0 360 0" dur="60000" easing="linear" repeat="indefinite"></a-animation>
+            </a-sphere>
+            
+            <!-- Mars-like planet -->
+            <a-sphere 
+                radius="7" 
+                position="-25 -10 -50"
+                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg;
+                         normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_normal.jpg;
+                         emissive: #222;
+                         emissiveIntensity: 0.1">
+                <a-animation attribute="rotation" to="0 360 0" dur="80000" easing="linear" repeat="indefinite"></a-animation>
+            </a-sphere>
+            
+            <!-- Gas giant -->
+            <a-sphere 
+                radius="10" 
+                position="0 20 -80"
+                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/jupiter_1k_color.jpg;
+                         emissive: #111;
+                         emissiveIntensity: 0.3">
+                <a-animation attribute="rotation" to="0 360 0" dur="120000" easing="linear" repeat="indefinite"></a-animation>
+            </a-sphere>
+        </a-entity>
+        
+        <!-- Asteroid belt -->
+        <a-entity id="asteroids"></a-entity>
         
         <!-- Ambient light -->
-        <a-entity light="type: ambient; color: #333"></a-entity>
+        <a-entity light="type: ambient; color: #334"></a-entity>
         
         <!-- Directional light (sun) -->
-        <a-entity light="type: directional; color: #ffddaa; intensity: 0.5" position="-1 1 0"></a-entity>
+        <a-entity light="type: directional; color: #ffddaa; intensity: 0.8" position="-1 1 0"></a-entity>
+        
+        <!-- Point light (distant star) -->
+        <a-entity light="type: point; color: #aaffff; intensity: 0.5" position="15 10 -40"></a-entity>
     </a-scene>
 
     <script>
         // Generate procedural stars
         function generateStars() {
             const starsEntity = document.getElementById('stars');
-            const starCount = 2000; // Number of stars to generate
+            const starCount = 3000; // Number of stars to generate
             
             for (let i = 0; i < starCount; i++) {
                 // Random position in a sphere around the origin
@@ -170,7 +194,7 @@
                 const z = radius * Math.cos(phi);
                 
                 // Random size and color for variety
-                const size = 0.05 + Math.random() * 0.2;
+                const size = 0.05 + Math.random() * 0.3;
                 const colors = ['#ffffff', '#ffffaa', '#ffaaff', '#aaffff'];
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 
@@ -205,16 +229,64 @@
                 
                 starsEntity.appendChild(star);
             }
+        }
+        
+        // Generate asteroid belt
+        function generateAsteroids() {
+            const asteroidsEntity = document.getElementById('asteroids');
+            const asteroidCount = 150;
             
-            // Hide loading screen
-            setTimeout(() => {
-                document.getElementById('loading').style.display = 'none';
-            }, 1000);
+            for (let i = 0; i < asteroidCount; i++) {
+                // Position in a ring around the origin
+                const angle = Math.random() * Math.PI * 2;
+                const distance = 40 + Math.random() * 20;
+                const height = -5 + Math.random() * 10;
+                
+                const x = Math.cos(angle) * distance;
+                const z = Math.sin(angle) * distance;
+                
+                // Random size and rotation
+                const size = 0.2 + Math.random() * 1.5;
+                const rx = Math.random() * 360;
+                const ry = Math.random() * 360;
+                const rz = Math.random() * 360;
+                
+                // Create asteroid
+                const asteroid = document.createElement('a-entity');
+                asteroid.setAttribute('geometry', {
+                    primitive: 'tetrahedron',
+                    radius: size
+                });
+                asteroid.setAttribute('material', {
+                    color: '#888',
+                    roughness: 0.8,
+                    metalness: 0.2
+                });
+                asteroid.setAttribute('position', `${x} ${height} ${z}`);
+                asteroid.setAttribute('rotation', `${rx} ${ry} ${rz}`);
+                
+                // Rotation animation
+                asteroid.setAttribute('animation', {
+                    property: 'rotation',
+                    to: `${rx + 360} ${ry + 360} ${rz + 360}`,
+                    dur: 30000 + Math.random() * 60000,
+                    easing: 'linear',
+                    loop: 'indefinite'
+                });
+                
+                asteroidsEntity.appendChild(asteroid);
+            }
         }
         
         // Initialize when scene is loaded
         document.querySelector('a-scene').addEventListener('loaded', function() {
             generateStars();
+            generateAsteroids();
+            
+            // Hide loading screen after a delay
+            setTimeout(() => {
+                document.getElementById('loading').style.display = 'none';
+            }, 2000);
         });
         
         // Enter VR button functionality
@@ -226,7 +298,8 @@
         
         // Handle controller input for acceleration
         document.querySelector('a-scene').addEventListener('controllerconnected', function(e) {
-            const controller = e.detail.component;
+            const controller = e.detail.component.el;
+            
             controller.addEventListener('triggerdown', function() {
                 // Increase speed when trigger is pressed
                 const rig = document.getElementById('cameraRig');
