@@ -17,13 +17,17 @@
     <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
       <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="white" width="3"></a-text>
       <a-text id="scoreCounter" value="Score: 0/20" position="0 0.3 -1.5" align="center" color="white" width="3"></a-text>
-      <!-- Position the restart button below the score -->
-      <a-entity id="restartButtonContainer" position="0 -0.3 -1.5">
-        <a-plane id="restartButton" color="#4CAF50" height="0.2" width="0.8" position="0 0 0" class="interactable" visible="false"></a-plane>
-        <a-text id="restartButtonText" value="RESTART" align="center" color="white" width="1.5" position="0 0 0.01"></a-text>
-      </a-entity>
       <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
       <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
+      <!-- Restart Button - Initially hidden -->
+      <a-entity id="restartButton"
+                geometry="primitive: plane; width: 1.5; height: 0.5"
+                material="color: #4CAF50"
+                position="0 -0.3 -2"
+                visible="false"
+                class="interactable">
+        <a-text value="RESTART" align="center" color="white" position="0 0 0.01" width="2"></a-text>
+      </a-entity>
     </a-entity>
     <a-entity id="leftHand"
               oculus-touch-controls="hand: left; model: true"
@@ -94,35 +98,34 @@
             this.gameOverTextEl = document.querySelector('#gameOverText');
             this.winTextEl = document.querySelector('#winText');
             this.restartButtonEl = document.querySelector('#restartButton');
-            this.restartButtonTextEl = document.querySelector('#restartButtonText');
             this.clickableSphere = document.querySelector('#colorSphere');
             this.isGameOverFlag = false;
             this.hasWonFlag = false;
             this.gameEnded = false;
-            this.gameStartTime = null; // Initialize on first click
+            this.gameStartTime = performance.now(); // Initialize start time
             this.updateDisplay();
 
-            // Add event listener for restart button click
-            this.onRestartClick = this.restartGame.bind(this);
-            this.restartButtonEl.addEventListener('click', this.onRestartClick);
+            // Add click event listener to the restart button
+            if (this.restartButtonEl) {
+                this.restartButtonEl.addEventListener('click', () => {
+                    if (this.gameEnded) { // Only restart if game is over
+                         window.location.reload(); // Reload the page to restart
+                    }
+                });
+            }
         },
         tick: function(time, deltaTime) {
-            // Initialize game start time on the first tick/frame
-            if (this.gameStartTime === null && !this.gameEnded) {
-               this.gameStartTime = time;
-            }
-            // No need for win timer check here anymore as win is based on score
+            // No need for win timer check here anymore, handled by score
         },
         isGameOver: function() {
             return this.isGameOverFlag || this.hasWonFlag;
         },
         // Function to calculate current projectile speed based on elapsed time
-        getCurrentProjectileSpeed: function() {
-             if (this.gameStartTime === null) return this.data.initialProjectileSpeed; // If not started, use initial speed
-             const elapsedTime = performance.now() - this.gameStartTime;
-             const progress = Math.min(elapsedTime / this.data.winTime, 1);
-             return this.data.initialProjectileSpeed +
-                    (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
+        getProjectileSpeed: function() {
+            const elapsedTime = performance.now() - this.gameStartTime;
+            const progress = Math.min(elapsedTime / this.data.winTime, 1); // Clamp progress between 0 and 1
+            return this.data.initialProjectileSpeed +
+                   (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
         },
         updateDisplay: function() {
             if (this.hitCounterEl) {
@@ -154,7 +157,7 @@
             if (this.gameOverTextEl) {
                 this.gameOverTextEl.setAttribute('visible', true);
             }
-            this.showRestartButton();
+            this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
         },
         winGame: function() {
@@ -163,20 +166,13 @@
             if (this.winTextEl) {
                 this.winTextEl.setAttribute('visible', true);
             }
-            this.showRestartButton();
+            this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
         },
         showRestartButton: function() {
-            if (this.restartButtonEl && this.restartButtonTextEl) {
-                this.restartButtonEl.setAttribute('visible', true);
-                this.restartButtonTextEl.setAttribute('visible', true);
-            }
-        },
-        hideRestartButton: function() {
-            if (this.restartButtonEl && this.restartButtonTextEl) {
-                this.restartButtonEl.setAttribute('visible', false);
-                this.restartButtonTextEl.setAttribute('visible', false);
-            }
+             if (this.restartButtonEl) {
+                 this.restartButtonEl.setAttribute('visible', true);
+             }
         },
         disableSphereInteraction: function() {
             if (this.clickableSphere) {
@@ -185,61 +181,6 @@
                 this.clickableSphere.setAttribute('color', '#888');
                 this.clickableSphere.setAttribute('class', 'non-clickable');
             }
-        },
-        enableSphereInteraction: function() {
-             if (this.clickableSphere) {
-                this.clickableSphere.setAttribute('shoot-on-click', '');
-                this.clickableSphere.setAttribute('toggle-color-on-click', '');
-                this.clickableSphere.setAttribute('color', '#FFC300'); // Reset to initial color
-                this.clickableSphere.setAttribute('class', 'clickable');
-             }
-        },
-        restartGame: function() {
-            // Reset game state variables
-            this.hits = 0;
-            this.score = 0;
-            this.isGameOverFlag = false;
-            this.hasWonFlag = false;
-            this.gameEnded = false;
-            this.gameStartTime = null; // Reset start time
-
-            // Update UI text elements
-            if (this.gameOverTextEl) this.gameOverTextEl.setAttribute('visible', false);
-            if (this.winTextEl) this.winTextEl.setAttribute('visible', false);
-            this.hideRestartButton();
-            this.updateDisplay();
-
-            // Re-enable sphere interaction
-            this.enableSphereInteraction();
-
-            // Remove existing projectiles
-            const projectiles = document.querySelectorAll('[homing-projectile]');
-            projectiles.forEach(p => {
-                if (p.parentNode) {
-                    p.parentNode.removeChild(p);
-                }
-            });
-
-            // Reset player sphere color/opacity if needed (in case it was hit)
-            const playerSphere = document.querySelector('#playerSphere');
-            if (playerSphere) {
-                 playerSphere.setAttribute('color', '#2196F3');
-                 playerSphere.setAttribute('opacity', '0.3');
-                 // Clear any ongoing animations on player sphere
-                 playerSphere.removeAttribute('animation__grow');
-                 playerSphere.removeAttribute('animation__shrink');
-                 playerSphere.removeAttribute('animation__color');
-                 playerSphere.removeAttribute('animation__opacity');
-            }
-
-            // Reset camera shake animations if present
-            const playerCam = document.querySelector('#playerCam');
-            if (playerCam) {
-                 playerCam.removeAttribute('animation__shakeX');
-                 playerCam.removeAttribute('animation__shakeY');
-            }
-
-            console.log("Game restarted!");
         }
     });
 
@@ -331,7 +272,6 @@
         }
         setTimeout(() => {
           this.isReacting = false;
-          // Ensure scale/color/opacity are reset even if animations were interrupted
           el.setAttribute('scale', this.originalScale.clone());
           el.setAttribute('color', this.originalColor);
           el.setAttribute('opacity', this.originalOpacity);
@@ -367,17 +307,16 @@
             var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
             var origin = new THREE.Vector3();
             this.el.object3D.getWorldPosition(origin);
-            // var direction = mid.clone().sub(origin).normalize(); // Not used for homing
+            // Direction is not used for homing, but we can still calculate it if needed elsewhere
+            // var direction = mid.clone().sub(origin).normalize();
             var scene = this.el.sceneEl;
             var projectile = document.createElement('a-sphere');
             projectile.setAttribute('radius', 0.12);
             projectile.setAttribute('color', '#E53935');
             projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
-
-            // Get the current speed from game manager based on elapsed time
-            const currentProjectileSpeed = gameManager ? gameManager.getCurrentProjectileSpeed() : this.data.initialProjectileSpeed;
-
-            // Pass the player sphere element and speed to the projectile
+            // Get the current speed from the game manager based on elapsed time
+            const currentProjectileSpeed = gameManager ? gameManager.getProjectileSpeed() : this.data.initialProjectileSpeed;
+            // Pass the player sphere element and speed to the projectile for homing
             projectile.setAttribute('homing-projectile', {
               speed: currentProjectileSpeed, // Pass the calculated speed
               target: '#playerSphere' // Specify the target selector
@@ -388,14 +327,14 @@
       }
     });
 
-    // Updated component for homing projectiles with speed scaling
+    // Updated component for homing projectiles with dynamic speed
     AFRAME.registerComponent('homing-projectile', {
       schema: {
-        speed: {type: 'number', default: 2.0}, // Speed passed from shoot-on-click
+        speed: {type: 'number', default: 2.0}, // Speed can be set dynamically
         target: {type: 'selector'} // The target element to home towards
       },
       init: function () {
-        this.speed = this.data.speed; // Initial speed set by shoot-on-click
+        this.speed = this.data.speed; // Use the passed speed
         this.start = null;
         this.hit = false;
         this.tempVec = new THREE.Vector3(); // Helper vector for calculations
@@ -403,7 +342,6 @@
       tick: function (time, deltaTime) {
         if (this.hit) return;
         if (!this.el.parentNode) return;
-
         const gameManager = this.el.sceneEl.components['game-manager'];
         if (gameManager && gameManager.isGameOver()) {
             if (this.el.parentNode) {
@@ -411,19 +349,15 @@
             }
             return;
         }
-
-        // Update speed dynamically based on game time
-        if (gameManager) {
-            this.speed = gameManager.getCurrentProjectileSpeed();
-        }
-
         if (!this.start) this.start = time;
 
         const targetEl = this.data.target;
         if (!targetEl) {
-            // If no target, just move forward slightly or remove
+            // If no target, move forward based on initial direction or just remove
+            // For simplicity, let's just remove it or move it forward slightly
+            // Let's just move it forward in its local Z direction
             const moveDistance = this.speed * deltaTime / 1000;
-            this.el.object3D.translateZ(-moveDistance);
+            this.el.object3D.translateZ(-moveDistance); // Move forward along local Z
         } else {
             // --- Homing Logic ---
             const projectileObject3D = this.el.object3D;
@@ -438,7 +372,7 @@
             // 2. Calculate direction vector from projectile to target
             const directionToTarget = new THREE.Vector3().subVectors(targetWorldPos, projectileWorldPos).normalize();
 
-            // 3. Calculate movement vector for this frame using potentially updated speed
+            // 3. Calculate movement vector for this frame using the dynamic speed
             const moveDistance = this.speed * deltaTime / 1000;
             const moveVector = directionToTarget.multiplyScalar(moveDistance);
 
@@ -464,7 +398,7 @@
             return;
           }
         }
-        if (time - this.start > 8000) {
+        if (time - this.start > 8000) { // Optional: remove old projectiles
             if (this.el.parentNode) {
                 this.el.parentNode.removeChild(this.el);
             }
