@@ -1,225 +1,267 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Three.js AR Experience</title>
-    <style>
-        body { 
-            margin: 0; 
-            overflow: hidden;
-            font-family: Arial, sans-serif;
-        }
-        #canvas-container {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-        }
-        #instructions {
-            position: absolute;
-            top: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: white;
-            font-size: 18px;
-            text-shadow: 1px 1px 2px black;
-            z-index: 100;
-            pointer-events: none;
-        }
-        #object-selector {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 100;
-            background: rgba(0,0,0,0.7);
-            padding: 10px;
-            border-radius: 10px;
-            display: flex;
-            gap: 10px;
-        }
-        .object-btn {
-            background: #4a86e8;
-            color: white;
-            border: none;
-            padding: 10px 15px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .object-btn.active {
-            background: #34a853;
-        }
-        #reticle {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 50px;
-            height: 50px;
-            border: 2px solid #fff;
-            border-radius: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-            z-index: 10;
-        }
-    </style>
+  <title>Gemini's WebXR Cube Demo</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: sans-serif;
+      background-color: #111;
+      color: #fff;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      z-index: 100;
+      display: block;
+      padding: 10px 0;
+    }
+    /* AR Button styles are handled by the ARButton script below */
+  </style>
 </head>
 <body>
-    <div id="canvas-container"></div>
-    <div id="instructions">Point your camera at a surface and tap to place objects</div>
-    <div id="reticle"></div>
-    <div id="object-selector">
-        <button class="object-btn active" data-object="cube">Cube</button>
-        <button class="object-btn" data-object="sphere">Sphere</button>
-        <button class="object-btn" data-object="torus">Torus</button>
-        <button class="object-btn" data-object="pyramid">Pyramid</button>
-    </div>
+  <div id="info">
+    A WebXR Demo by Christopher & Gemini
+  </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // Main variables
-        let scene, camera, renderer;
-        let arGroup, reticle;
-        let selectedObject = 'cube';
-        let placedObjects = [];
-        
-        // Initialize Three.js scene
-        function init() {
-            // Create scene
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xdddddd);
-            
-            // Create camera
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            
-            // Create renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.getElementById('canvas-container').appendChild(renderer.domElement);
-            
-            // Add lighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-            
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(1, 1, 1);
-            scene.add(directionalLight);
-            
-            // Create AR group for placed objects
-            arGroup = new THREE.Group();
-            scene.add(arGroup);
-            
-            // Setup event listeners
-            setupEventListeners();
-            
-            // Start animation loop
-            animate();
-        }
-        
-        // Create 3D objects
-        function createObject(type) {
-            let geometry, material, object;
-            
-            material = new THREE.MeshStandardMaterial({ 
-                color: new THREE.Color(Math.random() * 0xffffff),
-                roughness: 0.3,
-                metalness: 0.7
+  <!-- Using an import map is a modern way to define module locations -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+
+  <script type="module">
+    // Import the main Three.js library
+    import * as THREE from 'three';
+
+    // --- Inlined ARButton.js from Three.js examples ---
+    // This class creates the "Start AR" button and handles the WebXR session setup.
+    // Inlining it here keeps everything in a single file as requested.
+    class ARButton {
+      static createButton(renderer, sessionInit = {}) {
+        const button = document.createElement('button');
+
+        function showStartAR( /*device*/ ) {
+          if (sessionInit.domOverlay === undefined) {
+            const overlay = document.createElement('div');
+            overlay.style.display = 'none';
+            document.body.appendChild(overlay);
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('width', 38);
+            svg.setAttribute('height', 38);
+            svg.style.position = 'absolute';
+            svg.style.right = '20px';
+            svg.style.top = '20px';
+            svg.addEventListener('click', function() {
+              currentSession.end();
             });
-            
-            switch(type) {
-                case 'cube':
-                    geometry = new THREE.BoxGeometry(0.1, 0.1, 0.1);
-                    object = new THREE.Mesh(geometry, material);
-                    break;
-                case 'sphere':
-                    geometry = new THREE.SphereGeometry(0.07, 32, 32);
-                    object = new THREE.Mesh(geometry, material);
-                    break;
-                case 'torus':
-                    geometry = new THREE.TorusGeometry(0.05, 0.02, 16, 100);
-                    object = new THREE.Mesh(geometry, material);
-                    break;
-                case 'pyramid':
-                    geometry = new THREE.ConeGeometry(0.07, 0.15, 4);
-                    object = new THREE.Mesh(geometry, material);
-                    object.rotation.x = Math.PI;
-                    break;
+            overlay.appendChild(svg);
+            const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            path.setAttribute('d', 'M 12,12 L 28,28 M 28,12 12,28');
+            path.setAttribute('stroke', '#fff');
+            path.setAttribute('stroke-width', 2);
+            svg.appendChild(path);
+            if (sessionInit.optionalFeatures === undefined) {
+              sessionInit.optionalFeatures = [];
             }
-            
-            return object;
-        }
-        
-        // Place object at reticle position
-        function placeObject() {
-            const object = createObject(selectedObject);
-            
-            // Position at reticle (center of screen)
-            object.position.set(0, 0, -0.5);
-            
-            // Add to AR group
-            arGroup.add(object);
-            placedObjects.push(object);
-            
-            // Add subtle animation
-            object.scale.set(0.1, 0.1, 0.1);
-            const scaleUp = { duration: 300, easing: 'easeOutBack' };
-            object.userData = { 
-                initialScale: object.scale.clone(),
-                animation: { scale: 1, time: 0 }
+            sessionInit.optionalFeatures.push('dom-overlay');
+            sessionInit.domOverlay = {
+              root: overlay
             };
+          }
+
+          let currentSession = null;
+
+          async function onSessionStarted(session) {
+            session.addEventListener('end', onSessionEnded);
+            renderer.xr.setReferenceSpaceType('local');
+            await renderer.xr.setSession(session);
+            button.textContent = 'STOP AR';
+            sessionInit.domOverlay.root.style.display = '';
+            currentSession = session;
+          }
+
+          function onSessionEnded( /*event*/ ) {
+            currentSession.removeEventListener('end', onSessionEnded);
+            button.textContent = 'START AR';
+            sessionInit.domOverlay.root.style.display = 'none';
+            currentSession = null;
+          }
+
+          button.style.display = '';
+          button.style.cursor = 'pointer';
+          button.style.left = 'calc(50% - 50px)';
+          button.style.width = '100px';
+          button.textContent = 'START AR';
+          button.onmouseenter = function() {
+            button.style.opacity = '1.0';
+          };
+          button.onmouseleave = function() {
+            button.style.opacity = '0.5';
+          };
+          button.onclick = function() {
+            if (currentSession === null) {
+              navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+            } else {
+              currentSession.end();
+            }
+          };
         }
-        
-        // Setup event listeners
-        function setupEventListeners() {
-            // Object selection
-            document.querySelectorAll('.object-btn').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    document.querySelectorAll('.object-btn').forEach(b => b.classList.remove('active'));
-                    btn.classList.add('active');
-                    selectedObject = btn.dataset.object;
-                });
-            });
-            
-            // Placement interaction
-            renderer.domElement.addEventListener('click', placeObject);
-            
-            // Window resize
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
+
+        function disableButton() {
+          button.style.display = '';
+          button.style.cursor = 'auto';
+          button.style.left = 'calc(50% - 75px)';
+          button.style.width = '150px';
+          button.onmouseenter = null;
+          button.onmouseleave = null;
+          button.onclick = null;
         }
-        
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
-            
-            // Animate placed objects
-            placedObjects.forEach(obj => {
-                obj.rotation.x += 0.01;
-                obj.rotation.y += 0.01;
-                
-                // Scale animation for new objects
-                if (obj.userData.animation) {
-                    obj.userData.animation.time += 0.05;
-                    const scale = Math.min(1, obj.userData.animation.time);
-                    const s = obj.userData.initialScale.clone().multiplyScalar(scale);
-                    obj.scale.copy(s);
-                    
-                    if (scale >= 1) {
-                        delete obj.userData.animation;
-                    }
-                }
-            });
-            
-            renderer.render(scene, camera);
+
+        function showARNotSupported() {
+          disableButton();
+          button.textContent = 'AR NOT SUPPORTED';
         }
-        
-        // Initialize when page loads
-        window.addEventListener('load', init);
-    </script>
+
+        function stylizeElement(element) {
+          element.style.position = 'absolute';
+          element.style.bottom = '20px';
+          element.style.padding = '12px 6px';
+          element.style.border = '1px solid #fff';
+          element.style.borderRadius = '4px';
+          element.style.background = 'rgba(0,0,0,0.1)';
+          element.style.color = '#fff';
+          element.style.font = 'normal 13px sans-serif';
+          element.style.textAlign = 'center';
+          element.style.opacity = '0.5';
+          element.style.outline = 'none';
+          element.style.zIndex = '999';
+        }
+
+        if ('xr' in navigator) {
+          button.id = 'ARButton';
+          stylizeElement(button);
+          navigator.xr.isSessionSupported('immersive-ar').then(function(supported) {
+            supported ? showStartAR() : showARNotSupported();
+          }).catch(showARNotSupported);
+          return button;
+        } else {
+          const message = document.createElement('a');
+          if (window.isSecureContext === false) {
+            message.href = document.location.href.replace(/^http:/, 'https:');
+            message.innerHTML = 'WEBXR NEEDS HTTPS';
+          } else {
+            message.href = 'https://immersiveweb.dev/';
+            message.innerHTML = 'WEBXR NOT AVAILABLE';
+          }
+          message.style.left = 'calc(50% - 90px)';
+          message.style.width = '180px';
+          message.style.textDecoration = 'none';
+          stylizeElement(message);
+          return message;
+        }
+      }
+    }
+
+    // --- Main Application Logic ---
+    let camera, scene, renderer;
+    let cube;
+
+    init();
+    animate();
+
+    function init() {
+      // Create the main scene
+      scene = new THREE.Scene();
+
+      // Create a camera. Its position will be updated by the WebXR device.
+      camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+      // Create the WebGL renderer and configure it for XR.
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true // alpha: true is required for AR passthrough
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true; // This is the key to enabling WebXR!
+      document.body.appendChild(renderer.domElement);
+
+      // Add the AR button to the body. It will handle session start/end.
+      // We pass the renderer and a session configuration object.
+      // 'local' is a good starting point for reference space.
+      document.body.appendChild(ARButton.createButton(renderer, {
+        requiredFeatures: ['local']
+      }));
+
+      // Create the same multi-colored cube from your original code.
+      // This is a great way to test orientation.
+      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
+      const materials = [
+        new THREE.MeshBasicMaterial({ color: 0xff0000 }), // right
+        new THREE.MeshBasicMaterial({ color: 0x00ff00 }), // left
+        new THREE.MeshBasicMaterial({ color: 0x0000ff }), // top
+        new THREE.MeshBasicMaterial({ color: 0xffff00 }), // bottom
+        new THREE.MeshBasicMaterial({ color: 0xff00ff }), // front
+        new THREE.MeshBasicMaterial({ color: 0x00ffff })  // back
+      ];
+      cube = new THREE.Mesh(geometry, materials);
+
+      // Position the cube 1 meter in front of the user.
+      // The Z-axis is negative away from the camera in WebGL.
+      cube.position.set(0, 0, -1);
+      
+      // Add the cube to the scene.
+      scene.add(cube);
+
+      // Add a light to the scene. While MeshBasicMaterial doesn't need it,
+      // it's good practice for when you use more advanced materials.
+      const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+      light.position.set(0.5, 1, 0.25);
+      scene.add(light);
+
+      // Add a listener to handle window resizing, which is good practice.
+      window.addEventListener('resize', onWindowResize, false);
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function animate() {
+      // Use the renderer's built-in animation loop, which is XR-aware.
+      // This will call the 'render' function on every frame.
+      renderer.setAnimationLoop(render);
+    }
+
+    // This function is called every frame
+    function render(timestamp, frame) {
+      // The 'frame' object is available if an XR session is active.
+      if (frame) {
+        // You could get poses and other data from the 'frame' object here,
+        // but Three.js's WebXRManager handles the camera updates for you.
+      }
+      
+      // Make the cube slowly rotate to make it more interesting.
+      if (cube) {
+        cube.rotation.y += 0.01;
+        cube.rotation.x += 0.005;
+      }
+      
+      // Render the scene with the camera.
+      // In an AR session, Three.js will automatically handle rendering
+      // for each eye and clearing the background for passthrough.
+      renderer.render(scene, camera);
+    }
+  </script>
 </body>
 </html>
