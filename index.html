@@ -19,25 +19,24 @@
       <a-text id="scoreCounter" value="Score: 0/20" position="0 0.3 -1.5" align="center" color="white" width="3"></a-text>
       <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
       <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
-      <!-- Restart Button - Initially hidden -->
+      <!-- Restart Button - Initially hidden and NOT in the interactable class -->
       <a-entity id="restartButton"
                 geometry="primitive: plane; width: 1.5; height: 0.5"
                 material="color: #4CAF50"
                 position="0 -0.3 -2"
-                visible="false"
-                class="interactable">
+                visible="false">
         <a-text value="RESTART" align="center" color="white" position="0 0 0.01" width="2"></a-text>
       </a-entity>
     </a-entity>
     <a-entity id="leftHand"
               oculus-touch-controls="hand: left; model: true"
               laser-controls="hand: left"
-              raycaster="objects: .clickable, .interactable; far: 100"
+              raycaster="objects: .clickable; far: 100" <!-- Removed .interactable from initial list -->
               line="color: blue; opacity: 0.9"></a-entity>
     <a-entity id="rightHand"
               oculus-touch-controls="hand: right; model: true"
               laser-controls="hand: right"
-              raycaster="objects: .clickable, .interactable; far: 100"
+              raycaster="objects: .clickable; far: 100" <!-- Removed .interactable from initial list -->
               line="color: red; opacity: 0.9"></a-entity>
     <a-sphere id="playerSphere"
               color="#2196F3"
@@ -172,6 +171,17 @@
         showRestartButton: function() {
              if (this.restartButtonEl) {
                  this.restartButtonEl.setAttribute('visible', true);
+                 // *** Add the 'interactable' class to the button when it becomes visible ***
+                 this.restartButtonEl.setAttribute('class', 'interactable');
+                 // *** Update the raycaster objects list to include '.interactable' ***
+                 const leftHand = document.querySelector('#leftHand');
+                 const rightHand = document.querySelector('#rightHand');
+                 if (leftHand) {
+                     leftHand.setAttribute('raycaster', 'objects', '.clickable, .interactable');
+                 }
+                 if (rightHand) {
+                     rightHand.setAttribute('raycaster', 'objects', '.clickable, .interactable');
+                 }
              }
         },
         disableSphereInteraction: function() {
