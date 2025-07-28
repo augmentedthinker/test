@@ -6,7 +6,136 @@
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
   <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
-  <!-- *** Store the current preset index in a data attribute on the HTML element *** -->
+  <!-- *** Define CSS styles for the UI panel *** -->
+  <style>
+    #gameUIPanel {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+      color: white;
+      padding: 15px;
+      border-radius: 10px; /* Rounded corners */
+      border: 2px solid #4CAF50; /* Green border */
+      font-family: 'Courier New', Courier, monospace; /* Monospace font */
+      box-shadow: 0 0 15px rgba(76, 175, 80, 0.5); /* Green glow */
+      z-index: 1000; /* Ensure it's on top */
+    }
+
+    #gameUIPanel a-text {
+       /* Target A-Frame text inside the panel for potential styling */
+       /* Note: A-Frame text might need adjustments via its own attributes */
+    }
+
+    /* Style for game over / win text */
+    #endGameText {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%); /* Center perfectly */
+        background-color: rgba(0, 0, 0, 0.8);
+        padding: 20px 40px;
+        border-radius: 15px;
+        border: 3px solid; /* Color set dynamically */
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 48px; /* Larger font */
+        font-weight: bold;
+        text-align: center;
+        z-index: 1001;
+        display: none; /* Hidden by default */
+    }
+
+    #gameOverDisplay {
+        color: #f44336; /* Red */
+        border-color: #f44336;
+        text-shadow: 0 0 10px #f44336; /* Red glow */
+    }
+
+    #winDisplay {
+        color: #FFD700; /* Gold */
+        border-color: #FFD700;
+        text-shadow: 0 0 10px #FFD700; /* Gold glow */
+    }
+
+    /* Style for restart button */
+    #restartButtonUI {
+        position: absolute;
+        top: 65%; /* Slightly below the end game text */
+        left: 50%;
+        transform: translateX(-50%); /* Center horizontally */
+        background-color: #4CAF50; /* Green */
+        color: white;
+        padding: 15px 30px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-family: 'Courier New', Courier, monospace;
+        font-size: 24px;
+        font-weight: bold;
+        z-index: 1002;
+        display: none; /* Hidden by default */
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        transition: background-color 0.3s, transform 0.2s; /* Smooth hover effects */
+    }
+
+    #restartButtonUI:hover {
+        background-color: #45a049; /* Darker green on hover */
+        transform: translateX(-50%) scale(1.05); /* Slight scale on hover */
+    }
+
+    #restartButtonUI:active {
+         transform: translateX(-50%) scale(0.98); /* Slight press down effect */
+    }
+
+  </style>
+</head>
+<body>
+<a-scene background="color: #ECECEC" game-manager>
+  <a-assets>
+    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
+    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
+  </a-assets>
+  <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
+    <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
+       <!-- *** 2D UI Elements positioned using CSS *** -->
+       <div id="gameUIPanel">
+          <a-text id="hitCounter" value="Hits: 0/3" align="left" color="white"></a-text>
+          <br/> <!-- Line break for spacing -->
+          <a-text id="scoreCounter" value="Score: 0/20" align="left" color="white"></a-text>
+       </div>
+       <!-- *** End Game Texts *** -->
+       <div id="endGameText" class="gameOverDisplay" style="display: none;">GAME OVER!</div>
+       <div id="winText" class="winDisplay" style="display: none;">YOU WIN!</div>
+       <!-- *** Restart Button *** -->
+       <button id="restartButtonUI" style="display: none;">RESTART</button>
+    </a-entity>
+    <a-entity id="leftHand"
+              oculus-touch-controls="hand: left; model: true"
+              laser-controls="hand: left"
+              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
+              line="color: blue; opacity: 0.9"></a-entity>
+    <a-entity id="rightHand"
+              oculus-touch-controls="hand: right; model: true"
+              laser-controls="hand: right"
+              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
+              line="color: red; opacity: 0.9"></a-entity>
+    <a-sphere id="playerSphere"
+              color="#2196F3"
+              opacity="0.3"
+              radius="0.4"
+              visible="true"
+              player-hit-reaction></a-sphere>
+  </a-entity>
+  <!-- *** Environment entity with an ID, but no initial preset *** -->
+  <a-entity id="environmentEntity"></a-entity>
+  <a-sphere id="colorSphere"
+            class="clickable"
+            position="0 2 0"
+            radius="0.4"
+            color="#FFC300"
+            shadow="cast: true"
+            toggle-color-on-click
+            shoot-on-click></a-sphere>
   <script>
     // *** Define available environment presets ***
     const environmentPresets = [
@@ -42,57 +171,7 @@
     } else {
         document.addEventListener('DOMContentLoaded', initializeEnvironment);
     }
-  </script>
-</head>
-<body>
-<a-scene background="color: #ECECEC" game-manager>
-  <a-assets>
-    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
-    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
-  </a-assets>
-  <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
-    <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
-      <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="white" width="3"></a-text>
-      <a-text id="scoreCounter" value="Score: 0/20" position="0 0.3 -1.5" align="center" color="white" width="3"></a-text>
-      <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
-      <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
-      <!-- Restart Button - Initially hidden -->
-      <a-entity id="restartButton"
-                geometry="primitive: plane; width: 1.5; height: 0.5"
-                material="color: #4CAF50"
-                position="0 -0.3 -2"
-                visible="false">
-        <a-text value="RESTART" align="center" color="white" position="0 0 0.01" width="2"></a-text>
-      </a-entity>
-    </a-entity>
-    <a-entity id="leftHand"
-              oculus-touch-controls="hand: left; model: true"
-              laser-controls="hand: left"
-              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
-              line="color: blue; opacity: 0.9"></a-entity>
-    <a-entity id="rightHand"
-              oculus-touch-controls="hand: right; model: true"
-              laser-controls="hand: right"
-              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
-              line="color: red; opacity: 0.9"></a-entity>
-    <a-sphere id="playerSphere"
-              color="#2196F3"
-              opacity="0.3"
-              radius="0.4"
-              visible="true"
-              player-hit-reaction></a-sphere>
-  </a-entity>
-  <!-- *** Environment entity with an ID, but no initial preset *** -->
-  <a-entity id="environmentEntity"></a-entity>
-  <a-sphere id="colorSphere"
-            class="clickable"
-            position="0 2 0"
-            radius="0.4"
-            color="#FFC300"
-            shadow="cast: true"
-            toggle-color-on-click
-            shoot-on-click></a-sphere>
-  <script>
+
     const laserAudio = document.querySelector('#laser-sfx');
     const explosionAudio = document.querySelector('#explosion-sfx');
     let audioUnlocked = false;
@@ -127,31 +206,18 @@
             this.score = 0;
             this.maxHits = this.data.maxHits;
             this.winScore = this.data.winScore;
+            // *** UI elements are now standard HTML/CSS ***
             this.hitCounterEl = document.querySelector('#hitCounter');
             this.scoreCounterEl = document.querySelector('#scoreCounter');
-            this.gameOverTextEl = document.querySelector('#gameOverText');
-            this.winTextEl = document.querySelector('#winText');
-            this.restartButtonEl = document.querySelector('#restartButton');
+            this.gameOverTextEl = document.querySelector('#endGameText'); // Updated ID
+            this.winTextEl = document.querySelector('#winText'); // Updated ID
+            this.restartButtonEl = document.querySelector('#restartButtonUI'); // Updated ID
             this.clickableSphere = document.querySelector('#colorSphere');
             this.isGameOverFlag = false;
             this.hasWonFlag = false;
             this.gameEnded = false;
             this.gameStartTime = performance.now(); // Initialize start time
             this.updateDisplay();
-
-            // Add click event listener to the restart button
-            if (this.restartButtonEl) {
-                this.restartButtonEl.addEventListener('click', () => {
-                    if (this.gameEnded) { // Only restart if game is over
-                         // *** Cycle to the next environment preset ***
-                         currentPresetIndex = (currentPresetIndex + 1) % environmentPresets.length;
-                         // *** Restart the game by reloading the page with the new preset index in the URL ***
-                         const url = new URL(window.location);
-                         url.searchParams.set('presetIndex', currentPresetIndex);
-                         window.location.href = url.toString(); // Use href to change URL and reload
-                    }
-                });
-            }
         },
         tick: function(time, deltaTime) {
             // No need for win timer check here anymore, handled by score
@@ -194,7 +260,8 @@
             this.isGameOverFlag = true;
             this.gameEnded = true;
             if (this.gameOverTextEl) {
-                this.gameOverTextEl.setAttribute('visible', true);
+                // *** Show the HTML game over text ***
+                this.gameOverTextEl.style.display = 'block';
             }
             this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
@@ -203,25 +270,45 @@
             this.hasWonFlag = true;
             this.gameEnded = true;
             if (this.winTextEl) {
-                this.winTextEl.setAttribute('visible', true);
+                // *** Show the HTML win text ***
+                this.winTextEl.style.display = 'block';
             }
             this.showRestartButton(); // Show the restart button
             this.disableSphereInteraction();
         },
         showRestartButton: function() {
              if (this.restartButtonEl) {
-                 this.restartButtonEl.setAttribute('visible', true);
-                 // *** Add the 'interactable' class to the button when it becomes visible ***
-                 this.restartButtonEl.setAttribute('class', 'interactable');
-                 // *** Update the raycaster objects list to include '.interactable' ***
+                 // *** Show the HTML restart button ***
+                 this.restartButtonEl.style.display = 'block';
+
+                 // Add click event listener to the HTML restart button
+                 // Use {once: true} to prevent multiple listeners
+                 this.restartButtonEl.addEventListener('click', () => {
+                     if (this.gameEnded) { // Only restart if game is over
+                          // *** Cycle to the next environment preset ***
+                          currentPresetIndex = (currentPresetIndex + 1) % environmentPresets.length;
+                          // *** Restart the game by reloading the page with the new preset index in the URL ***
+                          const url = new URL(window.location);
+                          url.searchParams.set('presetIndex', currentPresetIndex);
+                          window.location.href = url.toString(); // Use href to change URL and reload
+                     }
+                 }, { once: true }); // Ensure listener is added only once
+
+                 // *** Update raycasters to include the HTML button if needed for VR interaction ***
+                 // Note: This requires aframe-htmlmesh or similar for HTML elements to be raycastable.
+                 // For now, we assume the button is for 2D mouse interaction.
+                 // If you want VR interaction, you'd need to add interactable class and update raycasters.
+                 // For simplicity here, it's just a 2D overlay button.
+                 /*
                  const leftHand = document.querySelector('#leftHand');
                  const rightHand = document.querySelector('#rightHand');
                  if (leftHand) {
-                     leftHand.setAttribute('raycaster', 'objects', '.clickable, .interactable');
+                     leftHand.setAttribute('raycaster', 'objects', '.clickable, #restartButtonUI');
                  }
                  if (rightHand) {
-                     rightHand.setAttribute('raycaster', 'objects', '.clickable, .interactable');
+                     rightHand.setAttribute('raycaster', 'objects', '.clickable, #restartButtonUI');
                  }
+                 */
              }
         },
         disableSphereInteraction: function() {
