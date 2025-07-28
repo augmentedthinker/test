@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Spaceship Showroom</title>
+    <title>VR Spaceship Showroom - Large Scale</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
     <style>
@@ -144,6 +144,20 @@
             text-shadow: 0 0 10px rgba(0, 200, 255, 0.8);
             font-weight: bold;
         }
+        #scaleNotice {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid rgba(0, 150, 255, 0.5);
+            border-radius: 10px;
+            padding: 10px;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+            color: #aaf;
+            font-size: 14px;
+            max-width: 250px;
+        }
     </style>
 </head>
 <body>
@@ -185,6 +199,10 @@
         Look around to view ships | Press trigger to accelerate
     </div>
     
+    <div id="scaleNotice">
+        Ships are scaled to planet size for visibility in VR
+    </div>
+    
     <div class="asset-credit">
         Spaceship Models: Sketchfab/NASA/Community | Planet Textures: NASA/ESA
     </div>
@@ -201,43 +219,43 @@
                       camera="active: true" 
                       look-controls="pointerLockEnabled: false"
                       position="0 0 0">
-                <!-- Spaceship models -->
+                <!-- Spaceship models - scaled to planet size -->
                 <a-entity id="spaceship-fighter"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.5 0.5 0.5"
+                          position="0 0 -20"
+                          rotation="0 0 0"
+                          scale="5 5 5"
                           gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/spaceship.glb?v=1623456789000"
                           visible="true">
                 </a-entity>
                 
                 <a-entity id="spaceship-explorer"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.4 0.4 0.4"
+                          position="0 0 -20"
+                          rotation="0 0 0"
+                          scale="5 5 5"
                           gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/explorer_ship.glb?v=1623456789001"
                           visible="false">
                 </a-entity>
                 
                 <a-entity id="spaceship-cargo"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.6 0.6 0.6"
+                          position="0 0 -20"
+                          rotation="0 0 0"
+                          scale="5 5 5"
                           gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/cargo_ship.glb?v=1623456789002"
                           visible="false">
                 </a-entity>
                 
                 <a-entity id="spaceship-shuttle"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.7 0.7 0.7"
+                          position="0 0 -20"
+                          rotation="0 0 0"
+                          scale="5 5 5"
                           gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/shuttle.glb?v=1623456789003"
                           visible="false">
                 </a-entity>
                 
                 <a-entity id="spaceship-stealth"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.5 0.5 0.5"
+                          position="0 0 -20"
+                          rotation="0 0 0"
+                          scale="5 5 5"
                           gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/stealth_ship.glb?v=1623456789004"
                           visible="false">
                 </a-entity>
