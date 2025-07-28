@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AR Cube with Controllers & Laser</title>
+  <title>AR Sphere with Laser & Color Change</title>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
@@ -27,7 +27,7 @@
 </head>
 <body>
   <div id="info">
-    A WebXR Demo with Controller Lasers
+    A WebXR Demo: Click Sphere with Laser to Change Color
   </div>
   <!-- Using an import map is a modern way to define module locations -->
   <script type="importmap">
@@ -45,7 +45,6 @@
     import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Factory for controller models
 
     // --- Inlined ARButton.js from Three.js examples (Simplified for brevity) ---
-    // (Keeping the core AR button logic from your original file)
     class ARButton {
       static createButton(renderer, sessionInit = {}) {
         const button = document.createElement('button');
@@ -57,22 +56,21 @@
             await renderer.xr.setSession(session);
             button.textContent = 'STOP AR';
             currentSession = session;
-            // --- Trigger Controller Setup ---
             if (currentSession) {
                 setupControllers(); // Call setup when session starts
             }
-            // -----------------------------
           }
           function onSessionEnded() {
             currentSession.removeEventListener('end', onSessionEnded);
             button.textContent = 'START AR';
             currentSession = null;
-            // --- Cleanup Controllers ---
+            // Cleanup Controllers and Lasers
             if (controller1) scene.remove(controller1);
             if (controller2) scene.remove(controller2);
             if (controllerGrip1) scene.remove(controllerGrip1);
             if (controllerGrip2) scene.remove(controllerGrip2);
-            // --------------------------
+            // Reset pointers array
+            pointers.length = 0;
           }
           button.style.cssText = `
             position: absolute;
@@ -152,14 +150,12 @@
 
     // --- Main Application Logic ---
     let camera, scene, renderer;
-    let cube;
+    let sphere; // Changed from cube to sphere
 
-    // --- Controller Variables ---
+    // --- Controller & Laser Variables ---
     let controller1, controller2;
     let controllerGrip1, controllerGrip2;
     let controllerModelFactory;
-    // --- Laser Pointer Variables ---
-    const laserPointerGroup = new THREE.Group(); // Group to hold all laser elements
     const pointers = []; // Array to store pointer data for each controller
     const tempMatrix = new THREE.Matrix4(); // Reusable matrix for calculations
     const raycaster = new THREE.Raycaster(); // Raycaster for intersection testing
@@ -179,26 +175,26 @@
 
       document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-      // Create the cube (keeping the original multi-colored one)
-      const geometry = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-      const materials = [
-        new THREE.MeshBasicMaterial({ color: 0xff0000 }),
-        new THREE.MeshBasicMaterial({ color: 0x00ff00 }),
-        new THREE.MeshBasicMaterial({ color: 0x0000ff }),
-        new THREE.MeshBasicMaterial({ color: 0xffff00 }),
-        new THREE.MeshBasicMaterial({ color: 0xff00ff }),
-        new THREE.MeshBasicMaterial({ color: 0x00ffff })
-      ];
-      cube = new THREE.Mesh(geometry, materials);
-      cube.position.set(0, 0, -1);
-      scene.add(cube);
+      // --- Create the SPHERE ---
+      const geometry = new THREE.SphereGeometry(0.1, 32, 32); // Radius 0.1, segments for smoothness
+      const material = new THREE.MeshStandardMaterial({
+        color: 0x0000ff, // Initial color: Blue
+        roughness: 0.5,
+        metalness: 0.1
+      });
+      sphere = new THREE.Mesh(geometry, material);
+      sphere.position.set(0, 0, -1); // Position 1 meter in front
+      scene.add(sphere);
+      // ------------------------
 
       const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
       light.position.set(0.5, 1, 0.25);
       scene.add(light);
 
-      // Add the laser pointer group to the scene
-      scene.add(laserPointerGroup);
+      // Add a directional light for better 3D perception with MeshStandardMaterial
+      const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+      dirLight.position.set(1, 1, 1).normalize();
+      scene.add(dirLight);
 
       window.addEventListener('resize', onWindowResize, false);
     }
@@ -244,10 +240,10 @@
     function setupLaserPointer(controller, index) {
         // Create a line geometry for the laser
         const geometry = new THREE.BufferGeometry();
-        geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3)); // Start at origin, point down -Z
-        geometry.setAttribute('color', new THREE.Float32BufferAttribute([1, 1, 1, 1, 1, 1], 3)); // White color
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+        // Use a distinct color for the laser
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute([1, 0, 0, 1, 0, 0], 3)); // Red
 
-        // Create a line material that uses vertex colors and is not affected by depth
         const material = new THREE.LineBasicMaterial({
             vertexColors: true,
             blending: THREE.AdditiveBlending,
@@ -277,8 +273,7 @@
             isSelecting: false
         };
 
-        // Add event listeners for controller connection/disconnection
-        controller.addEventListener('connected', function (event) {
+        controller.addEventListener('connected', function () {
              line.visible = true; // Show laser when controller connects
         });
 
@@ -293,13 +288,12 @@
         const index = controller === controller1 ? 0 : 1;
         if (pointers[index]) {
             pointers[index].isSelecting = true;
-            // Optional: Visual feedback on the controller itself
-            // e.g., change the controller model color temporarily
         }
-        // Example interaction: Make the cube bigger when a trigger is pressed
-        if (cube) {
-            cube.scale.set(1.5, 1.5, 1.5);
-        }
+        // --- Check for sphere interaction on Select Start ---
+        // Note: This check is also in updateLasers, but checking here ensures
+        // the action happens immediately on the frame the button is pressed.
+        checkAndInteract(controller, index);
+        // ---------------------------------------------------
     }
 
     function onSelectEnd(event) {
@@ -307,11 +301,31 @@
         const index = controller === controller1 ? 0 : 1;
         if (pointers[index]) {
             pointers[index].isSelecting = false;
-             // Optional: Revert visual feedback on the controller
         }
-         // Example interaction: Revert cube size when trigger is released
-        if (cube) {
-           cube.scale.set(1, 1, 1);
+    }
+
+    function checkAndInteract(controller, index) {
+         // This function checks if the controller's ray is hitting the sphere
+         // and triggers the color change if it is.
+         const pointer = pointers[index];
+         if (!pointer) return;
+
+         // Get controller world matrix for ray direction
+         tempMatrix.identity().extractRotation(controller.matrixWorld);
+         raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+         raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+         const intersects = raycaster.intersectObject(sphere);
+         if (intersects.length > 0 && pointer.isSelecting) {
+             changeSphereColor();
+         }
+    }
+
+    function changeSphereColor() {
+        // Generates a random hex color
+        const newColor = Math.random() * 0xffffff;
+        if (sphere && sphere.material) {
+            sphere.material.color.setHex(newColor);
         }
     }
 
@@ -323,10 +337,10 @@
         // Update laser pointers every frame
         updateLasers();
 
-        // Rotate the cube
-        if (cube) {
-            cube.rotation.y += 0.01;
-            cube.rotation.x += 0.005;
+        // Rotate the sphere slowly
+        if (sphere) {
+            sphere.rotation.y += 0.005;
+            sphere.rotation.x += 0.0025;
         }
         // Render the scene.
         renderer.render(scene, camera);
@@ -337,40 +351,31 @@
             const pointer = pointers[i];
             if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
 
-            // Get the controller's matrix world (position and orientation)
             tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
-
-            // Set the raycaster's origin to the controller's position
             raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
-            // Set the raycaster's direction along the controller's negative Z-axis (pointing forward)
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
             // --- Perform Intersection Test ---
-            const intersects = raycaster.intersectObject(cube); // Check only against the cube
+            const intersects = raycaster.intersectObject(sphere); // Check only against the sphere
 
             if (intersects.length > 0) {
                 const distance = intersects[0].distance;
-                // Clamp distance to max laser length (e.g., 5 meters)
                 const clampedDistance = Math.min(distance, 5);
                 pointer.line.scale.z = clampedDistance;
-                pointer.hitPoint.position.z = -clampedDistance; // Position hit point
+                pointer.hitPoint.position.z = -clampedDistance;
                 pointer.hitPoint.visible = true;
 
-                // --- Handle Interaction on Select ---
-                if (pointer.isSelecting) {
-                    // Perform action on the intersected object
-                    console.log("Cube clicked by controller", i);
-                    // You can trigger specific actions here, like changing color
-                    // cube.material.color.setHex(Math.random() * 0xffffff);
-                }
-                // -------------------------------
+                // --- Handle Interaction on Select (Alternative location) ---
+                // This check happens every frame while pointing and selecting
+                // if (pointer.isSelecting) {
+                //     changeSphereColor(); // This would change color every frame while held
+                // }
+                // ----------------------------------------------------------
 
             } else {
-                // No intersection, show full-length laser
                 pointer.line.scale.z = 5;
-                pointer.hitPoint.visible = false; // Hide hit point
+                pointer.hitPoint.visible = false;
             }
-            // ----------------------------------
         }
     }
 
