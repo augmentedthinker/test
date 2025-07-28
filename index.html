@@ -1,394 +1,450 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Solar System Explorer</title>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            overflow: hidden;
-            background: #000;
-            font-family: 'Arial', sans-serif;
-        }
-        #enterVR {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(255, 100, 0, 0.7);
-            color: white;
-            border: none;
-            padding: 20px 40px;
-            font-size: 24px;
-            border-radius: 10px;
-            cursor: pointer;
-            z-index: 100;
-            backdrop-filter: blur(5px);
-            transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(255, 100, 0, 0.5);
-        }
-        #enterVR:hover {
-            background: rgba(255, 150, 0, 0.9);
-            transform: translate(-50%, -50%) scale(1.05);
-        }
-        #instructions {
-            position: fixed;
-            bottom: 20px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: rgba(255, 255, 255, 0.7);
-            font-size: 18px;
-            z-index: 10;
-            text-shadow: 0 0 5px rgba(255, 100, 0, 0.8);
-        }
-        #loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #000;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            z-index: 200;
-        }
-        .spinner {
-            width: 50px;
-            height: 50px;
-            border: 5px solid rgba(255, 100, 0, 0.3);
-            border-radius: 50%;
-            border-top-color: #ff6600;
-            animation: spin 1s ease-in-out infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        h1 {
-            color: white;
-            margin-bottom: 30px;
-            text-align: center;
-            text-shadow: 0 0 10px rgba(255, 100, 0, 0.8);
-        }
-        .asset-credit {
-            position: fixed;
-            bottom: 60px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: rgba(255, 200, 150, 0.6);
-            font-size: 14px;
-            z-index: 10;
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>Quest VR: Gamified Hits (Forest Environment - Homing Projectiles)</title>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v7.2.0/dist/aframe-extras.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
 </head>
 <body>
-    <div id="loading">
-        <div class="spinner"></div>
-        <h1>Initializing Solar System...</h1>
-        <p>Loading planets, sun, and spaceship assets</p>
-    </div>
-    
-    <button id="enterVR">Enter Solar System</button>
-    
-    <div id="instructions">
-        Look around to steer your ship | Press trigger to accelerate
-    </div>
-    
-    <div class="asset-credit">
-        Spaceship Model: NASA | Planet Textures: NASA/ESA | Stars: Procedurally Generated
-    </div>
-    
-    <a-scene vr-mode-ui="enabled: false" 
-             renderer="antialias: true; colorManagement: true; sortObjects: true; shadowMapType: pcfsoft"
-             background="color: #000011">
-        
-        <!-- Camera with movement controls -->
-        <a-entity id="cameraRig" 
-                  movement-controls="fly: true; speed: 0.2;"
-                  position="0 1.6 0">
-            <a-entity id="head" 
-                      camera="active: true" 
-                      look-controls="pointerLockEnabled: false"
-                      position="0 0 0">
-            </a-entity>
-        </a-entity>
-        
-        <!-- Procedurally generated stars -->
-        <a-entity id="stars"></a-entity>
-        
-        <!-- Sun at the center -->
-        <a-entity id="sun" position="0 0 0">
-            <a-sphere 
-                radius="8" 
-                material="color: #ffdd55; emissive: #ffaa00; emissiveIntensity: 2.0"
-                light="type: point; color: #ffdd55; intensity: 2.0; distance: 200; decay: 2">
-            </a-sphere>
-            <!-- Sun glow effect -->
-            <a-entity 
-                geometry="primitive: sphere; radius: 9"
-                material="color: #ffaa00; shader: flat; transparent: true; opacity: 0.3">
-            </a-entity>
-        </a-entity>
-        
-        <!-- Spaceship near the sun -->
-        <a-entity id="playerSpaceship"
-                  position="12 0 0"
-                  rotation="0 90 0"
-                  scale="0.8 0.8 0.8"
-                  gltf-model="https://raw.githubusercontent.com/augmentedthinker/test/main/spaceship.glb">
-            <!-- Engine glow effect -->
-            <a-entity position="0 0 -2.5">
-                <a-entity 
-                    geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 1"
-                    material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
-                    position="0.4 0 0"
-                    rotation="0 0 0">
-                    <a-animation attribute="material.opacity"
-                                 from="0.7" to="0.3" dur="500"
-                                 direction="alternate" repeat="indefinite"></a-animation>
-                </a-entity>
-                <a-entity 
-                    geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 1"
-                    material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
-                    position="-0.4 0 0"
-                    rotation="0 0 0">
-                    <a-animation attribute="material.opacity"
-                                 from="0.7" to="0.3" dur="500"
-                                 direction="alternate" repeat="indefinite"></a-animation>
-                </a-entity>
-            </a-entity>
-        </a-entity>
-        
-        <!-- Solar system with orbiting planets -->
-        <a-entity id="solarSystem">
-            <!-- Mercury -->
-            <a-entity id="mercuryOrbit" rotation="0 0 0">
-                <a-entity position="15 0 0">
-                    <a-sphere 
-                        radius="1.5" 
-                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mercury_1k_color.jpg;
-                                 emissive: #222;
-                                 emissiveIntensity: 0.1;
-                                 shininess: 30"
-                        shadow="cast: true; receive: true">
-                        <a-animation attribute="rotation" to="0 360 0" dur="15000" easing="linear" repeat="indefinite"></a-animation>
-                    </a-sphere>
-                </a-entity>
-                <a-animation attribute="rotation" to="0 360 0" dur="20000" easing="linear" repeat="indefinite"></a-animation>
-            </a-entity>
-            
-            <!-- Venus -->
-            <a-entity id="venusOrbit" rotation="0 60 0">
-                <a-entity position="25 0 0">
-                    <a-sphere 
-                        radius="2" 
-                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/venus_1k_color.jpg;
-                                 emissive: #333;
-                                 emissiveIntensity: 0.1;
-                                 shininess: 20"
-                        shadow="cast: true; receive: true">
-                        <a-animation attribute="rotation" to="0 360 0" dur="25000" easing="linear" repeat="indefinite"></a-animation>
-                    </a-sphere>
-                </a-entity>
-                <a-animation attribute="rotation" to="0 360 0" dur="40000" easing="linear" repeat="indefinite"></a-animation>
-            </a-entity>
-            
-            <!-- Earth -->
-            <a-entity id="earthOrbit" rotation="0 120 0">
-                <a-entity position="35 0 0">
-                    <a-sphere 
-                        radius="2.2" 
-                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg; 
-                                 normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg;
-                                 emissive: #333;
-                                 emissiveIntensity: 0.2;
-                                 shininess: 50"
-                        shadow="cast: true; receive: true">
-                        <a-animation attribute="rotation" to="0 360 0" dur="30000" easing="linear" repeat="indefinite"></a-animation>
-                    </a-sphere>
-                </a-entity>
-                <a-animation attribute="rotation" to="0 360 0" dur="60000" easing="linear" repeat="indefinite"></a-animation>
-            </a-entity>
-            
-            <!-- Mars -->
-            <a-entity id="marsOrbit" rotation="0 180 0">
-                <a-entity position="45 0 0">
-                    <a-sphere 
-                        radius="1.8" 
-                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg;
-                                 normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_normal.jpg;
-                                 emissive: #222;
-                                 emissiveIntensity: 0.1;
-                                 shininess: 25"
-                        shadow="cast: true; receive: true">
-                        <a-animation attribute="rotation" to="0 360 0" dur="35000" easing="linear" repeat="indefinite"></a-animation>
-                    </a-sphere>
-                </a-entity>
-                <a-animation attribute="rotation" to="0 360 0" dur="80000" easing="linear" repeat="indefinite"></a-animation>
-            </a-entity>
-            
-            <!-- Jupiter -->
-            <a-entity id="jupiterOrbit" rotation="0 240 0">
-                <a-entity position="60 0 0">
-                    <a-sphere 
-                        radius="5" 
-                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/jupiter_1k_color.jpg;
-                                 emissive: #111;
-                                 emissiveIntensity: 0.3;
-                                 shininess: 10"
-                        shadow="cast: true; receive: true">
-                        <a-animation attribute="rotation" to="0 360 0" dur="50000" easing="linear" repeat="indefinite"></a-animation>
-                    </a-sphere>
-                </a-entity>
-                <a-animation attribute="rotation" to="0 360 0" dur="120000" easing="linear" repeat="indefinite"></a-animation>
-            </a-entity>
-        </a-entity>
-        
-        <!-- Asteroid belt -->
-        <a-entity id="asteroids"></a-entity>
-        
-        <!-- Ambient light -->
-        <a-entity light="type: ambient; color: #223"></a-entity>
-    </a-scene>
+<a-scene background="color: #ECECEC" game-manager>
+  <a-assets>
+    <audio id="laser-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3" preload="auto"></audio>
+    <audio id="explosion-sfx" src="https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3" preload="auto"></audio>
+  </a-assets>
+  <a-entity id="cameraRig" position="0 1.6 0" movement-controls>
+    <a-entity id="playerCam" camera look-controls wasd-controls position="0 0 0">
+      <a-text id="hitCounter" value="Hits: 0/3" position="0 0.5 -1.5" align="center" color="white" width="3"></a-text>
+      <a-text id="scoreCounter" value="Score: 0/20" position="0 0.3 -1.5" align="center" color="white" width="3"></a-text>
+      <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
+      <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
+    </a-entity>
+    <a-entity id="leftHand"
+              oculus-touch-controls="hand: left; model: true"
+              laser-controls="hand: left"
+              raycaster="objects: .clickable; far: 100"
+              line="color: blue; opacity: 0.9"></a-entity>
+    <a-entity id="rightHand"
+              oculus-touch-controls="hand: right; model: true"
+              laser-controls="hand: right"
+              raycaster="objects: .clickable; far: 100"
+              line="color: red; opacity: 0.9"></a-entity>
+    <a-sphere id="playerSphere"
+              color="#2196F3"
+              opacity="0.3"
+              radius="0.4"
+              visible="true"
+              player-hit-reaction></a-sphere>
+  </a-entity>
+  <a-entity
+    environment="preset: forest;
+                 groundColor: #6B8E23;
+                 shadow: true;
+                 shadowSize: 10;
+                 fog: 0.7">
+  </a-entity>
+  <a-sphere id="colorSphere"
+            class="clickable"
+            position="0 2 0"
+            radius="0.4"
+            color="#FFC300"
+            shadow="cast: true"
+            toggle-color-on-click
+            shoot-on-click></a-sphere>
+  <script>
+    const laserAudio = document.querySelector('#laser-sfx');
+    const explosionAudio = document.querySelector('#explosion-sfx');
+    let audioUnlocked = false;
+    function unlockAudio() {
+      [laserAudio, explosionAudio].forEach(audio => {
+        if (!audio) return;
+        try {
+          audio.muted = false;
+          audio.play().catch(()=>{});
+          audio.pause();
+          audio.currentTime = 0;
+        } catch (e) {}
+      });
+      audioUnlocked = true;
+    }
+    window.addEventListener('click', unlockAudio, {once:true});
+    window.addEventListener('touchstart', unlockAudio, {once:true});
+    AFRAME.registerComponent('game-manager', {
+        schema: {
+            maxHits: {type: 'number', default: 3},
+            winScore: {type: 'number', default: 20} // New win condition
+            // winTime and projectile speed range removed
+        },
+        init: function () {
+            this.hits = 0;
+            this.score = 0; // Track clicks
+            this.maxHits = this.data.maxHits;
+            this.winScore = this.data.winScore;
+            this.hitCounterEl = document.querySelector('#hitCounter');
+            this.scoreCounterEl = document.querySelector('#scoreCounter'); // New score element
+            this.gameOverTextEl = document.querySelector('#gameOverText');
+            this.winTextEl = document.querySelector('#winText');
+            this.clickableSphere = document.querySelector('#colorSphere');
+            this.isGameOverFlag = false;
+            this.hasWonFlag = false;
+            this.gameEnded = false;
+            this.updateDisplay();
+        },
+        tick: function(time, deltaTime) {
+            // Removed win timer check
+        },
+        isGameOver: function() {
+            return this.isGameOverFlag || this.hasWonFlag;
+        },
+        // Removed getProjectileSpeed function
 
-    <script>
-        // Generate procedural stars
-        function generateStars() {
-            const starsEntity = document.getElementById('stars');
-            const starCount = 3000;
-            
-            for (let i = 0; i < starCount; i++) {
-                const radius = 200 + Math.random() * 800;
-                const theta = Math.random() * Math.PI * 2;
-                const phi = Math.acos(2 * Math.random() - 1);
-                
-                const x = radius * Math.sin(phi) * Math.cos(theta);
-                const y = radius * Math.sin(phi) * Math.sin(theta);
-                const z = radius * Math.cos(phi);
-                
-                const size = 0.05 + Math.random() * 0.3;
-                const colors = ['#ffffff', '#ffffaa', '#ffaaff', '#aaffff'];
-                const color = colors[Math.floor(Math.random() * colors.length)];
-                
-                const star = document.createElement('a-entity');
-                star.setAttribute('geometry', { primitive: 'sphere', radius: size });
-                star.setAttribute('material', { color: color, shader: 'flat' });
-                star.setAttribute('position', `${x} ${y} ${z}`);
-                
-                if (Math.random() > 0.7) {
-                    const minOpacity = 0.3 + Math.random() * 0.4;
-                    const maxOpacity = 0.8 + Math.random() * 0.2;
-                    const duration = 2000 + Math.random() * 3000;
-                    
-                    star.setAttribute('animation', {
-                        property: 'components.material.material.opacity',
-                        from: minOpacity,
-                        to: maxOpacity,
-                        dur: duration,
-                        dir: 'alternate',
-                        loop: true,
-                        easing: 'easeInOutSine'
-                    });
+        updateDisplay: function() {
+            if (this.hitCounterEl) {
+                this.hitCounterEl.setAttribute('value', `Hits: ${this.hits}/${this.maxHits}`);
+            }
+            if (this.scoreCounterEl) { // Update score display
+                this.scoreCounterEl.setAttribute('value', `Score: ${this.score}/${this.winScore}`);
+            }
+        },
+        registerHit: function() {
+            if (this.isGameOverFlag || this.hasWonFlag) return;
+            this.hits++;
+            this.updateDisplay();
+            if (this.hits >= this.maxHits) {
+                this.gameOver();
+            }
+        },
+        registerScore: function() { // New function to handle scoring
+             if (this.isGameOverFlag || this.hasWonFlag) return;
+             this.score++;
+             this.updateDisplay();
+             if (this.score >= this.winScore) {
+                 this.winGame();
+             }
+        },
+        gameOver: function() {
+            this.isGameOverFlag = true;
+            this.gameEnded = true;
+            if (this.gameOverTextEl) {
+                this.gameOverTextEl.setAttribute('visible', true);
+            }
+            this.disableSphereInteraction();
+        },
+        winGame: function() {
+            this.hasWonFlag = true;
+            this.gameEnded = true;
+            if (this.winTextEl) {
+                this.winTextEl.setAttribute('visible', true);
+            }
+            this.disableSphereInteraction();
+        },
+        disableSphereInteraction: function() {
+            if (this.clickableSphere) {
+                this.clickableSphere.removeAttribute('shoot-on-click');
+                this.clickableSphere.removeAttribute('toggle-color-on-click');
+                this.clickableSphere.setAttribute('color', '#888');
+                this.clickableSphere.setAttribute('class', 'non-clickable');
+            }
+        }
+    });
+    AFRAME.registerComponent('toggle-color-on-click', {
+      schema: {
+        colors: {type: 'array', default: ['#FFC300', '#32CD32', '#1976D2', '#E53935']}
+      },
+      init: function () {
+        this.colorIndex = 0;
+        this.el.addEventListener('click', () => {
+          this.colorIndex = (this.colorIndex + 1) % this.data.colors.length;
+          this.el.setAttribute('color', this.data.colors[this.colorIndex]);
+        });
+      }
+    });
+    AFRAME.registerComponent('player-hit-reaction', {
+      init: function () {
+        this.isReacting = false;
+        this.originalScale = this.el.object3D.scale.clone();
+        this.originalColor = this.el.getAttribute('color');
+        this.originalOpacity = this.el.getAttribute('opacity');
+        this.playerCam = document.querySelector('#playerCam');
+      },
+      reactToHit: function () {
+        const gameManager = this.el.sceneEl.components['game-manager'];
+        if (!gameManager || gameManager.isGameOver()) return;
+        if (this.isReacting) return;
+        gameManager.registerHit();
+        this.isReacting = true;
+        let el = this.el;
+        try {
+          if (explosionAudio && audioUnlocked) {
+            explosionAudio.currentTime = 0;
+            explosionAudio.volume = 1;
+            explosionAudio.play();
+          }
+        } catch (e) { /* Error handling removed */ }
+        vibrateControllers(0.4, 1.0);
+        el.setAttribute('color', '#FF0000');
+        el.setAttribute('opacity', 0.8);
+        el.setAttribute('animation__grow', {
+          property: 'scale',
+          to: '0.6 0.6 0.6',
+          dur: 100,
+          easing: 'easeOutCubic'
+        });
+        el.setAttribute('animation__shrink', {
+          property: 'scale',
+          to: `${this.originalScale.x} ${this.originalScale.y} ${this.originalScale.z}`,
+          dur: 200,
+          delay: 100,
+          easing: 'easeInCubic'
+        });
+        el.setAttribute('animation__color', {
+          property: 'color',
+          to: this.originalColor,
+          dur: 200,
+          delay: 100,
+          easing: 'easeInCubic'
+        });
+        el.setAttribute('animation__opacity', {
+            property: 'opacity',
+            to: this.originalOpacity,
+            dur: 200,
+            delay: 100,
+            easing: 'easeInCubic'
+        });
+        const playerWorldPos = new THREE.Vector3();
+        this.el.object3D.getWorldPosition(playerWorldPos);
+        spawnParticles(playerWorldPos, 30);
+        if (this.playerCam) {
+            this.playerCam.setAttribute('animation__shakeX', {
+                property: 'position.x',
+                from: this.playerCam.object3D.position.x - 0.05,
+                to: this.playerCam.object3D.position.x + 0.05,
+                dir: 'alternate',
+                dur: 50,
+                repeat: 2
+            });
+             this.playerCam.setAttribute('animation__shakeY', {
+                property: 'position.y',
+                from: this.playerCam.object3D.position.y - 0.05,
+                to: this.playerCam.object3D.position.y + 0.05,
+                dir: 'alternate',
+                dur: 50,
+                repeat: 2
+            });
+        }
+        setTimeout(() => {
+          this.isReacting = false;
+          el.setAttribute('scale', this.originalScale.clone());
+          el.setAttribute('color', this.originalColor);
+          el.setAttribute('opacity', this.originalOpacity);
+        }, 350);
+      }
+    });
+    AFRAME.registerComponent('shoot-on-click', {
+      // schema removed as speed is no longer used here
+      init: function () {
+        this.onClickHandler = () => {
+            const gameManager = this.el.sceneEl.components['game-manager'];
+            if (gameManager && gameManager.isGameOver()) {
+                return;
+            }
+            // Register the score click
+            if (gameManager) {
+                 gameManager.registerScore();
+            }
+
+            try {
+                if (laserAudio && audioUnlocked) {
+                    laserAudio.currentTime = 0;
+                    laserAudio.volume = 1;
+                    laserAudio.play();
                 }
-                
-                starsEntity.appendChild(star);
+            } catch (e) { /* Error handling removed */ }
+            var leftObj = document.querySelector('#leftHand').object3D;
+            var rightObj = document.querySelector('#rightHand').object3D;
+            var leftPos = new THREE.Vector3();
+            var rightPos = new THREE.Vector3();
+            leftObj.getWorldPosition(leftPos);
+            rightObj.getWorldPosition(rightPos);
+            var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+            var origin = new THREE.Vector3();
+            this.el.object3D.getWorldPosition(origin);
+            var direction = mid.clone().sub(origin).normalize();
+            var scene = this.el.sceneEl;
+            var projectile = document.createElement('a-sphere');
+            projectile.setAttribute('radius', 0.12);
+            projectile.setAttribute('color', '#E53935');
+            projectile.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+            // Pass the player sphere element to the projectile for homing
+            projectile.setAttribute('homing-projectile', {
+              // speed: 1.5 // Initial speed can be set here if needed, or default in component
+              target: '#playerSphere' // Specify the target selector
+            });
+            scene.appendChild(projectile);
+        };
+        this.el.addEventListener('click', this.onClickHandler);
+      }
+    });
+    // New component for homing projectiles
+    AFRAME.registerComponent('homing-projectile', {
+      schema: {
+        // direction: {type: 'string', default: '0 0 0'}, // Removed, calculated dynamically
+        speed: {type: 'number', default: 2.0}, // Adjusted default speed for homing
+        target: {type: 'selector'} // The target element to home towards
+      },
+      init: function () {
+        // var d = this.data.direction.split(' ').map(Number); // Removed
+        // this.directionVec = new THREE.Vector3(d[0], d[1], d[2]); // Removed
+        this.speed = this.data.speed;
+        this.start = null;
+        this.hit = false;
+        this.tempVec = new THREE.Vector3(); // Helper vector for calculations
+      },
+      tick: function (time, deltaTime) {
+        if (this.hit) return;
+        if (!this.el.parentNode) return;
+        const gameManager = this.el.sceneEl.components['game-manager'];
+        if (gameManager && gameManager.isGameOver()) {
+            if (this.el.parentNode) {
+                this.el.parentNode.removeChild(this.el);
+            }
+            return;
+        }
+        if (!this.start) this.start = time;
+
+        const targetEl = this.data.target;
+        if (!targetEl) {
+            // If no target, move forward based on initial direction or just remove
+            // For simplicity, let's just remove it or move it forward slightly
+            // Let's just move it forward in its local Z direction
+            const moveDistance = this.speed * deltaTime / 1000;
+            this.el.object3D.translateZ(-moveDistance); // Move forward along local Z
+        } else {
+            // --- Homing Logic ---
+            const projectileObject3D = this.el.object3D;
+            const targetObject3D = targetEl.object3D;
+
+            // 1. Get world positions
+            const projectileWorldPos = new THREE.Vector3();
+            const targetWorldPos = new THREE.Vector3();
+            projectileObject3D.getWorldPosition(projectileWorldPos);
+            targetObject3D.getWorldPosition(targetWorldPos);
+
+            // 2. Calculate direction vector from projectile to target
+            const directionToTarget = new THREE.Vector3().subVectors(targetWorldPos, projectileWorldPos).normalize();
+
+            // 3. Calculate movement vector for this frame
+            const moveDistance = this.speed * deltaTime / 1000;
+            const moveVector = directionToTarget.multiplyScalar(moveDistance);
+
+            // 4. Update projectile position
+            projectileObject3D.position.add(moveVector);
+            // --- End Homing Logic ---
+        }
+
+        var playerSphereEl = document.querySelector('#playerSphere');
+        if (playerSphereEl && playerSphereEl.components['player-hit-reaction']) {
+          var projectilePos = new THREE.Vector3();
+          this.el.object3D.getWorldPosition(projectilePos);
+          var playerPos = new THREE.Vector3();
+          playerSphereEl.object3D.getWorldPosition(playerPos);
+          var dist = projectilePos.distanceTo(playerPos);
+          var combinedRadius = 0.12 + 0.4;
+          if (dist < combinedRadius) {
+            this.hit = true;
+            playerSphereEl.components['player-hit-reaction'].reactToHit();
+            if (this.el.parentNode) {
+                this.el.parentNode.removeChild(this.el);
+            }
+            return;
+          }
+        }
+        if (time - this.start > 8000) {
+            if (this.el.parentNode) {
+                this.el.parentNode.removeChild(this.el);
             }
         }
-        
-        // Generate asteroid belt
-        function generateAsteroids() {
-            const asteroidsEntity = document.getElementById('asteroids');
-            const asteroidCount = 200;
-            
-            for (let i = 0; i < asteroidCount; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const distance = 50 + Math.random() * 10;
-                const height = -3 + Math.random() * 6;
-                
-                const x = Math.cos(angle) * distance;
-                const z = Math.sin(angle) * distance;
-                
-                const size = 0.2 + Math.random() * 1.2;
-                const rx = Math.random() * 360;
-                const ry = Math.random() * 360;
-                const rz = Math.random() * 360;
-                
-                const asteroid = document.createElement('a-entity');
-                asteroid.setAttribute('geometry', { primitive: 'tetrahedron', radius: size });
-                asteroid.setAttribute('material', { color: '#777', roughness: 0.8, metalness: 0.2 });
-                asteroid.setAttribute('position', `${x} ${height} ${z}`);
-                asteroid.setAttribute('rotation', `${rx} ${ry} ${rz}`);
-                
-                asteroid.setAttribute('animation', {
-                    property: 'rotation',
-                    to: `${rx + 360} ${ry + 360} ${rz + 360}`,
-                    dur: 30000 + Math.random() * 60000,
-                    easing: 'linear',
-                    loop: 'indefinite'
-                });
-                
-                asteroidsEntity.appendChild(asteroid);
-            }
+      }
+    });
+    AFRAME.registerComponent('player-follow-hands', {
+      tick: function () {
+        var leftHand = document.querySelector('#leftHand');
+        var rightHand = document.querySelector('#rightHand');
+        var playerSphere = document.querySelector('#playerSphere');
+        if (leftHand && rightHand && playerSphere) {
+          var leftObj = leftHand.object3D;
+          var rightObj = rightHand.object3D;
+          var leftPos = new THREE.Vector3();
+          var rightPos = new THREE.Vector3();
+          leftObj.getWorldPosition(leftPos);
+          rightObj.getWorldPosition(rightPos);
+          var mid = leftPos.clone().add(rightPos).multiplyScalar(0.5);
+          playerSphere.object3D.parent.worldToLocal(mid);
+          playerSphere.object3D.position.copy(mid);
         }
-        
-        // Initialize when scene is loaded
-        document.querySelector('a-scene').addEventListener('loaded', function() {
-            generateStars();
-            generateAsteroids();
-            
-            // Hide loading screen after a delay
-            setTimeout(() => {
-                document.getElementById('loading').style.display = 'none';
-            }, 2500);
-        });
-        
-        // Enter VR button functionality
-        document.getElementById('enterVR').addEventListener('click', function() {
-            const scene = document.querySelector('a-scene');
-            scene.enterVR();
-            this.style.display = 'none';
-        });
-        
-        // Handle controller input for acceleration
-        document.querySelector('a-scene').addEventListener('controllerconnected', function(e) {
-            const controller = e.detail.component.el;
-            
-            controller.addEventListener('triggerdown', function() {
-                const rig = document.getElementById('cameraRig');
-                rig.setAttribute('movement-controls', 'speed', 0.5);
-            });
-            
-            controller.addEventListener('triggerup', function() {
-                const rig = document.getElementById('cameraRig');
-                rig.setAttribute('movement-controls', 'speed', 0.2);
-            });
-        });
-        
-        // Make the spaceship orbit the sun
-        document.querySelector('a-scene').addEventListener('loaded', function() {
-            const spaceship = document.getElementById('playerSpaceship');
-            let angle = 0;
-            const radius = 12;
-            const speed = 0.005;
-            
-            function updateSpaceshipPosition() {
-                const x = Math.cos(angle) * radius;
-                const z = Math.sin(angle) * radius;
-                spaceship.setAttribute('position', `${x} 0 ${z}`);
-                spaceship.setAttribute('rotation', `0 ${angle * 180 / Math.PI + 90} 0`);
-                angle += speed;
-                requestAnimationFrame(updateSpaceshipPosition);
-            }
-            
-            updateSpaceshipPosition();
-        });
-    </script>
+      }
+    });
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelector('#cameraRig').setAttribute('player-follow-hands', '');
+    });
+    function vibrateControllers(duration = 0.4, intensity = 1.0) {
+      const hands = ['leftHand', 'rightHand'];
+      hands.forEach(handId => {
+        const hand = document.getElementById(handId);
+        if (!hand) return;
+        const gamepad = hand.components['oculus-touch-controls'] &&
+                        hand.components['oculus-touch-controls'].controller &&
+                        hand.components['oculus-touch-controls'].controller.gamepad;
+        if (gamepad && gamepad.hapticActuators && gamepad.hapticActuators.length > 0) {
+          try {
+            gamepad.hapticActuators[0].pulse(intensity, duration * 1000);
+          } catch (e) { /* Error handling removed */ }
+        }
+      });
+    }
+    function spawnParticles(origin, count) {
+      const scene = document.querySelector('a-scene');
+      for (let i = 0; i < count; i++) {
+        const p = document.createElement('a-sphere');
+        p.setAttribute('radius', 0.01 + Math.random() * 0.03);
+        p.setAttribute('color', '#FFD600');
+        const theta = Math.random() * 2 * Math.PI;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const dir = new THREE.Vector3(
+          Math.sin(phi) * Math.cos(theta),
+          Math.sin(phi) * Math.sin(theta),
+          Math.cos(phi)
+        ).multiplyScalar(0.5 + Math.random() * 1.5);
+        p.setAttribute('position', `${origin.x} ${origin.y} ${origin.z}`);
+        p.setAttribute('particle-move-fade', {vx: dir.x, vy: dir.y, vz: dir.z});
+        scene.appendChild(p);
+      }
+    }
+    AFRAME.registerComponent('particle-move-fade', {
+      schema: {
+        vx: {type: 'number', default: 0},
+        vy: {type: 'number', default: 0},
+        vz: {type: 'number', default: 0}
+      },
+      init: function () {
+        this.life = 0;
+      },
+      tick: function (time, dt) {
+        this.life += dt;
+        this.el.object3D.position.x += this.data.vx * dt / 1000;
+        this.el.object3D.position.y += this.data.vy * dt / 1000;
+        this.el.object3D.position.z += this.data.vz * dt / 1000;
+        this.el.object3D.position.y -= 0.5 * dt / 1000;
+        if (this.life > 100) {
+          this.el.setAttribute('material', 'opacity', Math.max(1 - (this.life - 100) / 700, 0));
+        }
+        if (this.life > 800) {
+          this.el.parentNode && this.el.parentNode.removeChild(this.el);
+        }
+      }
+    });
+  </script>
+</a-scene>
 </body>
 </html>
