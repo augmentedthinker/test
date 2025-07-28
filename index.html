@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Solar System Explorer with Spaceship</title>
+    <title>VR Solar System Explorer</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
     <style>
@@ -102,7 +102,7 @@
     </div>
     
     <div class="asset-credit">
-        Spaceship Model: Augmented Thinker | Planet Textures: NASA/ESA | Stars: Procedurally Generated
+        Spaceship Model: NASA | Planet Textures: NASA/ESA | Stars: Procedurally Generated
     </div>
     
     <a-scene vr-mode-ui="enabled: false" 
@@ -117,13 +117,6 @@
                       camera="active: true" 
                       look-controls="pointerLockEnabled: false"
                       position="0 0 0">
-                <!-- Spaceship model from your GitHub -->
-                <a-entity id="spaceship"
-                          position="0 -0.3 -1.5"
-                          rotation="0 180 0"
-                          scale="0.5 0.5 0.5"
-                          gltf-model="https://raw.githubusercontent.com/augmentedthinker/test/main/spaceship.glb">
-                </a-entity>
             </a-entity>
         </a-entity>
         
@@ -141,6 +134,35 @@
             <a-entity 
                 geometry="primitive: sphere; radius: 9"
                 material="color: #ffaa00; shader: flat; transparent: true; opacity: 0.3">
+            </a-entity>
+        </a-entity>
+        
+        <!-- Spaceship near the sun -->
+        <a-entity id="playerSpaceship"
+                  position="12 0 0"
+                  rotation="0 90 0"
+                  scale="0.8 0.8 0.8"
+                  gltf-model="https://raw.githubusercontent.com/augmentedthinker/test/main/spaceship.glb">
+            <!-- Engine glow effect -->
+            <a-entity position="0 0 -2.5">
+                <a-entity 
+                    geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 1"
+                    material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
+                    position="0.4 0 0"
+                    rotation="0 0 0">
+                    <a-animation attribute="material.opacity"
+                                 from="0.7" to="0.3" dur="500"
+                                 direction="alternate" repeat="indefinite"></a-animation>
+                </a-entity>
+                <a-entity 
+                    geometry="primitive: cone; radiusBottom: 0.3; radiusTop: 0; height: 1"
+                    material="color: #0af; shader: flat; transparent: true; opacity: 0.7"
+                    position="-0.4 0 0"
+                    rotation="0 0 0">
+                    <a-animation attribute="material.opacity"
+                                 from="0.7" to="0.3" dur="500"
+                                 direction="alternate" repeat="indefinite"></a-animation>
+                </a-entity>
             </a-entity>
         </a-entity>
         
@@ -347,6 +369,25 @@
                 const rig = document.getElementById('cameraRig');
                 rig.setAttribute('movement-controls', 'speed', 0.2);
             });
+        });
+        
+        // Make the spaceship orbit the sun
+        document.querySelector('a-scene').addEventListener('loaded', function() {
+            const spaceship = document.getElementById('playerSpaceship');
+            let angle = 0;
+            const radius = 12;
+            const speed = 0.005;
+            
+            function updateSpaceshipPosition() {
+                const x = Math.cos(angle) * radius;
+                const z = Math.sin(angle) * radius;
+                spaceship.setAttribute('position', `${x} 0 ${z}`);
+                spaceship.setAttribute('rotation', `0 ${angle * 180 / Math.PI + 90} 0`);
+                angle += speed;
+                requestAnimationFrame(updateSpaceshipPosition);
+            }
+            
+            updateSpaceshipPosition();
         });
     </script>
 </body>
