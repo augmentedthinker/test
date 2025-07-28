@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VR Spaceship Showroom - Large Scale</title>
+    <title>VR Solar System Explorer</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
     <script src="https://unpkg.com/aframe-extras@7.0.0/dist/aframe-extras.controls.min.js"></script>
     <style>
@@ -13,59 +13,12 @@
             background: #000;
             font-family: 'Arial', sans-serif;
         }
-        #shipSelector {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 20, 40, 0.8);
-            border: 1px solid rgba(0, 150, 255, 0.5);
-            border-radius: 10px;
-            padding: 15px;
-            z-index: 100;
-            backdrop-filter: blur(5px);
-            color: white;
-            width: 300px;
-        }
-        #shipSelector h2 {
-            margin-top: 0;
-            color: #4af;
-            text-align: center;
-            text-shadow: 0 0 10px rgba(0, 150, 255, 0.7);
-        }
-        .ship-option {
-            background: rgba(0, 40, 80, 0.6);
-            margin: 10px 0;
-            padding: 12px;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
-        }
-        .ship-option:hover {
-            background: rgba(0, 80, 160, 0.8);
-            border: 1px solid #0af;
-            transform: translateY(-2px);
-        }
-        .ship-option.selected {
-            background: rgba(0, 100, 200, 0.9);
-            border: 1px solid #0ff;
-            box-shadow: 0 0 15px rgba(0, 200, 255, 0.7);
-        }
-        .ship-name {
-            font-weight: bold;
-            font-size: 18px;
-            margin-bottom: 5px;
-        }
-        .ship-desc {
-            font-size: 14px;
-            color: #aaf;
-        }
         #enterVR {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 100, 255, 0.7);
+            background: rgba(255, 100, 0, 0.7);
             color: white;
             border: none;
             padding: 20px 40px;
@@ -75,9 +28,10 @@
             z-index: 100;
             backdrop-filter: blur(5px);
             transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(255, 100, 0, 0.5);
         }
         #enterVR:hover {
-            background: rgba(0, 150, 255, 0.9);
+            background: rgba(255, 150, 0, 0.9);
             transform: translate(-50%, -50%) scale(1.05);
         }
         #instructions {
@@ -89,7 +43,7 @@
             color: rgba(255, 255, 255, 0.7);
             font-size: 18px;
             z-index: 10;
-            text-shadow: 0 0 5px rgba(0, 100, 255, 0.8);
+            text-shadow: 0 0 5px rgba(255, 100, 0, 0.8);
         }
         #loading {
             position: fixed;
@@ -107,9 +61,9 @@
         .spinner {
             width: 50px;
             height: 50px;
-            border: 5px solid rgba(0, 150, 255, 0.3);
+            border: 5px solid rgba(255, 100, 0, 0.3);
             border-radius: 50%;
-            border-top-color: #0af;
+            border-top-color: #ff6600;
             animation: spin 1s ease-in-out infinite;
             margin-bottom: 20px;
         }
@@ -120,7 +74,7 @@
             color: white;
             margin-bottom: 30px;
             text-align: center;
-            text-shadow: 0 0 10px rgba(0, 150, 255, 0.8);
+            text-shadow: 0 0 10px rgba(255, 100, 0, 0.8);
         }
         .asset-credit {
             position: fixed;
@@ -128,87 +82,31 @@
             left: 0;
             width: 100%;
             text-align: center;
-            color: rgba(200, 200, 255, 0.6);
+            color: rgba(255, 200, 150, 0.6);
             font-size: 14px;
             z-index: 10;
-        }
-        #shipInfo {
-            position: fixed;
-            bottom: 100px;
-            left: 0;
-            width: 100%;
-            text-align: center;
-            color: #0ff;
-            font-size: 20px;
-            z-index: 10;
-            text-shadow: 0 0 10px rgba(0, 200, 255, 0.8);
-            font-weight: bold;
-        }
-        #scaleNotice {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(0, 20, 40, 0.8);
-            border: 1px solid rgba(0, 150, 255, 0.5);
-            border-radius: 10px;
-            padding: 10px;
-            z-index: 100;
-            backdrop-filter: blur(5px);
-            color: #aaf;
-            font-size: 14px;
-            max-width: 250px;
         }
     </style>
 </head>
 <body>
     <div id="loading">
         <div class="spinner"></div>
-        <h1>Loading Spaceship Collection...</h1>
-        <p>Preparing premium spacecraft models</p>
+        <h1>Initializing Solar System...</h1>
+        <p>Loading planets, sun, and spaceship assets</p>
     </div>
     
-    <button id="enterVR">Enter VR Showroom</button>
-    
-    <div id="shipSelector">
-        <h2>Spaceship Collection</h2>
-        <div class="ship-option selected" data-ship="fighter">
-            <div class="ship-name">Interceptor X-7</div>
-            <div class="ship-desc">Agile combat fighter with advanced propulsion</div>
-        </div>
-        <div class="ship-option" data-ship="explorer">
-            <div class="ship-name">Voyager Class</div>
-            <div class="ship-desc">Long-range exploration vessel with scientific equipment</div>
-        </div>
-        <div class="ship-option" data-ship="cargo">
-            <div class="ship-name">Freighter Hauler</div>
-            <div class="ship-desc">Heavy-duty cargo transport with reinforced hull</div>
-        </div>
-        <div class="ship-option" data-ship="shuttle">
-            <div class="ship-name">Orbital Shuttle</div>
-            <div class="ship-desc">Compact personnel transport for planetary missions</div>
-        </div>
-        <div class="ship-option" data-ship="stealth">
-            <div class="ship-name">Shadow Infiltrator</div>
-            <div class="ship-desc">Stealth vessel with cloaking technology</div>
-        </div>
-    </div>
-    
-    <div id="shipInfo">Current Ship: Interceptor X-7</div>
+    <button id="enterVR">Enter Solar System</button>
     
     <div id="instructions">
-        Look around to view ships | Press trigger to accelerate
-    </div>
-    
-    <div id="scaleNotice">
-        Ships are scaled to planet size for visibility in VR
+        Look around to steer your ship | Press trigger to accelerate
     </div>
     
     <div class="asset-credit">
-        Spaceship Models: Sketchfab/NASA/Community | Planet Textures: NASA/ESA
+        Spaceship Model: NASA | Planet Textures: NASA/ESA | Stars: Procedurally Generated
     </div>
     
     <a-scene vr-mode-ui="enabled: false" 
-             renderer="antialias: true; colorManagement: true; sortObjects: true;"
+             renderer="antialias: true; colorManagement: true; sortObjects: true; shadowMapType: pcfsoft"
              background="color: #000011">
         
         <!-- Camera with movement controls -->
@@ -219,45 +117,12 @@
                       camera="active: true" 
                       look-controls="pointerLockEnabled: false"
                       position="0 0 0">
-                <!-- Spaceship models - scaled to planet size -->
-                <a-entity id="spaceship-fighter"
-                          position="0 0 -20"
-                          rotation="0 0 0"
-                          scale="5 5 5"
-                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/spaceship.glb?v=1623456789000"
-                          visible="true">
-                </a-entity>
-                
-                <a-entity id="spaceship-explorer"
-                          position="0 0 -20"
-                          rotation="0 0 0"
-                          scale="5 5 5"
-                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/explorer_ship.glb?v=1623456789001"
-                          visible="false">
-                </a-entity>
-                
-                <a-entity id="spaceship-cargo"
-                          position="0 0 -20"
-                          rotation="0 0 0"
-                          scale="5 5 5"
-                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/cargo_ship.glb?v=1623456789002"
-                          visible="false">
-                </a-entity>
-                
-                <a-entity id="spaceship-shuttle"
-                          position="0 0 -20"
-                          rotation="0 0 0"
-                          scale="5 5 5"
-                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/shuttle.glb?v=1623456789003"
-                          visible="false">
-                </a-entity>
-                
-                <a-entity id="spaceship-stealth"
-                          position="0 0 -20"
-                          rotation="0 0 0"
-                          scale="5 5 5"
-                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/stealth_ship.glb?v=1623456789004"
-                          visible="false">
+                <!-- Spaceship model from NASA -->
+                <a-entity id="spaceship"
+                          position="0 -0.3 -1.5"
+                          rotation="0 180 0"
+                          scale="0.5 0.5 0.5"
+                          gltf-model="https://cdn.glitch.global/4d0c0b5d-3e3b-4d9f-9b5a-3f5d5b5d3f5d/spaceship.glb?v=1623456789000">
                 </a-entity>
             </a-entity>
         </a-entity>
@@ -265,52 +130,110 @@
         <!-- Procedurally generated stars -->
         <a-entity id="stars"></a-entity>
         
-        <!-- Premade planets with NASA textures -->
-        <a-entity>
-            <!-- Earth-like planet -->
+        <!-- Sun at the center -->
+        <a-entity id="sun" position="0 0 0">
             <a-sphere 
-                radius="5" 
-                position="20 5 -30"
-                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg; 
-                         normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg;
-                         emissive: #333;
-                         emissiveIntensity: 0.2">
+                radius="8" 
+                material="color: #ffdd55; emissive: #ffaa00; emissiveIntensity: 2.0"
+                light="type: point; color: #ffdd55; intensity: 2.0; distance: 200; decay: 2">
+            </a-sphere>
+            <!-- Sun glow effect -->
+            <a-entity 
+                geometry="primitive: sphere; radius: 9"
+                material="color: #ffaa00; shader: flat; transparent: true; opacity: 0.3">
+            </a-entity>
+        </a-entity>
+        
+        <!-- Solar system with orbiting planets -->
+        <a-entity id="solarSystem">
+            <!-- Mercury -->
+            <a-entity id="mercuryOrbit" rotation="0 0 0">
+                <a-entity position="15 0 0">
+                    <a-sphere 
+                        radius="1.5" 
+                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mercury_1k_color.jpg;
+                                 emissive: #222;
+                                 emissiveIntensity: 0.1;
+                                 shininess: 30"
+                        shadow="cast: true; receive: true">
+                        <a-animation attribute="rotation" to="0 360 0" dur="15000" easing="linear" repeat="indefinite"></a-animation>
+                    </a-sphere>
+                </a-entity>
+                <a-animation attribute="rotation" to="0 360 0" dur="20000" easing="linear" repeat="indefinite"></a-animation>
+            </a-entity>
+            
+            <!-- Venus -->
+            <a-entity id="venusOrbit" rotation="0 60 0">
+                <a-entity position="25 0 0">
+                    <a-sphere 
+                        radius="2" 
+                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/venus_1k_color.jpg;
+                                 emissive: #333;
+                                 emissiveIntensity: 0.1;
+                                 shininess: 20"
+                        shadow="cast: true; receive: true">
+                        <a-animation attribute="rotation" to="0 360 0" dur="25000" easing="linear" repeat="indefinite"></a-animation>
+                    </a-sphere>
+                </a-entity>
+                <a-animation attribute="rotation" to="0 360 0" dur="40000" easing="linear" repeat="indefinite"></a-animation>
+            </a-entity>
+            
+            <!-- Earth -->
+            <a-entity id="earthOrbit" rotation="0 120 0">
+                <a-entity position="35 0 0">
+                    <a-sphere 
+                        radius="2.2" 
+                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_atmos_2048.jpg; 
+                                 normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/earth_normal_2048.jpg;
+                                 emissive: #333;
+                                 emissiveIntensity: 0.2;
+                                 shininess: 50"
+                        shadow="cast: true; receive: true">
+                        <a-animation attribute="rotation" to="0 360 0" dur="30000" easing="linear" repeat="indefinite"></a-animation>
+                    </a-sphere>
+                </a-entity>
                 <a-animation attribute="rotation" to="0 360 0" dur="60000" easing="linear" repeat="indefinite"></a-animation>
-            </a-sphere>
+            </a-entity>
             
-            <!-- Mars-like planet -->
-            <a-sphere 
-                radius="7" 
-                position="-25 -10 -50"
-                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg;
-                         normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_normal.jpg;
-                         emissive: #222;
-                         emissiveIntensity: 0.1">
+            <!-- Mars -->
+            <a-entity id="marsOrbit" rotation="0 180 0">
+                <a-entity position="45 0 0">
+                    <a-sphere 
+                        radius="1.8" 
+                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_color.jpg;
+                                 normalMap: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/mars_1k_normal.jpg;
+                                 emissive: #222;
+                                 emissiveIntensity: 0.1;
+                                 shininess: 25"
+                        shadow="cast: true; receive: true">
+                        <a-animation attribute="rotation" to="0 360 0" dur="35000" easing="linear" repeat="indefinite"></a-animation>
+                    </a-sphere>
+                </a-entity>
                 <a-animation attribute="rotation" to="0 360 0" dur="80000" easing="linear" repeat="indefinite"></a-animation>
-            </a-sphere>
+            </a-entity>
             
-            <!-- Gas giant -->
-            <a-sphere 
-                radius="10" 
-                position="0 20 -80"
-                material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/jupiter_1k_color.jpg;
-                         emissive: #111;
-                         emissiveIntensity: 0.3">
+            <!-- Jupiter -->
+            <a-entity id="jupiterOrbit" rotation="0 240 0">
+                <a-entity position="60 0 0">
+                    <a-sphere 
+                        radius="5" 
+                        material="src: https://raw.githubusercontent.com/mrdoob/three.js/master/examples/textures/planets/jupiter_1k_color.jpg;
+                                 emissive: #111;
+                                 emissiveIntensity: 0.3;
+                                 shininess: 10"
+                        shadow="cast: true; receive: true">
+                        <a-animation attribute="rotation" to="0 360 0" dur="50000" easing="linear" repeat="indefinite"></a-animation>
+                    </a-sphere>
+                </a-entity>
                 <a-animation attribute="rotation" to="0 360 0" dur="120000" easing="linear" repeat="indefinite"></a-animation>
-            </a-sphere>
+            </a-entity>
         </a-entity>
         
         <!-- Asteroid belt -->
         <a-entity id="asteroids"></a-entity>
         
         <!-- Ambient light -->
-        <a-entity light="type: ambient; color: #334"></a-entity>
-        
-        <!-- Directional light (sun) -->
-        <a-entity light="type: directional; color: #ffddaa; intensity: 0.8" position="-1 1 0"></a-entity>
-        
-        <!-- Point light (distant star) -->
-        <a-entity light="type: point; color: #aaffff; intensity: 0.5" position="15 10 -40"></a-entity>
+        <a-entity light="type: ambient; color: #223"></a-entity>
     </a-scene>
 
     <script>
@@ -320,7 +243,7 @@
             const starCount = 3000;
             
             for (let i = 0; i < starCount; i++) {
-                const radius = 100 + Math.random() * 900;
+                const radius = 200 + Math.random() * 800;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos(2 * Math.random() - 1);
                 
@@ -333,14 +256,8 @@
                 const color = colors[Math.floor(Math.random() * colors.length)];
                 
                 const star = document.createElement('a-entity');
-                star.setAttribute('geometry', {
-                    primitive: 'sphere',
-                    radius: size
-                });
-                star.setAttribute('material', {
-                    color: color,
-                    shader: 'flat'
-                });
+                star.setAttribute('geometry', { primitive: 'sphere', radius: size });
+                star.setAttribute('material', { color: color, shader: 'flat' });
                 star.setAttribute('position', `${x} ${y} ${z}`);
                 
                 if (Math.random() > 0.7) {
@@ -366,31 +283,24 @@
         // Generate asteroid belt
         function generateAsteroids() {
             const asteroidsEntity = document.getElementById('asteroids');
-            const asteroidCount = 150;
+            const asteroidCount = 200;
             
             for (let i = 0; i < asteroidCount; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const distance = 40 + Math.random() * 20;
-                const height = -5 + Math.random() * 10;
+                const distance = 50 + Math.random() * 10;
+                const height = -3 + Math.random() * 6;
                 
                 const x = Math.cos(angle) * distance;
                 const z = Math.sin(angle) * distance;
                 
-                const size = 0.2 + Math.random() * 1.5;
+                const size = 0.2 + Math.random() * 1.2;
                 const rx = Math.random() * 360;
                 const ry = Math.random() * 360;
                 const rz = Math.random() * 360;
                 
                 const asteroid = document.createElement('a-entity');
-                asteroid.setAttribute('geometry', {
-                    primitive: 'tetrahedron',
-                    radius: size
-                });
-                asteroid.setAttribute('material', {
-                    color: '#888',
-                    roughness: 0.8,
-                    metalness: 0.2
-                });
+                asteroid.setAttribute('geometry', { primitive: 'tetrahedron', radius: size });
+                asteroid.setAttribute('material', { color: '#777', roughness: 0.8, metalness: 0.2 });
                 asteroid.setAttribute('position', `${x} ${height} ${z}`);
                 asteroid.setAttribute('rotation', `${rx} ${ry} ${rz}`);
                 
@@ -406,57 +316,15 @@
             }
         }
         
-        // Ship selection functionality
-        function setupShipSelector() {
-            const shipOptions = document.querySelectorAll('.ship-option');
-            const shipEntities = {
-                'fighter': document.getElementById('spaceship-fighter'),
-                'explorer': document.getElementById('spaceship-explorer'),
-                'cargo': document.getElementById('spaceship-cargo'),
-                'shuttle': document.getElementById('spaceship-shuttle'),
-                'stealth': document.getElementById('spaceship-stealth')
-            };
-            
-            shipOptions.forEach(option => {
-                option.addEventListener('click', function() {
-                    // Update UI selection
-                    shipOptions.forEach(opt => opt.classList.remove('selected'));
-                    this.classList.add('selected');
-                    
-                    // Get selected ship
-                    const selectedShip = this.getAttribute('data-ship');
-                    
-                    // Update ship info display
-                    const shipNames = {
-                        'fighter': 'Interceptor X-7',
-                        'explorer': 'Voyager Class',
-                        'cargo': 'Freighter Hauler',
-                        'shuttle': 'Orbital Shuttle',
-                        'stealth': 'Shadow Infiltrator'
-                    };
-                    document.getElementById('shipInfo').textContent = `Current Ship: ${shipNames[selectedShip]}`;
-                    
-                    // Hide all ships
-                    Object.values(shipEntities).forEach(ship => {
-                        ship.setAttribute('visible', 'false');
-                    });
-                    
-                    // Show selected ship
-                    shipEntities[selectedShip].setAttribute('visible', 'true');
-                });
-            });
-        }
-        
         // Initialize when scene is loaded
         document.querySelector('a-scene').addEventListener('loaded', function() {
             generateStars();
             generateAsteroids();
-            setupShipSelector();
             
             // Hide loading screen after a delay
             setTimeout(() => {
                 document.getElementById('loading').style.display = 'none';
-            }, 2000);
+            }, 2500);
         });
         
         // Enter VR button functionality
