@@ -45,7 +45,8 @@
               visible="true"
               player-hit-reaction></a-sphere>
   </a-entity>
-  <a-entity
+  <!-- Environment entity with an ID for easy access -->
+  <a-entity id="environmentEntity"
     environment="preset: forest;
                  groundColor: #6B8E23;
                  shadow: true;
@@ -79,6 +80,15 @@
     window.addEventListener('click', unlockAudio, {once:true});
     window.addEventListener('touchstart', unlockAudio, {once:true});
 
+    // *** Define available environment presets ***
+    const environmentPresets = [
+        { preset: 'forest', groundColor: '#6B8E23', shadow: true, shadowSize: 10, fog: 0.7 },
+        { preset: 'contact', groundColor: '#87CEEB', shadow: true, shadowSize: 10, fog: 0.8 },
+        { preset: 'egypt', groundColor: '#D2B48C', shadow: true, shadowSize: 15, fog: 0.6 },
+        { preset: 'checkerboard', groundColor: '#FFFFFF', shadow: false, fog: 0 }
+    ];
+    let currentPresetIndex = 0; // Track the current environment preset
+
     AFRAME.registerComponent('game-manager', {
         schema: {
             maxHits: {type: 'number', default: 3},
@@ -108,6 +118,8 @@
             if (this.restartButtonEl) {
                 this.restartButtonEl.addEventListener('click', () => {
                     if (this.gameEnded) { // Only restart if game is over
+                         // *** Change environment preset before restarting ***
+                         this.changeEnvironment();
                          window.location.reload(); // Reload the page to restart
                     }
                 });
@@ -125,6 +137,18 @@
             const progress = Math.min(elapsedTime / this.data.winTime, 1); // Clamp progress between 0 and 1
             return this.data.initialProjectileSpeed +
                    (this.data.maxProjectileSpeed - this.data.initialProjectileSpeed) * progress;
+        },
+        // *** New function to change the environment ***
+        changeEnvironment: function() {
+             const environmentEntity = document.querySelector('#environmentEntity');
+             if (!environmentEntity) return;
+
+             // Cycle to the next preset
+             currentPresetIndex = (currentPresetIndex + 1) % environmentPresets.length;
+             const nextPreset = environmentPresets[currentPresetIndex];
+
+             // Apply the new preset to the environment entity
+             environmentEntity.setAttribute('environment', nextPreset);
         },
         updateDisplay: function() {
             if (this.hitCounterEl) {
