@@ -19,7 +19,7 @@
       <a-text id="scoreCounter" value="Score: 0/20" position="0 0.3 -1.5" align="center" color="white" width="3"></a-text>
       <a-text id="gameOverText" value="GAME OVER!" position="0 0 -2" align="center" color="red" width="4" visible="false"></a-text>
       <a-text id="winText" value="YOU WIN!" position="0 0 -2" align="center" color="gold" width="4" visible="false"></a-text>
-      <!-- Restart Button - Initially hidden and NOT in the interactable class -->
+      <!-- Restart Button - Initially hidden -->
       <a-entity id="restartButton"
                 geometry="primitive: plane; width: 1.5; height: 0.5"
                 material="color: #4CAF50"
@@ -31,12 +31,12 @@
     <a-entity id="leftHand"
               oculus-touch-controls="hand: left; model: true"
               laser-controls="hand: left"
-              raycaster="objects: .clickable; far: 100" <!-- Removed .interactable from initial list -->
+              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
               line="color: blue; opacity: 0.9"></a-entity>
     <a-entity id="rightHand"
               oculus-touch-controls="hand: right; model: true"
               laser-controls="hand: right"
-              raycaster="objects: .clickable; far: 100" <!-- Removed .interactable from initial list -->
+              raycaster="objects: .clickable; far: 100" <!-- .interactable removed initially -->
               line="color: red; opacity: 0.9"></a-entity>
     <a-sphere id="playerSphere"
               color="#2196F3"
@@ -337,7 +337,7 @@
       }
     });
 
-    // Updated component for homing projectiles with dynamic speed
+    // Updated component for homing projectiles with dynamic speed and click-to-destroy
     AFRAME.registerComponent('homing-projectile', {
       schema: {
         speed: {type: 'number', default: 2.0}, // Speed can be set dynamically
@@ -348,9 +348,13 @@
         this.start = null;
         this.hit = false;
         this.tempVec = new THREE.Vector3(); // Helper vector for calculations
+        // *** Add the 'projectile' class for raycasting ***
+        this.el.setAttribute('class', 'projectile clickable');
+        // *** Add click event listener for destruction ***
+        this.el.addEventListener('click', this.destroy.bind(this));
       },
       tick: function (time, deltaTime) {
-        if (this.hit) return;
+        if (this.hit) return; // Prevent further processing if hit/destroyed
         if (!this.el.parentNode) return;
         const gameManager = this.el.sceneEl.components['game-manager'];
         if (gameManager && gameManager.isGameOver()) {
@@ -413,6 +417,40 @@
                 this.el.parentNode.removeChild(this.el);
             }
         }
+      },
+      // *** New method to handle projectile destruction ***
+      destroy: function () {
+         // Ensure projectile is still active and not already hit
+         if (this.hit || !this.el.parentNode) {
+             return;
+         }
+         this.hit = true; // Mark as destroyed to prevent further interactions/ticking
+
+         // Play explosion sound
+         try {
+             if (explosionAudio && audioUnlocked) {
+                 // Create a new audio instance to allow multiple simultaneous plays
+                 const destroySound = explosionAudio.cloneNode();
+                 destroySound.muted = false;
+                 destroySound.volume = 0.7; // Slightly lower volume for destroy sound
+                 destroySound.currentTime = 0;
+                 destroySound.play().catch(e => console.warn("Failed to play destroy sound:", e));
+             }
+         } catch (e) {
+             console.warn("Error playing destroy sound:", e);
+         }
+
+         // Get projectile position for particle effect
+         const projectileWorldPos = new THREE.Vector3();
+         this.el.object3D.getWorldPosition(projectileWorldPos);
+
+         // Remove the projectile entity
+         if (this.el.parentNode) {
+             this.el.parentNode.removeChild(this.el);
+         }
+
+         // Spawn destruction particles at the projectile's location
+         spawnParticles(projectileWorldPos, 20); // Fewer particles for destruction
       }
     });
 
@@ -437,6 +475,15 @@
 
     document.addEventListener('DOMContentLoaded', function () {
       document.querySelector('#cameraRig').setAttribute('player-follow-hands', '');
+      // *** Update raycasters to include projectiles ***
+      const leftHand = document.querySelector('#leftHand');
+      const rightHand = document.querySelector('#rightHand');
+      if (leftHand) {
+         leftHand.setAttribute('raycaster', 'objects', '.clickable, .projectile');
+      }
+      if (rightHand) {
+         rightHand.setAttribute('raycaster', 'objects', '.clickable, .projectile');
+      }
     });
 
     function vibrateControllers(duration = 0.4, intensity = 1.0) {
@@ -460,7 +507,8 @@
       for (let i = 0; i < count; i++) {
         const p = document.createElement('a-sphere');
         p.setAttribute('radius', 0.01 + Math.random() * 0.03);
-        p.setAttribute('color', '#FFD600');
+        // *** Use a different color for destroy particles, e.g., red/orange ***
+        p.setAttribute('color', '#FF5722');
         const theta = Math.random() * 2 * Math.PI;
         const phi = Math.acos(2 * Math.random() - 1);
         const dir = new THREE.Vector3(
