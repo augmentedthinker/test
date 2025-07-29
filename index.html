@@ -10,10 +10,16 @@
 </head>
 <body>
     <script type="importmap">
-        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
     </script>
     <script type="module">
         import * as THREE from 'three';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; // Import for controller models
 
         // --- Minimal AR Button ---
         class ARButton {
@@ -27,11 +33,18 @@
                         await renderer.xr.setSession(session);
                         button.textContent = 'STOP AR';
                         currentSession = session;
+                        if (currentSession) {
+                            setupControllers(); // Setup controllers when session starts
+                        }
                     }
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
                         currentSession = null;
+                        if (controller1) scene.remove(controller1);
+                        if (controller2) scene.remove(controller2);
+                        if (controllerGrip1) scene.remove(controllerGrip1);
+                        if (controllerGrip2) scene.remove(controllerGrip2);
                         if (screenGroup) scene.remove(screenGroup);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -64,6 +77,8 @@
 
         // --- Core Three.js Setup ---
         let camera, scene, renderer, screenGroup;
+        let controller1, controller2, controllerGrip1, controllerGrip2; // Controller variables
+        let controllerModelFactory; // Factory for controller models
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -75,6 +90,30 @@
 
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
         scene.add(light);
+
+        // --- Controller Setup ---
+        function setupControllers() {
+            // Get controller input sources
+            controller1 = renderer.xr.getController(0);
+            controller2 = renderer.xr.getController(1);
+            scene.add(controller1);
+            scene.add(controller2);
+
+            // Get controller grips (for rendering the physical controller models)
+            controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrip2 = renderer.xr.getControllerGrip(1);
+            scene.add(controllerGrip1);
+            scene.add(controllerGrip2);
+
+            // Create the factory for loading controller models
+            controllerModelFactory = new XRControllerModelFactory();
+
+            // Load and apply controller models to the grips
+            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
+            controllerGrip1.add(controllerModel1);
+            const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
+            controllerGrip2.add(controllerModel2);
+        }
 
         // --- Screen Creation Logic ---
         function createScreen() {
