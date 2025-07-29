@@ -1,6 +1,6 @@
-Okay, vibe coder! Here's a self-contained HTML file implementing a basic Breakout game on the black screen in your AR environment. It uses the left-right movement of the laser pointer (controller) to move the paddle and the controller's 'select' button to launch the ball and restart the game.
+Okay, vibe coder! I've adjusted the Breakout game code. The ball is now much slower, and instead of just moving the paddle based on the laser's X position, you can now **drag the paddle** by holding the trigger button and moving the controller.
 
-Remember to save this as an `.html` file, upload it to GitHub Pages, and test it on your Quest 2!
+Here's the updated self-contained HTML file:
 
 ```html
 <!DOCTYPE html>
@@ -8,7 +8,7 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Breakout</title>
+    <title>AR Breakout - Drag Paddle</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
         #instructions {
@@ -19,7 +19,7 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
     </style>
 </head>
 <body>
-    <div id="instructions">Move laser left/right to move paddle. Press trigger to launch/restart.</div>
+    <div id="instructions">Hold trigger and move controller to drag paddle. Release to launch/restart.</div>
     <script type="importmap">
         {
             "imports": {
@@ -99,8 +99,8 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
         let gameStarted = false;
         let gameObjectsCreated = false;
         let paddle, ball, ballVelocity, bricks = [];
-        const PADDLE_SPEED = 0.02;
-        const BALL_SPEED = 0.02;
+        // --- Adjusted Speeds ---
+        const BALL_SPEED = 0.005; // <<<<< MUCH SLOWER BALL
         const BRICK_ROWS = 4;
         const BRICK_COLS = 8;
         const BRICK_WIDTH = 0.18;
@@ -111,6 +111,11 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
         const PADDLE_HEIGHT = 0.03;
         const PADDLE_DEPTH = 0.02;
         const BALL_RADIUS = 0.02;
+
+        // --- Dragging State ---
+        let isDragging = false;
+        let dragController = null;
+        let dragOffsetX = 0; // Difference between controller X and paddle X at drag start
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -126,9 +131,11 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
             controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
@@ -142,12 +149,36 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
         }
 
         function onSelectStart(event) {
-            if (!gameStarted) {
-                launchBall();
+            const controller = event.target;
+            if (!gameStarted && !isDragging) {
+                // --- Start Dragging ---
+                const controllerWorldPos = getControllerScreenIntersection(controller);
+                if (controllerWorldPos && paddle) {
+                    // Check if the laser hits the paddle
+                    const paddleHalfWidth = PADDLE_WIDTH / 2;
+                    if (controllerWorldPos.x > paddle.position.x - paddleHalfWidth &&
+                        controllerWorldPos.x < paddle.position.x + paddleHalfWidth) {
+                        isDragging = true;
+                        dragController = controller;
+                        dragOffsetX = controllerWorldPos.x - paddle.position.x;
+                        document.getElementById('instructions').textContent = "Dragging paddle... Release to launch.";
+                    }
+                }
             } else if (ball && ballVelocity.length() === 0) {
                  // If ball is stopped (game over or level clear), restart
                  resetBall();
                  launchBall();
+            }
+        }
+
+        function onSelectEnd(event) {
+            if (isDragging && dragController === event.target) {
+                isDragging = false;
+                dragController = null;
+                dragOffsetX = 0;
+                if (!gameStarted) {
+                    launchBall();
+                }
             }
         }
 
@@ -215,7 +246,7 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
             ball.position.set(paddle.position.x, -0.3, -1.501);
             ballVelocity.set(0, 0, 0);
             gameStarted = false;
-            document.getElementById('instructions').textContent = "Press trigger to launch ball!";
+            document.getElementById('instructions').textContent = "Hold trigger and move controller to drag paddle. Release to launch.";
         }
 
         function launchBall() {
@@ -239,25 +270,46 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
              ballVelocity = null;
              gameStarted = false;
              gameObjectsCreated = false;
-             document.getElementById('instructions').textContent = "Move laser left/right to move paddle. Press trigger to launch/restart.";
+             isDragging = false;
+             dragController = null;
+             dragOffsetX = 0;
+             document.getElementById('instructions').textContent = "Hold trigger and move controller to drag paddle. Release to launch.";
         }
 
+        // --- Helper for Controller Intersection ---
+        function getControllerScreenIntersection(controller) {
+            if (!controller) return null;
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            // Intersect with an invisible plane at the paddle's Z depth
+            const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1.501); // Normal (0,0,1), distance 1.501
+            const intersection = new THREE.Vector3();
+            if (raycaster.ray.intersectPlane(plane, intersection)) {
+                return intersection;
+            }
+            return null;
+        }
 
         // --- Game Logic ---
-        function updateGame(controller1Pos, controller2Pos) {
+        function updateGame() {
             if (!gameStarted || !paddle || !ball || !ballVelocity) return;
 
-            // --- Move Paddle based on controller laser position ---
-            // Use the first available controller's X position
-            let controllerX = null;
-            if (controller1Pos) controllerX = controller1Pos.x;
-            else if (controller2Pos) controllerX = controller2Pos.x;
-
-            if (controllerX !== null) {
-                // Map controller X (-0.8 to 0.8 screen width) to paddle X (-0.65 to 0.65)
-                const clampedControllerX = Math.max(-0.8, Math.min(0.8, controllerX));
-                const mappedPaddleX = (clampedControllerX / 0.8) * 0.65;
-                paddle.position.x = mappedPaddleX;
+            // --- Handle Paddle Dragging ---
+            if (isDragging && dragController) {
+                const controllerWorldPos = getControllerScreenIntersection(dragController);
+                if (controllerWorldPos) {
+                    // Calculate new paddle X based on controller position and offset
+                    let newPaddleX = controllerWorldPos.x - dragOffsetX;
+                    // Clamp paddle to screen bounds
+                    const screenHalfWidth = 1.6 / 2 - PADDLE_WIDTH / 2;
+                    newPaddleX = Math.max(-screenHalfWidth, Math.min(screenHalfWidth, newPaddleX));
+                    paddle.position.x = newPaddleX;
+                    // If dragging before launch, move ball with paddle
+                    if (ballVelocity.length() === 0) {
+                        ball.position.x = newPaddleX;
+                    }
+                }
             }
 
             // --- Move Ball ---
@@ -279,7 +331,7 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
             }
             // Bottom - Game Over
             if (ball.position.y < -screenHalfHeight) {
-                 document.getElementById('instructions').textContent = "Game Over! Press trigger to restart.";
+                 document.getElementById('instructions').textContent = "Game Over! Hold trigger and move to drag paddle, then release to restart.";
                  ballVelocity.set(0, 0, 0); // Stop the ball
                  return; // Stop further updates
             }
@@ -335,7 +387,7 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
 
                     // Check for win
                     if (bricks.length === 0) {
-                        document.getElementById('instructions').textContent = "You Win! Press trigger to restart.";
+                        document.getElementById('instructions').textContent = "You Win! Hold trigger and move to drag paddle, then release to restart.";
                         ballVelocity.set(0, 0, 0); // Stop the ball
                         return; // Stop further updates
                     }
@@ -345,34 +397,8 @@ Remember to save this as an `.html` file, upload it to GitHub Pages, and test it
         }
 
         // --- Animation Loop ---
-        const controllerWorldPos = new THREE.Vector3();
         renderer.setAnimationLoop(() => {
-            // Get controller positions for paddle movement
-            let controller1Pos = null;
-            let controller2Pos = null;
-            if (controller1) {
-                 tempMatrix.identity().extractRotation(controller1.matrixWorld);
-                 raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-                 // Intersect with an invisible plane at the paddle's Z depth
-                 const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1.501); // Normal (0,0,1), distance 1.501
-                 const intersection = new THREE.Vector3();
-                 if (raycaster.ray.intersectPlane(plane, intersection)) {
-                     controller1Pos = intersection;
-                 }
-            }
-            if (controller2) {
-                 tempMatrix.identity().extractRotation(controller2.matrixWorld);
-                 raycaster.ray.origin.setFromMatrixPosition(controller2.matrixWorld);
-                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-                 const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1.501);
-                 const intersection = new THREE.Vector3();
-                 if (raycaster.ray.intersectPlane(plane, intersection)) {
-                     controller2Pos = intersection;
-                 }
-            }
-
-            updateGame(controller1Pos, controller2Pos);
+            updateGame(); // Pass no positions, dragging is handled internally
             renderer.render(scene, camera);
         });
 
