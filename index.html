@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Correct Rotation Collision</title>
+    <title>AR Tetris - Stacking with Orientation</title>
     <style>
         body {
             margin: 0;
@@ -26,8 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Pieces Collide Correctly on Move & Rotate</div>
-
+    <div id="info">AR Tetris - Pieces Stack with Landed Position & Rotation</div>
     <script type="importmap">
         {
             "imports": {
@@ -40,15 +39,12 @@
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-
         // --- Inlined ARButton.js (Simplified) ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
-
                 function showStartAR() {
                     let currentSession = null;
-
                     async function onSessionStarted(session) {
                         session.addEventListener('end', onSessionEnded);
                         renderer.xr.setReferenceSpaceType('local');
@@ -64,7 +60,6 @@
                             }
                         }
                     }
-
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
@@ -85,7 +80,6 @@
                         activePiece = null;
                         gameStarted = false;
                     }
-
                     button.style.cssText = `
                         position: absolute;
                         bottom: 20px;
@@ -113,7 +107,6 @@
                     button.onmouseenter = () => button.style.opacity = '1.0';
                     button.onmouseleave = () => button.style.opacity = '0.5';
                 }
-
                 function showARNotSupported() {
                     button.style.cssText = `
                         position: absolute;
@@ -132,7 +125,6 @@
                     `;
                     button.textContent = 'AR NOT SUPPORTED';
                 }
-
                 if ('xr' in navigator) {
                     navigator.xr.isSessionSupported('immersive-ar')
                         .then(supported => supported ? showStartAR() : showARNotSupported())
@@ -161,13 +153,11 @@
                 }
             }
         }
-
         // --- Main Application Logic ---
         let camera, scene, renderer;
         let controller1, controller2;
         let controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-
         // --- Controller & Laser Variables ---
         const pointers = [];
         const tempMatrix = new THREE.Matrix4();
@@ -178,20 +168,17 @@
         const GRID_HEIGHT = 20;
         const GRID_DEPTH = 1;
         const GRID_CELL_SIZE = 0.1;
-
         // --- Tetris Piece Variables ---
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000; // Can be adjusted for difficulty
-
+        const DROP_INTERVAL = 1000; // ms
         // --- Game State ---
-        // 2D array to represent the placed blocks: false = empty, {color: ...} = occupied
-        let placedBlocks = Array(GRID_WIDTH).fill().map(() => Array(GRID_HEIGHT).fill(false));
         // Store references to the Group objects representing placed pieces
         let placedPieceGroups = [];
         let gameOver = false;
-
+        // --- 2D Grid for Collision Detection ---
+        let tetrisGrid = []; // 2D array [y][x] to track occupied cells
         // --- Tetromino Definitions ---
         const TETROMINOES = {
             I: { shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: 0x00ffff },
@@ -203,46 +190,34 @@
             L: { shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: 0xff7f00 }
         };
         const TETROMINO_NAMES = Object.keys(TETROMINOES);
-
         init();
         animate();
-
         function init() {
             scene = new THREE.Scene();
-
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
-
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
-
             createGrid();
-
             const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
             light.position.set(0.5, 1, 0.25);
             scene.add(light);
-
             const dirLight = new THREE.DirectionalLight(0xffffff, 1);
             dirLight.position.set(1, 1, 1).normalize();
             scene.add(dirLight);
-
             window.addEventListener('resize', onWindowResize, false);
         }
-
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
-
         function createGrid() {
             const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
             const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
             const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
-
             const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
             const gridMaterial = new THREE.MeshBasicMaterial({
                 color: 0x00ffff,
@@ -250,110 +225,84 @@
                 transparent: true,
                 opacity: 0.5
             });
-
             grid = new THREE.Mesh(gridGeometry, gridMaterial);
             grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
             scene.add(grid);
         }
-
         function resetGame() {
-             // Clear the logical grid
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                for (let y = 0; y < GRID_HEIGHT; y++) {
-                    placedBlocks[x][y] = false;
-                }
-            }
             // Clear visual piece groups from scene
             for (let group of placedPieceGroups) {
                 scene.remove(group);
             }
             placedPieceGroups.length = 0;
-
             if (activePiece && activePiece.mesh) {
                 scene.remove(activePiece.mesh);
             }
             activePiece = null;
             gameOver = false;
             lastDropTime = 0;
+            
+            // Initialize or reset the 2D grid
+            tetrisGrid = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
+
             console.log("Game reset");
         }
 
         function gridToWorld(x, y) {
-            // Convert grid coordinates (0,0 bottom-left) to Three.js world coordinates
-            // Assumes grid is centered at (0, gridHeight/2 - 0.5, -1.5)
             const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
-            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5; // Bottom of grid is at y = -0.5
+            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5;
             const worldZ = -1.5;
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
 
-        // Helper function to rotate a 2D matrix (shape) 90 degrees clockwise
-        function rotateMatrix(matrix) {
-            const N = matrix.length;
-            const M = matrix[0].length;
-            // Create a new matrix with swapped dimensions
-            const rotated = Array(M).fill().map(() => Array(N).fill(0));
-            for (let y = 0; y < N; y++) {
-                for (let x = 0; x < M; x++) {
-                    // Rotate 90 degrees clockwise: (x,y) -> (M-1-y, x)
-                    rotated[x][N - 1 - y] = matrix[y][x];
-                }
-            }
-            return rotated;
+        function worldToGrid(worldPosition) {
+            const x = Math.floor((worldPosition.x / GRID_CELL_SIZE) + (GRID_WIDTH / 2));
+            // Adjust for grid origin offset
+            const y = Math.floor((worldPosition.y + 0.5) / GRID_CELL_SIZE);
+            return { x, y };
         }
-
 
         function createPiece(type) {
             const definition = TETROMINOES[type];
             if (!definition) return null;
-
             const group = new THREE.Group();
             const blockSize = GRID_CELL_SIZE;
-            // Slightly smaller blocks for visual separation
             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
             const blockMaterial = new THREE.MeshStandardMaterial({ color: definition.color });
-
             const shape = definition.shape;
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                        // --- Mark as interactive piece ---
+                         // --- Mark as interactive piece ---
                         block.userData = { isPiece: true };
                         // ---
-                        // Position blocks relative to the piece's origin (top-left of the shape)
                         block.position.set(
                             x * blockSize,
-                            -y * blockSize, // Invert Y so shape orientation matches grid Y+
+                            -y * blockSize, // Align shape correctly
                             0
                         );
                         group.add(block);
                     }
                 }
             }
-
-            // Position the new piece at the top center of the grid
-            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2; // Just above the grid
+            // Start piece above the visible grid
             const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
             const startPosY = GRID_HEIGHT; // Start above the grid
-
-            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Adjust for block origin
-
+            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Initial position
             return {
                 mesh: group,
                 type: type,
-                x: startPosX, // Grid-based X position
-                y: startPosY, // Grid-based Y position (top-based)
+                x: startPosX,
+                y: startPosY,
                 shape: shape
             };
         }
 
         function spawnNewPiece() {
             if (!gameStarted || gameOver) return;
-
             const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
             activePiece = createPiece(randomType);
-
             if (activePiece) {
                  // --- Mark active piece's child meshes as interactive ---
                  activePiece.mesh.traverse((child) => {
@@ -363,41 +312,43 @@
                 });
                 // ---
                 scene.add(activePiece.mesh);
-                // Check for immediate collision (game over)
+                
+                // Check for game over immediately after spawning
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
-                    // Optional: Add game over visual feedback
+                    // Optionally, trigger a visual game over state here
                 }
             }
         }
 
         // --- Updated Collision Detection ---
-        // Checks if a piece (at its current position + offset) collides with walls or placed blocks
-        // Optionally accepts a testShape to check a specific orientation (e.g., for rotation)
-        function checkCollision(piece, offsetX, offsetY, testShape = null) {
+        function checkCollision(piece, offsetX, offsetY) {
             if (!piece) return true;
-            const shapeToCheck = testShape || piece.shape; // Use provided test shape or current shape
-            // Calculate the new potential grid position
+            const shape = piece.shape;
             const newX = piece.x + offsetX;
             const newY = piece.y + offsetY;
 
-            for (let y = 0; y < shapeToCheck.length; y++) {
-                for (let x = 0; x < shapeToCheck[y].length; x++) {
-                    if (shapeToCheck[y][x]) {
-                        // Calculate the grid coordinates this block would occupy
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
                         const checkX = newX + x;
-                        const checkY = newY - y; // Convert piece Y (top-based) to grid Y (bottom-based)
+                        const checkY = newY - y; // Convert piece Y to grid Y (grid Y increases upwards)
 
-                        // 1. Check boundaries (left, right, bottom)
-                        if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
-                            return true; // Collision with wall or floor
+                        // Check boundaries
+                        if (checkX < 0 || checkX >= GRID_WIDTH || checkY >= GRID_HEIGHT) {
+                            return true; // Collision with side or top walls
+                        }
+                        
+                        // Check if it's below the grid (floor collision)
+                        if (checkY < 0) {
+                            return true;
                         }
 
-                        // 2. Check collision with placed blocks (only if within grid height)
-                        // This is the key addition for piece-to-piece collision
-                        if (checkY < GRID_HEIGHT && placedBlocks[checkX][checkY]) {
-                            return true; // Collision with another placed piece
+                        // Check collision with placed pieces in the grid
+                        // Only check if within the grid bounds vertically
+                        if (checkY < GRID_HEIGHT && tetrisGrid[checkY][checkX] !== 0) {
+                            return true;
                         }
                     }
                 }
@@ -408,56 +359,49 @@
 
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
-            // Use the updated checkCollision function
             if (!checkCollision(piece, dx, dy)) {
                 piece.x += dx;
                 piece.y += dy;
                 piece.mesh.position.x += dx * GRID_CELL_SIZE;
                 piece.mesh.position.y += dy * GRID_CELL_SIZE; // Y+ is up in Three.js
-                return true; // Move successful
+                return true;
             }
-            return false; // Move blocked by collision
+            return false;
         }
 
-        // --- New Rotation Function ---
-        function rotatePiece(piece) {
-             if (!piece || !gameStarted || gameOver) return false;
-
-             // Calculate the rotated shape
-             const rotatedShape = rotateMatrix(piece.shape);
-
-             // Check for collision with the rotated shape in the current position
-             if (!checkCollision(piece, 0, 0, rotatedShape)) {
-                 // No collision, update the piece's shape and visually rotate the mesh
-                 piece.shape = rotatedShape;
-                 piece.mesh.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians) visually
-                 console.log("Piece rotated successfully");
-                 return true; // Rotation successful
-             } else {
-                 console.log("Rotation blocked by collision");
-                 return false; // Rotation blocked
-             }
-        }
-        // --- End New Rotation Function ---
-
-
+        // --- Updated Place Piece Logic ---
         function placePiece(piece) {
             if (!piece || gameOver) return;
+            
+            // Update the 2D grid with the piece's final position
             const shape = piece.shape;
-            const color = TETROMINOES[piece.type].color;
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const gridX = piece.x + x;
+                        const gridY = piece.y - y; // Convert to grid coordinates
+                        
+                        // Safety check to prevent out-of-bounds writes
+                        if (gridY >= 0 && gridY < GRID_HEIGHT && gridX >= 0 && gridX < GRID_WIDTH) {
+                            tetrisGrid[gridY][gridX] = 1; // Mark cell as occupied
+                        }
+                    }
+                }
+            }
 
-            // --- Create a new Group to hold the blocks in their current landed orientation ---
+            // --- Create a new Group to hold the blocks in their current orientation ---
             const landedPieceGroup = new THREE.Group();
-
-            // Copy the final position and rotation of the active piece's mesh
+            const color = TETROMINOES[piece.type].color;
+            
+            // Copy the position and rotation of the active piece's mesh
             landedPieceGroup.position.copy(piece.mesh.position);
             landedPieceGroup.quaternion.copy(piece.mesh.quaternion); // Copy rotation
-
+            
             // Add the individual block meshes as children to this new group
             const blockSize = GRID_CELL_SIZE;
             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
             const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
-
+            
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
@@ -469,36 +413,24 @@
                             -y * blockSize,
                             0
                         );
-                        // Mark as interactive (optional, for future interactions with placed pieces)
+                        // Mark as interactive
                         blockMesh.userData = { isPiece: true };
                         landedPieceGroup.add(blockMesh);
-
-                        // --- Update the logical grid ---
-                        // Calculate the grid coordinates for this block
-                        const gridX = piece.x + x;
-                        const gridY = piece.y - y; // Convert to grid Y
-
-                        // Only update the grid if the block is within bounds
-                        if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                            // Store the block's data in the grid
-                            placedBlocks[gridX][gridY] = { color: color };
-                        }
-                        // ---
                     }
                 }
             }
-
+            
             // Add the new group (representing the placed piece) to the scene and our tracking array
             scene.add(landedPieceGroup);
             placedPieceGroups.push(landedPieceGroup);
             // ---
-
+            
             // Remove the active piece's mesh from the scene
             scene.remove(piece.mesh);
             activePiece = null;
             console.log(`Piece placed and stacked with orientation.`);
         }
-
+        // --- End Updated Place Piece Logic ---
 
         // --- Controller & Laser Functions ---
         function setupControllers() {
@@ -506,32 +438,24 @@
             controller1.addEventListener('selectstart', onSelectStart);
             controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
-
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
             controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
-
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
-
             controllerGrip2 = renderer.xr.getControllerGrip(1);
             scene.add(controllerGrip2);
-
             controllerModelFactory = new XRControllerModelFactory();
-
             const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
-
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-
             // --- Setup Laser Pointers ---
             setupLaserPointer(controller1, 0);
             setupLaserPointer(controller2, 1);
             // ---
         }
-
         function setupLaserPointer(controller, index) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
@@ -545,22 +469,18 @@
             const line = new THREE.Line(geometry, material);
             line.scale.z = 5;
             line.visible = false;
-
             const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
             const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
             const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
             hitPoint.visible = false;
-
             controller.add(line);
             controller.add(hitPoint);
-
             pointers[index] = {
                 controller: controller,
                 line: line,
                 hitPoint: hitPoint,
                 isSelecting: false
             };
-
             controller.addEventListener('connected', function () {
                  line.visible = true;
             });
@@ -569,7 +489,6 @@
                 hitPoint.visible = false;
             });
         }
-
         function onSelectStart(event) {
             const controller = event.target;
             const index = controller === controller1 ? 0 : 1;
@@ -579,7 +498,6 @@
             // Check for piece interaction on Select Start
             checkAndInteract(controller);
         }
-
         function onSelectEnd(event) {
             const controller = event.target;
             const index = controller === controller1 ? 0 : 1;
@@ -587,31 +505,37 @@
                 pointers[index].isSelecting = false;
             }
         }
-
-        // --- Updated Interaction to use rotatePiece ---
         function checkAndInteract(controller) {
              tempMatrix.identity().extractRotation(controller.matrixWorld);
              raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
              raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
              // Check intersection with all objects in the scene
              const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
-
              // Find the first intersected object that is a piece
              for (let i = 0; i < intersects.length; i++) {
                  const object = intersects[i].object;
                  if (object.userData && object.userData.isPiece) {
-                     // --- Use the new rotatePiece function ---
-                     if (activePiece) {
-                         rotatePiece(activePiece); // Attempt to rotate the active falling piece
+                     // --- Rotate the piece 90 degrees around its local Z-axis ---
+                     // Find the root piece group (the parent Group of the block mesh)
+                     let pieceGroup = object;
+                     while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
+                         pieceGroup = pieceGroup.parent;
+                     }
+                     if (pieceGroup) {
+                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
+                         console.log("Piece rotated");
+                     } else {
+                         // If it's a placed block (not in a group, though unlikely if grouped correctly),
+                         // or a block directly under the scene, rotate the block itself.
+                         // This case is less likely now with grouping, but kept for robustness.
+                         object.rotateZ(Math.PI / 2);
+                         console.log("Block rotated");
                      }
                      // ---
                      break; // Only interact with the first hit piece
                  }
              }
         }
-         // --- End Updated Interaction ---
-
         function updateLasers() {
             for (let i = 0; i < pointers.length; i++) {
                 const pointer = pointers[i];
@@ -619,7 +543,6 @@
                 tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
                 raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
                 // Optional: Check for intersection with the grid or other specific objects
                 // For now, lasers just extend out
                 pointer.line.scale.z = 5;
@@ -627,29 +550,30 @@
             }
         }
         // --- End Controller & Laser Functions ---
-
         function animate() {
             renderer.setAnimationLoop(render);
         }
-
         function render() {
             // Update laser pointers every frame
             updateLasers();
-
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
                     // Try to move the piece down
                     const moved = movePiece(activePiece, 0, -1);
                     if (!moved) {
-                        // If it couldn't move down, it has landed (on floor or another piece)
+                        // If it couldn't move down, it has landed
                         placePiece(activePiece);
-                        spawnNewPiece(); // Spawn the next piece
+                        spawnNewPiece();
+                        // Check for game over after spawning a new piece
+                        if (gameOver) {
+                             console.log("Game Over triggered after spawn!");
+                             // Optionally add visual feedback here
+                        }
                     }
                     lastDropTime = currentTime;
                 }
             }
-
             renderer.render(scene, camera);
         }
     </script>
