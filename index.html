@@ -3,59 +3,264 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Joystick & Click</title>
+    <title>AR Tetris - Gameboy Edition</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(to bottom, #1a1a2e, #16213e);
-            color: #e6e6e6;
+            font-family: sans-serif;
+            background-color: #f0f0f0; /* Light gray background for the page */
             overflow: hidden;
             height: 100vh;
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
+            align-items: center;
         }
-        #uiContainer {
+
+        /* --- Embedded Pixelated Font (Press Start 2P) --- */
+        @font-face {
+            font-family: 'PressStart2P';
+            src: url(data:font/woff2;base64,d09GMgABAAAAAALcAA4AAAAAB4AAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAABGRlRNAAABbAAAABwAAAAckWgcMUdERUYAAAGIAAAAKQAAACoDMQPhR1BPUwAAAbQAAAAyAAAAQCOcJJ9HU1VCAAAB6AAAFdoAAFjia0Q2qU9TLzIAABcMAAAAVgAAAGCG9A+SY21hcAAAF0AAAAIYAAADHslFYohjdnQgAAAZoAAAAAQAAAAEACQCuWdhc3AAABm0AAAACAAAAAj//wADZ2x5ZgAAGcQAADQFAAA8VKtX8IxoZWFkAABHFAAANgwAADM2v4oE52hoZWEAAEz0AAAAIQAAACQH3QOeaG10eAAATRgAAAHqAAAD4C4PAEhsb2NhAABQOAAAAvAAAAMiRN8Tzm1heHAAAFK0AAAAIAAAACAB0QC4bmFtZQAATRQAAAFxAAAB5uR6K81wb3N0AABOeAAAACgAAAA6nLlLh3jaY2BkYGAAYtGolt7x/DZfGbhZGEDg1t63B+j/2P8x/P8PZGbgAIlCAAKMD6oAAHjaY2BkYGBu+N/AEMPCAALMBxgYGVABCwBZ4wNrAAAAeNpjYGRgYGBn0GZgYgABEMnIABJzAAc2AAYAAAAAAAB42mNgZGBgYGWQY2BmAAEmIOYCQgaG/2A+AwAPIgY1AHjaY2BkYWCcwMDKwMLSw2LMwMDQBqGZihjTGQoYuBlYGJ4w/P8PUpoCVMwI18zA/B9kLgA1DQj6AAB42mNgZGBg4GBwY2BiAAEmIOYCQgaG/2A+A4ACdgDvAHjaY2BgYGaAYBkGRgYQSAHyGMF8FgYPIM3HwMHAxMDGoMCwmmM1UBlTJZDlDlLLBqSZgRKMLAwapkD1QA5QjB0kA1LLBtICAO9tCQ4AeNpjYGBgZoBgGQZWBhZQwP9/OkQCxH8F5DMACTaAAAB42mNhhQKmWUCcwsDA4MOQxBBQlZ9XkplflFqWWlDEkMBQll9UkJqikJtYkqqQmJevkJZflFqkADGZmYGBUQ4ozgKkORmYgUIgOQYAQFcKZgAAAHjaY2BgYGaAYBkGRgYQkAHyGMF8FgYPoExSfklqkGteSWpRsgJQTVF+aVFyUWZBOgMAWZcK8wAAAA==) format('woff2');
+            font-weight: normal;
+            font-style: normal;
+        }
+        /* --- End Embedded Font --- */
+
+
+        #gameboy {
+            width: 100%;
+            max-width: 900px; /* Adjust width as needed */
+            height: 90vh; /* Adjust height as needed */
+            background-color: #d3d3d3; /* Light gray */
+            border: 3px solid #a0a0a0; /* Darker gray border */
+            border-radius: 10px;
+            padding: 20px 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+            position: relative;
+            font-family: 'PressStart2P', 'Courier New', monospace;
+            font-size: 8px; /* Base small size for pixel effect */
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        #screen-area {
+            background-color: #8bac0f; /* Gameboy screen green */
+            border: 3px solid #0f380f; /* Darker green border */
+            border-radius: 5px;
+            padding: 10px;
+            margin-bottom: 15px;
+            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.5);
+            flex-grow: 1; /* Takes up available space */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            overflow: hidden;
+            position: relative; /* To position the AR view inside */
+        }
+
+        #logo {
+            color: #0f380f;
+            font-size: 1.2em;
+            margin-bottom: 5px;
+            text-shadow: 1px 1px 1px rgba(255, 255, 255, 0.5);
+            z-index: 10; /* Above the AR view */
+        }
+
+        #ar-container {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
-            padding: 15px 0;
-            text-align: center;
-            z-index: 100;
-            background: rgba(0, 0, 0, 0.4);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            height: 100%;
+            border-radius: 3px; /* Match inner screen border */
+            overflow: hidden; /* Ensure AR view stays within bounds */
         }
-        #title {
-            font-size: 1.8em;
+
+        #controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding: 0 10px;
+            box-sizing: border-box;
+        }
+
+        #d-pad {
+            width: 100px;
+            height: 100px;
+            position: relative;
+        }
+
+        .dpad-button {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #333;
+            border: 2px solid #000;
+            box-shadow: 0 2px 0 #000;
+        }
+
+        #up { top: 0; left: 35px; border-radius: 5px 5px 0 0; }
+        #down { bottom: 0; left: 35px; border-radius: 0 0 5px 5px; }
+        #left { top: 35px; left: 0; border-radius: 5px 0 0 5px; }
+        #right { top: 35px; right: 0; border-radius: 0 5px 5px 0; }
+
+        #action-buttons {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            margin-right: 10px;
+        }
+
+        .action-row {
+            display: flex;
+            margin-bottom: 15px;
+        }
+
+        .action-button {
+            width: 35px;
+            height: 35px;
+            background-color: #e10707; /* Gameboy red */
+            border: 2px solid #8a0000; /* Darker red border */
+            border-radius: 50%;
+            box-shadow: 0 2px 0 #8a0000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
             font-weight: bold;
-            margin-bottom: 5px;
-            color: #4dccff;
-            text-shadow: 0 0 8px rgba(77, 204, 255, 0.7);
+            font-size: 0.7em;
+            margin: 0 5px;
+            cursor: pointer;
+            user-select: none;
         }
-        #instructions {
-            font-size: 0.9em;
-            max-width: 80%;
-            margin: 10px auto 0;
-            color: #cccccc;
+        .action-button:active {
+             transform: translateY(2px);
+             box-shadow: 0 0 0 #8a0000;
         }
-        #status {
-            margin-top: 8px;
-            font-style: italic;
-            color: #ff9999;
-            height: 1.2em; /* Reserve space */
+
+        #start-select {
+            display: flex;
+            justify-content: center;
+            width: 100%;
+            margin-top: 10px;
         }
+
+        .system-button {
+            width: 50px;
+            height: 15px;
+            background-color: #555;
+            border: 2px solid #222;
+            border-radius: 8px;
+            box-shadow: 0 2px 0 #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: #ccc;
+            font-size: 0.5em;
+            margin: 0 10px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .system-button:active {
+             transform: translateY(2px);
+             box-shadow: 0 0 0 #222;
+        }
+
+        #branding {
+            position: absolute;
+            bottom: 5px;
+            right: 10px;
+            font-size: 0.6em;
+            color: #888;
+        }
+
+        /* --- AR Button Styling to match Gameboy UI --- */
+        #ar-button-container {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+        }
+        #ar-button {
+            width: 100px;
+            padding: 12px 6px;
+            border: 2px solid #000;
+            border-radius: 4px;
+            background: #e10707; /* Red like B button */
+            color: white;
+            font-family: 'PressStart2P', 'Courier New', monospace;
+            font-size: 8px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 3px 0 #8a0000;
+        }
+        #ar-button:hover {
+            background: #ff3333;
+        }
+        #ar-button:active {
+            transform: translateY(3px);
+            box-shadow: 0 0 0 #8a0000;
+        }
+        #ar-not-supported {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            padding: 12px 6px;
+            border: 2px solid #000;
+            border-radius: 4px;
+            background: #555;
+            color: #ccc;
+            font-family: 'PressStart2P', 'Courier New', monospace;
+            font-size: 8px;
+            text-align: center;
+            z-index: 1000;
+        }
+
     </style>
 </head>
 <body>
-    <div id="uiContainer">
-        <div id="title">AR Tetris - Joystick & Click</div>
-        <div id="instructions">Joystick: Move Piece. A/X Button: Rotate. B/Y Button: Soft Drop</div>
-        <div id="status"></div>
+
+    <div id="gameboy">
+        <div id="screen-area">
+            <div id="logo">AR TETRIS</div>
+            <div id="ar-container">
+                <!-- The Three.js renderer will be placed here -->
+            </div>
+        </div>
+
+        <div id="controls">
+            <div id="d-pad">
+                <div class="dpad-button" id="up"></div>
+                <div class="dpad-button" id="down"></div>
+                <div class="dpad-button" id="left"></div>
+                <div class="dpad-button" id="right"></div>
+            </div>
+
+            <div id="action-buttons">
+                <div class="action-row">
+                    <div class="action-button" id="B">B</div>
+                    <div class="action-button" id="A">A</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="start-select">
+            <div class="system-button" id="select">SELECT</div>
+            <div class="system-button" id="start">START</div>
+        </div>
+
+        <div id="branding">Vibe Coder</div>
     </div>
+
+    <!-- AR Button will be inserted here by the script -->
+    <div id="ar-button-container"></div>
 
     <script type="importmap">
         {
@@ -65,15 +270,17 @@
             }
         }
     </script>
-
     <script type="module">
         import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- Inlined ARButton.js (Simplified) ---
+        // --- Inlined ARButton.js (Simplified and Customized) ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
+                button.id = 'ar-button'; // Add ID for styling
+
                 function showStartAR() {
                     let currentSession = null;
                     async function onSessionStarted(session) {
@@ -88,7 +295,6 @@
                                 gameStarted = true;
                                 resetGame();
                                 spawnNewPiece();
-                                updateStatus("Game Started!");
                             }
                         }
                     }
@@ -96,41 +302,20 @@
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
                         currentSession = null;
-                        // Cleanup
                         if (controller1) scene.remove(controller1);
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        if (controllerModel1) controllerGrip1.remove(controllerModel1);
-                        if (controllerModel2) controllerGrip2.remove(controllerModel2);
-                        controllers.length = 0;
-                        if (gridHelper) scene.remove(gridHelper);
+                        pointers.length = 0;
+                        if (grid) scene.remove(grid);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
-                        for (let group of placedPieces) {
+                        for (let group of placedPieceGroups) {
                             scene.remove(group);
                         }
-                        placedPieces.length = 0;
+                        placedPieceGroups.length = 0;
                         activePiece = null;
                         gameStarted = false;
-                        gameOver = false;
-                        updateStatus("");
                     }
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 50px);
-                        width: 100px;
-                        padding: 12px 6px;
-                        border: 1px solid #4dccff;
-                        border-radius: 4px;
-                        background: rgba(20, 30, 48, 0.7);
-                        color: #4dccff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        cursor: pointer;
-                        z-index: 999;
-                        box-shadow: 0 0 8px rgba(77, 204, 255, 0.5);
-                    `;
                     button.textContent = 'START AR';
                     button.onclick = function () {
                         if (currentSession === null) {
@@ -141,82 +326,45 @@
                     };
                 }
                 function showARNotSupported() {
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 75px);
-                        width: 150px;
-                        padding: 12px 6px;
-                        border: 1px solid #ff6666;
-                        border-radius: 4px;
-                        background: rgba(30, 20, 20, 0.7);
-                        color: #ff9999;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        z-index: 999;
-                    `;
-                    button.textContent = 'AR NOT SUPPORTED';
+                    const message = document.createElement('div');
+                    message.id = 'ar-not-supported'; // Add ID for styling
+                    message.textContent = 'AR NOT SUPPORTED';
+                    document.getElementById('ar-button-container').appendChild(message);
                 }
                 if ('xr' in navigator) {
                     navigator.xr.isSessionSupported('immersive-ar')
                         .then(supported => supported ? showStartAR() : showARNotSupported())
                         .catch(showARNotSupported);
-                    return button;
                 } else {
                     const message = document.createElement('div');
-                    message.innerHTML = 'WEBXR NOT AVAILABLE';
-                    message.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 90px);
-                        width: 180px;
-                        padding: 12px 6px;
-                        border: 1px solid #ff6666;
-                        border-radius: 4px;
-                        background: rgba(30, 20, 20, 0.7);
-                        color: #ff9999;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        z-index: 999;
-                    `;
-                    return message;
+                    message.id = 'ar-not-supported';
+                    message.textContent = 'WEBXR NOT AVAILABLE';
+                    document.getElementById('ar-button-container').appendChild(message);
                 }
+                return button;
             }
         }
 
         // --- Main Application Logic ---
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
-        let controllerModel1, controllerModel2;
-        const controllers = []; // Store controller data
+        const pointers = [];
         const tempMatrix = new THREE.Matrix4();
-        const tempVector = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
 
-        // --- Tetris Grid Variables ---
+        let grid;
         const GRID_WIDTH = 10;
         const GRID_HEIGHT = 20;
         const GRID_DEPTH = 1;
-        const GRID_CELL_SIZE = 0.08;
-        let gridState = []; // 2D array to track occupied cells [y][x]
-        let gridHelper = null;
+        const GRID_CELL_SIZE = 0.1;
 
-        // --- Tetris Piece Variables ---
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000; // ms
-        let placedPieces = []; // Store Group objects for placed pieces
+        const DROP_INTERVAL = 1000;
+        let placedPieceGroups = [];
         let gameOver = false;
 
-        // --- UI Elements ---
-        const statusElement = document.getElementById('status');
-
-        function updateStatus(message) {
-            statusElement.textContent = message;
-        }
-
-        // --- Tetromino Definitions ---
         const TETROMINOES = {
             I: { shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: 0x00ffff },
             O: { shape: [[1, 1], [1, 1]], color: 0xffff00 },
@@ -228,34 +376,25 @@
         };
         const TETROMINO_NAMES = Object.keys(TETROMINOES);
 
-        // --- Input State ---
-        const inputState = {
-            left: false,
-            right: false,
-            down: false,
-            rotate: false,
-            softDrop: false
-        };
-        let lastMoveTime = 0;
-        const MOVE_INTERVAL = 100; // ms for joystick repeat
-
         init();
         animate();
 
         function init() {
+            // Create scene, camera, and renderer
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0c0c1a);
+            scene.background = new THREE.Color(0x0c0c1a); // Dark blue background for AR
 
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
-            renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
-            document.body.appendChild(renderer.domElement);
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+            // Append renderer to the AR container inside the Gameboy UI
+            document.getElementById('ar-container').appendChild(renderer.domElement);
+
+            // Append the custom AR button to its container
+            document.getElementById('ar-button-container').appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
             createGrid();
 
@@ -277,6 +416,7 @@
         }
 
         function onWindowResize() {
+            // Update camera and renderer on window resize
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -287,40 +427,31 @@
             const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
             const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
 
-            const gridHelperGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
-            const gridHelperMaterial = new THREE.MeshBasicMaterial({
+            const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
+            const gridMaterial = new THREE.MeshBasicMaterial({
                 color: 0x22aaff,
                 wireframe: true,
                 transparent: true,
                 opacity: 0.3
             });
-            gridHelper = new THREE.Mesh(gridHelperGeometry, gridHelperMaterial);
-            gridHelper.position.set(0, gridHeight / 2 - 0.5, -1.2);
-            scene.add(gridHelper);
-
-            gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
+            grid = new THREE.Mesh(gridGeometry, gridMaterial);
+            grid.position.set(0, gridHeight / 2 - 0.5, -1.2);
+            scene.add(grid);
         }
 
         function resetGame() {
-            for (let group of placedPieces) {
+            for (let group of placedPieceGroups) {
                 scene.remove(group);
             }
-            placedPieces.length = 0;
+            placedPieceGroups.length = 0;
 
             if (activePiece && activePiece.mesh) {
                 scene.remove(activePiece.mesh);
             }
             activePiece = null;
 
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                for (let x = 0; x < GRID_WIDTH; x++) {
-                    gridState[y][x] = 0;
-                }
-            }
-
             gameOver = false;
             lastDropTime = 0;
-            lastMoveTime = 0;
             console.log("Game reset");
         }
 
@@ -377,7 +508,7 @@
 
         function spawnNewPiece() {
             if (!gameStarted || gameOver) return;
-            const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
+            const randomType = TETROMINOES[Math.floor(Math.random() * TETROMINOES.length)];
             activePiece = createPiece(randomType);
             if (activePiece) {
                 activePiece.mesh.traverse((child) => {
@@ -389,7 +520,6 @@
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
-                    updateStatus("Game Over! Restart AR session.");
                 }
             }
         }
@@ -409,9 +539,7 @@
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
                             return true;
                         }
-                        if (checkY < GRID_HEIGHT && gridState[checkY][checkX]) {
-                            return true;
-                        }
+                        // Note: Piece-piece collision not implemented in this base version
                     }
                 }
             }
@@ -430,61 +558,15 @@
             return false;
         }
 
-        function rotatePiece(piece) {
-             if (!piece || !gameStarted || gameOver) return;
-             // --- Rotation Logic ---
-             // Store the original shape and position
-             const originalShape = piece.shape;
-             const originalX = piece.x;
-             // Create a new, rotated shape matrix (90 degrees clockwise)
-             const newShape = [];
-             const height = originalShape.length;
-             const width = originalShape[0].length;
-             for (let x = 0; x < width; x++) {
-                 const newRow = [];
-                 for (let y = height - 1; y >= 0; y--) {
-                     newRow.push(originalShape[y][x]);
-                 }
-                 newShape.push(newRow);
-             }
-             // Temporarily update the piece's shape to test collision
-             piece.shape = newShape;
-             // --- Wall Kick Attempt ---
-             // Simple wall kick: try shifting left/right if initial rotation causes collision
-             let kickSuccess = false;
-             const kickOffsets = [0, -1, 1, -2, 2]; // Try no shift, left 1, right 1, etc.
-             for (let offset of kickOffsets) {
-                 if (!checkCollision(piece, offset, 0)) {
-                     // Valid rotation with kick
-                     piece.x += offset;
-                     piece.mesh.position.x += offset * GRID_CELL_SIZE;
-                     kickSuccess = true;
-                     break;
-                 }
-             }
-             if (!kickSuccess) {
-                 // Revert to original shape and position if no kick worked
-                 piece.shape = originalShape;
-                 piece.x = originalX;
-             }
-             // ---
-             // If rotation (with or without kick) was successful, update the mesh visually
-             if (kickSuccess) {
-                 // Rotate the mesh group itself
-                 piece.mesh.rotateZ(-Math.PI / 2); // Negative because Three.js Z is towards viewer
-             }
-        }
-
-
-        function lockPiece(piece) {
+        function placePiece(piece) {
             if (!piece || gameOver) return;
 
-            const shape = piece.shape;
-            const blockSize = GRID_CELL_SIZE;
             const landedPieceGroup = new THREE.Group();
             landedPieceGroup.position.copy(piece.mesh.position);
             landedPieceGroup.quaternion.copy(piece.mesh.quaternion);
 
+            const shape = piece.shape;
+            const blockSize = GRID_CELL_SIZE;
             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 0.9, blockSize * 0.9);
             const blockMaterial = new THREE.MeshStandardMaterial({
                 color: TETROMINOES[piece.type].color,
@@ -505,120 +587,26 @@
                             0
                         );
                         landedPieceGroup.add(blockMesh);
-
-                        const gridX = piece.x + x;
-                        const gridY = piece.y - y;
-                        if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                            gridState[gridY][gridX] = 1;
-                        }
                     }
                 }
             }
 
             scene.add(landedPieceGroup);
-            placedPieces.push(landedPieceGroup);
+            placedPieceGroups.push(landedPieceGroup);
             scene.remove(piece.mesh);
             activePiece = null;
-
-            checkLineClears();
-            console.log("Piece locked and stacked with orientation.");
+            console.log("Piece placed and stacked with orientation.");
         }
 
-        function checkLineClears() {
-             // Simplified line clear check, same as before
-             let linesToClear = [];
-             for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
-                 let isLineFull = true;
-                 for (let x = 0; x < GRID_WIDTH; x++) {
-                     if (gridState[y][x] === 0) {
-                         isLineFull = false;
-                         break;
-                     }
-                 }
-                 if (isLineFull) {
-                     linesToClear.push(y);
-                 }
-             }
-
-             if (linesToClear.length > 0) {
-                 // Clear lines from bottom up
-                 for (let lineY of linesToClear) {
-                     clearLine(lineY);
-                 }
-                 // Shift lines down for all cleared lines
-                 for (let lineY of linesToClear.sort((a,b)=>a-b)) { // Process from top down
-                     shiftLinesDown(lineY);
-                 }
-                 console.log(`Cleared ${linesToClear.length} line(s)!`);
-             }
-        }
-
-        function clearLine(lineY) {
-            for (let i = placedPieces.length - 1; i >= 0; i--) {
-                const group = placedPieces[i];
-                const groupWorldPos = new THREE.Vector3();
-                group.getWorldPosition(groupWorldPos);
-                const worldLineY = gridToWorld(0, lineY).y;
-
-                for (let j = group.children.length - 1; j >= 0; j--) {
-                    const block = group.children[j];
-                    const blockWorldPos = new THREE.Vector3();
-                    block.getWorldPosition(blockWorldPos);
-                    if (Math.abs(blockWorldPos.y - worldLineY) < GRID_CELL_SIZE / 2) {
-                        group.remove(block);
-                        const gridX = Math.round((blockWorldPos.x - groupWorldPos.x) / GRID_CELL_SIZE + (GRID_WIDTH / 2 - 0.5));
-                        gridState[lineY][gridX] = 0;
-                    }
-                }
-                if (group.children.length === 0) {
-                    scene.remove(group);
-                    placedPieces.splice(i, 1);
-                }
-            }
-        }
-
-        function shiftLinesDown(startY) {
-            // Shift gridState data down
-            for (let y = startY; y > 0; y--) {
-                for (let x = 0; x < GRID_WIDTH; x++) {
-                    gridState[y][x] = gridState[y-1][x];
-                }
-            }
-            for (let x = 0; x < GRID_WIDTH; x++) {
-                gridState[0][x] = 0;
-            }
-
-            // Shift visual pieces down
-            for (let group of placedPieces) {
-                const groupWorldPos = new THREE.Vector3();
-                group.getWorldPosition(groupWorldPos);
-                const worldStartY = gridToWorld(0, startY).y;
-
-                let needsShift = false;
-                for (let block of group.children) {
-                    const blockWorldPos = new THREE.Vector3();
-                    block.getWorldPosition(blockWorldPos);
-                    if (blockWorldPos.y > worldStartY + GRID_CELL_SIZE / 2) {
-                         needsShift = true;
-                         break;
-                    }
-                }
-                if (needsShift) {
-                     group.position.y -= GRID_CELL_SIZE;
-                }
-            }
-        }
-
-        // --- Controller & Interaction Functions ---
+        // --- Controller & Laser Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('connected', onControllerConnected);
-            controller1.addEventListener('disconnected', onControllerDisconnected);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
-
             controller2 = renderer.xr.getController(1);
-            controller2.addEventListener('connected', onControllerConnected);
-            controller2.addEventListener('disconnected', onControllerDisconnected);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -627,155 +615,100 @@
             scene.add(controllerGrip2);
 
             const controllerModelFactory = new XRControllerModelFactory();
-            controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
+            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
-            controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
+            const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
+
+            setupLaserPointer(controller1, 0);
+            setupLaserPointer(controller2, 1);
         }
 
-        function onControllerConnected(event) {
-             const controller = event.target;
-             const index = controllers.length;
-             const data = {
-                 controller: controller,
-                 gamepad: null // Will be set in updateControllerInput
-             };
-             controllers.push(data);
-             console.log(`Controller ${index} connected.`);
+        function setupLaserPointer(controller, index) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3));
+            const material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true
+            });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 5;
+            line.visible = false;
+            controller.add(line);
+
+            pointers[index] = { controller: controller, line: line };
+            controller.addEventListener('connected', () => line.visible = true);
+            controller.addEventListener('disconnected', () => line.visible = false);
         }
 
-        function onControllerDisconnected(event) {
-             const controller = event.target;
-             const index = controllers.findIndex(c => c.controller === controller);
-             if (index !== -1) {
-                 controllers.splice(index, 1);
-                 console.log(`Controller ${index} disconnected.`);
-             }
+        function onSelectStart(event) {
+            const controller = event.target;
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = true;
+            }
+            checkAndInteract(controller);
         }
 
-        function updateControllerInput() {
-            if (!gameStarted || gameOver) return;
-
-            for (let i = 0; i < controllers.length; i++) {
-                const controllerData = controllers[i];
-                const controller = controllerData.controller;
-                const inputSource = controller.xrInputSource; // Get the XRInputSource
-
-                if (inputSource && inputSource.gamepad) {
-                    const gamepad = inputSource.gamepad;
-                    controllerData.gamepad = gamepad; // Store for potential future use
-
-                    // --- Joystick Movement ---
-                    const axes = gamepad.axes;
-                    if (axes.length >= 2) {
-                        const xAxis = axes[0]; // Left/Right
-                        const yAxis = axes[1]; // Forward/Back (Up/Down in our case)
-
-                        // Horizontal movement (Left Stick X)
-                        if (xAxis < -0.5) { // Left
-                            inputState.left = true;
-                        } else if (xAxis > 0.5) { // Right
-                            inputState.right = true;
-                        } else {
-                            // Reset if stick is centered
-                            if (Math.abs(xAxis) < 0.2) {
-                                inputState.left = false;
-                                inputState.right = false;
-                            }
-                        }
-
-                        // Vertical movement (Left Stick Y - inverted)
-                        if (yAxis > 0.5) { // Down (pushing stick down)
-                            inputState.down = true;
-                        } else {
-                            // Reset if stick is centered
-                            if (Math.abs(yAxis) < 0.2) {
-                                inputState.down = false;
-                            }
-                        }
-                    }
-
-                    // --- Button Actions ---
-                    const buttons = gamepad.buttons;
-                    if (buttons.length >= 2) {
-                        // A/X Button (index 0) - Rotate
-                        if (buttons[0] && buttons[0].pressed && !controllerData.wasRotatePressed) {
-                            inputState.rotate = true;
-                            controllerData.wasRotatePressed = true; // Debounce
-                        } else if (buttons[0] && !buttons[0].pressed) {
-                             controllerData.wasRotatePressed = false;
-                        }
-
-                        // B/Y Button (index 1) - Soft Drop
-                        if (buttons[1] && buttons[1].pressed && !controllerData.wasSoftDropPressed) {
-                            inputState.softDrop = true;
-                            controllerData.wasSoftDropPressed = true; // Debounce
-                        } else if (buttons[1] && !buttons[1].pressed) {
-                             controllerData.wasSoftDropPressed = false;
-                        }
-                    }
-                }
+        function onSelectEnd(event) {
+            const controller = event.target;
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = false;
             }
         }
 
-        // --- End Controller & Interaction Functions ---
-
-        function processInput() {
-             if (!gameStarted || gameOver || !activePiece) return;
-
-             const currentTime = performance.now();
-             let moved = false;
-
-             // --- Process Movement Inputs ---
-             if (currentTime - lastMoveTime > MOVE_INTERVAL) {
-                  if (inputState.left) {
-                      moved = movePiece(activePiece, -1, 0) || moved;
-                  }
-                  if (inputState.right) {
-                      moved = movePiece(activePiece, 1, 0) || moved;
-                  }
-                  if (inputState.down) {
-                      moved = movePiece(activePiece, 0, -1) || moved;
-                  }
-                  if (moved) {
-                      lastMoveTime = currentTime;
-                  }
-             }
-
-             // --- Process Action Inputs ---
-             if (inputState.rotate) {
-                 rotatePiece(activePiece);
-                 inputState.rotate = false; // Consume the input
-             }
-             if (inputState.softDrop) {
-                 // Move piece down immediately
-                 const movedDown = movePiece(activePiece, 0, -1);
-                 if (!movedDown) {
-                     lockPiece(activePiece);
-                     spawnNewPiece();
-                     // Reset drop timer to prevent double drop
-                     lastDropTime = currentTime;
+        function checkAndInteract(controller) {
+             tempMatrix.identity().extractRotation(controller.matrixWorld);
+             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+             const intersects = raycaster.intersectObjects(scene.children, true);
+             for (let i = 0; i < intersects.length; i++) {
+                 const object = intersects[i].object;
+                 if (object.userData && object.userData.isPiece) {
+                     let pieceGroup = object;
+                     while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
+                         pieceGroup = pieceGroup.parent;
+                     }
+                     if (pieceGroup) {
+                         pieceGroup.rotateZ(Math.PI / 2);
+                         console.log("Piece rotated");
+                     } else {
+                         object.rotateZ(Math.PI / 2);
+                         console.log("Block rotated");
+                     }
+                     break;
                  }
-                 inputState.softDrop = false; // Consume the input
              }
         }
 
+        function updateLasers() {
+            for (let i = 0; i < pointers.length; i++) {
+                const pointer = pointers[i];
+                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
+                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
+                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
+                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+                pointer.line.scale.z = 5;
+            }
+        }
+        // --- End Controller & Laser Functions ---
 
         function animate() {
             renderer.setAnimationLoop(render);
         }
 
         function render() {
-            updateControllerInput(); // Read controller state
-            processInput(); // Apply inputs to game logic
-
+            updateLasers();
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
-                // Normal auto-drop logic (can be overridden by soft drop)
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
                     const moved = movePiece(activePiece, 0, -1);
                     if (!moved) {
-                        lockPiece(activePiece);
+                        placePiece(activePiece);
                         spawnNewPiece();
                     }
                     lastDropTime = currentTime;
@@ -783,6 +716,91 @@
             }
             renderer.render(scene, camera);
         }
+
+        // --- Gameboy Button Interactions (Placeholder Logic) ---
+        // These currently just provide visual feedback and log to console.
+        // You can expand them to control game state (e.g., pause, rotate active piece).
+
+        document.querySelectorAll('.action-button, .system-button').forEach(button => {
+            button.addEventListener('click', function() {
+                const originalColor = this.style.backgroundColor;
+                const originalColorText = this.style.color;
+                this.style.backgroundColor = '#ffffff';
+                this.style.color = (this.classList.contains('action-button')) ? '#000000' : '#000000';
+                setTimeout(() => {
+                    this.style.backgroundColor = originalColor;
+                    this.style.color = originalColorText;
+                }, 100);
+
+                const buttonText = this.textContent;
+                console.log(`${buttonText} button pressed`);
+                // Example: Rotate active piece on A press
+                if (buttonText === 'A' && activePiece) {
+                     activePiece.mesh.rotateZ(Math.PI / 2);
+                     console.log("Active piece rotated via A button");
+                }
+                // Example: Drop piece on B press
+                if (buttonText === 'B' && activePiece) {
+                    const moved = movePiece(activePiece, 0, -1);
+                    if (!moved) {
+                        placePiece(activePiece);
+                        spawnNewPiece();
+                    }
+                    lastDropTime = performance.now(); // Reset drop timer
+                    console.log("Active piece dropped via B button");
+                }
+            });
+        });
+
+        document.querySelectorAll('.dpad-button').forEach(button => {
+            button.addEventListener('mousedown', function() {
+                 this.style.borderColor = "#ffffff";
+                 this.style.boxShadow = "0 0 0 #000";
+            });
+            button.addEventListener('mouseup', function() {
+                 this.style.borderColor = "#000000";
+                 this.style.boxShadow = "0 2px 0 #000000";
+            });
+            button.addEventListener('mouseleave', function() {
+                 this.style.borderColor = "#000000";
+                 this.style.boxShadow = "0 2px 0 #000000";
+            });
+
+            button.addEventListener('click', function() {
+                const dir = this.id.toUpperCase();
+                console.log(`D-Pad ${dir} pressed`);
+                // Example: Move active piece with D-pad
+                if (activePiece) {
+                    let dx = 0, dy = 0;
+                    switch(dir) {
+                        case 'LEFT': dx = -1; break;
+                        case 'RIGHT': dx = 1; break;
+                        // UP/DOWN could be for rotation/drop or future features
+                        case 'UP': dy = 1; break;
+                        case 'DOWN': dy = -1; break;
+                    }
+                    if (dir === 'UP' || dir === 'DOWN') {
+                        // For UP/DOWN, we can use them for rotation or instant drop
+                        if (dir === 'UP') {
+                            activePiece.mesh.rotateZ(Math.PI / 2);
+                            console.log("Active piece rotated via D-Pad UP");
+                        } else { // DOWN
+                            const moved = movePiece(activePiece, 0, -1);
+                            if (!moved) {
+                                placePiece(activePiece);
+                                spawnNewPiece();
+                            }
+                            lastDropTime = performance.now();
+                            console.log("Active piece dropped via D-Pad DOWN");
+                        }
+                    } else {
+                        // LEFT/RIGHT for horizontal movement
+                        movePiece(activePiece, dx, 0);
+                    }
+                }
+            });
+        });
     </script>
+
 </body>
 </html>
