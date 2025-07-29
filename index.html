@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Piece-to-Piece Collision</title>
+    <title>AR Tetris - Correct Rotation Collision</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Pieces Collide with Each Other & Boundaries</div>
+    <div id="info">AR Tetris - Pieces Collide Correctly on Move & Rotate</div>
 
     <script type="importmap">
         {
@@ -287,6 +287,22 @@
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
 
+        // Helper function to rotate a 2D matrix (shape) 90 degrees clockwise
+        function rotateMatrix(matrix) {
+            const N = matrix.length;
+            const M = matrix[0].length;
+            // Create a new matrix with swapped dimensions
+            const rotated = Array(M).fill().map(() => Array(N).fill(0));
+            for (let y = 0; y < N; y++) {
+                for (let x = 0; x < M; x++) {
+                    // Rotate 90 degrees clockwise: (x,y) -> (M-1-y, x)
+                    rotated[x][N - 1 - y] = matrix[y][x];
+                }
+            }
+            return rotated;
+        }
+
+
         function createPiece(type) {
             const definition = TETROMINOES[type];
             if (!definition) return null;
@@ -356,16 +372,19 @@
             }
         }
 
-        function checkCollision(piece, offsetX, offsetY) {
+        // --- Updated Collision Detection ---
+        // Checks if a piece (at its current position + offset) collides with walls or placed blocks
+        // Optionally accepts a testShape to check a specific orientation (e.g., for rotation)
+        function checkCollision(piece, offsetX, offsetY, testShape = null) {
             if (!piece) return true;
-            const shape = piece.shape;
+            const shapeToCheck = testShape || piece.shape; // Use provided test shape or current shape
             // Calculate the new potential grid position
             const newX = piece.x + offsetX;
             const newY = piece.y + offsetY;
 
-            for (let y = 0; y < shape.length; y++) {
-                for (let x = 0; x < shape[y].length; x++) {
-                    if (shape[y][x]) {
+            for (let y = 0; y < shapeToCheck.length; y++) {
+                for (let x = 0; x < shapeToCheck[y].length; x++) {
+                    if (shapeToCheck[y][x]) {
                         // Calculate the grid coordinates this block would occupy
                         const checkX = newX + x;
                         const checkY = newY - y; // Convert piece Y (top-based) to grid Y (bottom-based)
@@ -385,6 +404,7 @@
             }
             return false; // No collision
         }
+        // --- End Updated Collision Detection ---
 
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
@@ -398,6 +418,27 @@
             }
             return false; // Move blocked by collision
         }
+
+        // --- New Rotation Function ---
+        function rotatePiece(piece) {
+             if (!piece || !gameStarted || gameOver) return false;
+
+             // Calculate the rotated shape
+             const rotatedShape = rotateMatrix(piece.shape);
+
+             // Check for collision with the rotated shape in the current position
+             if (!checkCollision(piece, 0, 0, rotatedShape)) {
+                 // No collision, update the piece's shape and visually rotate the mesh
+                 piece.shape = rotatedShape;
+                 piece.mesh.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians) visually
+                 console.log("Piece rotated successfully");
+                 return true; // Rotation successful
+             } else {
+                 console.log("Rotation blocked by collision");
+                 return false; // Rotation blocked
+             }
+        }
+        // --- End New Rotation Function ---
 
 
         function placePiece(piece) {
@@ -547,6 +588,7 @@
             }
         }
 
+        // --- Updated Interaction to use rotatePiece ---
         function checkAndInteract(controller) {
              tempMatrix.identity().extractRotation(controller.matrixWorld);
              raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -559,27 +601,16 @@
              for (let i = 0; i < intersects.length; i++) {
                  const object = intersects[i].object;
                  if (object.userData && object.userData.isPiece) {
-                     // --- Rotate the piece 90 degrees around its local Z-axis ---
-                     // Find the root piece group (the parent Group of the block mesh)
-                     let pieceGroup = object;
-                     while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
-                         pieceGroup = pieceGroup.parent;
-                     }
-                     if (pieceGroup) {
-                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
-                         console.log("Piece rotated");
-                     } else {
-                         // If it's a placed block (not in a group, though unlikely if grouped correctly),
-                         // or a block directly under the scene, rotate the block itself.
-                         // This case is less likely now with grouping, but kept for robustness.
-                         object.rotateZ(Math.PI / 2);
-                         console.log("Block rotated");
+                     // --- Use the new rotatePiece function ---
+                     if (activePiece) {
+                         rotatePiece(activePiece); // Attempt to rotate the active falling piece
                      }
                      // ---
                      break; // Only interact with the first hit piece
                  }
              }
         }
+         // --- End Updated Interaction ---
 
         function updateLasers() {
             for (let i = 0; i < pointers.length; i++) {
