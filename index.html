@@ -23,24 +23,10 @@
             padding: 10px 0;
             pointer-events: none;
         }
-        #gameOver {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2em;
-            color: red;
-            z-index: 1000;
-            display: none;
-            background-color: rgba(0,0,0,0.7);
-            padding: 20px;
-            border-radius: 10px;
-        }
     </style>
 </head>
 <body>
     <div id="info">AR Tetris - Pieces Stack with Landed Position & Rotation</div>
-    <div id="gameOver">GAME OVER</div>
     <script type="importmap">
         {
             "imports": {
@@ -93,7 +79,6 @@
                         placedPieceGroups.length = 0;
                         activePiece = null;
                         gameStarted = false;
-                        document.getElementById('gameOver').style.display = 'none'; // Hide game over
                     }
                     button.style.cssText = `
                         position: absolute;
@@ -187,13 +172,15 @@
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000; // ms
+        const DROP_INTERVAL = 1000;
         // --- Game State ---
         // Store references to the Group objects representing placed pieces
         let placedPieceGroups = [];
         let gameOver = false;
-        // --- Grid State for Collision Detection ---
-        let gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0)); // 0 = empty, 1 = filled
+        // --- Grid State for Stacking ---
+        // 2D array to track occupied cells. true = occupied, false = empty.
+        // Indexed as gridState[x][y], where y=0 is the bottom row.
+        let gridState = [];
         // --- Tetromino Definitions ---
         const TETROMINOES = {
             I: { shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: 0x00ffff },
@@ -205,19 +192,6 @@
             L: { shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: 0xff7f00 }
         };
         const TETROMINO_NAMES = Object.keys(TETROMINOES);
-
-        // --- Helper to get rotated shape ---
-        function rotateShape(shape) {
-            const N = shape.length;
-            const rotated = Array(N).fill().map(() => Array(N).fill(0));
-            for (let y = 0; y < N; y++) {
-                for (let x = 0; x < N; x++) {
-                    rotated[x][N - 1 - y] = shape[y][x];
-                }
-            }
-            return rotated;
-        }
-
         init();
         animate();
         function init() {
@@ -269,9 +243,11 @@
             activePiece = null;
             gameOver = false;
             lastDropTime = 0;
-            // Reset grid state
-            gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
-            document.getElementById('gameOver').style.display = 'none'; // Hide game over
+            
+            // --- Reset Grid State ---
+            gridState = Array(GRID_WIDTH).fill(null).map(() => Array(GRID_HEIGHT).fill(false));
+            // ---
+            
             console.log("Game reset");
         }
         function gridToWorld(x, y) {
@@ -280,7 +256,6 @@
             const worldZ = -1.5;
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
-
         function createPiece(type) {
             const definition = TETROMINOES[type];
             if (!definition) return null;
@@ -317,7 +292,6 @@
                 shape: shape
             };
         }
-
         function spawnNewPiece() {
             if (!gameStarted || gameOver) return;
             const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
@@ -334,12 +308,10 @@
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
-                    document.getElementById('gameOver').style.display = 'block'; // Show game over
                 }
             }
         }
-
-        // --- Updated checkCollision to include grid state ---
+        // --- Updated checkCollision function ---
         function checkCollision(piece, offsetX, offsetY) {
             if (!piece) return true;
             const shape = piece.shape;
@@ -350,20 +322,23 @@
                     if (shape[y][x]) {
                         const checkX = newX + x;
                         const checkY = newY - y; // Convert piece Y to grid Y
-                        // Check boundaries
+                        
+                        // Check boundaries (left, right, bottom)
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
                             return true; // Collision with wall or floor
                         }
-                        // Check collision with placed pieces in gridState
-                        if (checkY < GRID_HEIGHT && gridState[checkY][checkX]) {
-                            return true; // Collision with another piece
+                        
+                        // Check if the target cell is already occupied by a placed piece
+                        // Only check if within the grid height bounds
+                        if (checkY < GRID_HEIGHT && gridState[checkX][checkY]) {
+                             return true; // Collision with another piece
                         }
                     }
                 }
             }
             return false; // No collision
         }
-
+        // ---
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
             if (!checkCollision(piece, dx, dy)) {
@@ -375,26 +350,26 @@
             }
             return false;
         }
-
-        // --- Updated placePiece to update gridState ---
+        // --- Updated placePiece function ---
         function placePiece(piece) {
             if (!piece || gameOver) return;
             
-            // Update gridState with the new piece's position
+            // --- Update gridState ---
             const shape = piece.shape;
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const gridX = piece.x + x;
                         const gridY = piece.y - y;
-                        // Only update if within grid bounds
+                        // Make sure we don't go out of bounds (shouldn't happen if collision works)
                         if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                            gridState[gridY][gridX] = 1; // Mark cell as filled
+                            gridState[gridX][gridY] = true; // Mark cell as occupied
                         }
                     }
                 }
             }
-
+            // ---
+            
             // --- Create a new Group to hold the blocks in their current orientation ---
             const landedPieceGroup = new THREE.Group();
             const color = TETROMINOES[piece.type].color;
@@ -432,7 +407,7 @@
             activePiece = null;
             console.log(`Piece placed and stacked with orientation.`);
         }
-
+        // ---
         // --- Controller & Laser Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
@@ -506,8 +481,6 @@
                 pointers[index].isSelecting = false;
             }
         }
-
-        // --- Updated checkAndInteract to rotate piece and update its shape ---
         function checkAndInteract(controller) {
              tempMatrix.identity().extractRotation(controller.matrixWorld);
              raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
@@ -524,30 +497,9 @@
                      while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
                          pieceGroup = pieceGroup.parent;
                      }
-                     if (pieceGroup && activePiece && pieceGroup === activePiece.mesh) {
-                         // Save original state
-                         const originalShape = activePiece.shape;
-                         const originalRotation = pieceGroup.quaternion.clone();
-
-                         // Rotate the piece's visual mesh
-                         pieceGroup.rotateZ(Math.PI / 2);
-                         
-                         // Update the activePiece's logical shape to match the visual rotation
-                         activePiece.shape = rotateShape(activePiece.shape);
-
-                         // Check for collision after rotation
-                         if (checkCollision(activePiece, 0, 0)) {
-                             // If collision, revert rotation and shape
-                             pieceGroup.quaternion.copy(originalRotation);
-                             activePiece.shape = originalShape;
-                             console.log("Rotation blocked by collision");
-                         } else {
-                             console.log("Piece rotated");
-                         }
-                     } else if (pieceGroup) {
-                         // If it's a placed piece, just rotate the visual (this is okay for landed pieces)
-                         pieceGroup.rotateZ(Math.PI / 2);
-                         console.log("Placed piece rotated");
+                     if (pieceGroup) {
+                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
+                         console.log("Piece rotated");
                      } else {
                          // If it's a placed block (not in a group, though unlikely if grouped correctly),
                          // or a block directly under the scene, rotate the block itself.
@@ -560,7 +512,6 @@
                  }
              }
         }
-
         function updateLasers() {
             for (let i = 0; i < pointers.length; i++) {
                 const pointer = pointers[i];
