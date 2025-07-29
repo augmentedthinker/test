@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Spawning, Boundary, Stacking</title>
+    <title>AR Tetris - Lasers & Piece Interaction</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Spawning at Top, Boundary Stops, Stacking</div>
+    <div id="info">AR Tetris - Shoot Lasers, Click Pieces to Change Color</div>
 
     <script type="importmap">
         {
@@ -59,8 +59,8 @@
                             setupControllers();
                             if (!gameStarted) {
                                 gameStarted = true;
-                                resetGame(); // Initialize game state
-                                spawnNewPiece(); // Spawn the first piece
+                                resetGame();
+                                spawnNewPiece();
                             }
                         }
                     }
@@ -73,9 +73,10 @@
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
+                        // Cleanup pointers
+                        pointers.length = 0;
                         if (grid) scene.remove(grid);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
-                        // Clear placed blocks from scene
                         for (let block of placedBlocksVisual) {
                             scene.remove(block);
                         }
@@ -165,6 +166,10 @@
         let controllerGrip1, controllerGrip2;
         let controllerModelFactory;
 
+        // --- Controller & Laser Variables ---
+        const pointers = [];
+        const tempMatrix = new THREE.Matrix4();
+        const raycaster = new THREE.Raycaster();
         // --- Tetris Grid Variables ---
         let grid;
         const GRID_WIDTH = 10;
@@ -176,12 +181,11 @@
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000; // milliseconds
+        const DROP_INTERVAL = 1000;
 
         // --- Game State ---
-        // 2D array to represent the placed blocks: false = empty, object = {color, mesh}
         let placedBlocks = Array(GRID_WIDTH).fill().map(() => Array(GRID_HEIGHT).fill(false));
-        let placedBlocksVisual = []; // Array to hold visual mesh objects of placed blocks
+        let placedBlocksVisual = [];
         let gameOver = false;
 
         // --- Tetromino Definitions ---
@@ -244,19 +248,16 @@
             });
 
             grid = new THREE.Mesh(gridGeometry, gridMaterial);
-            // Position grid: center it horizontally, place bottom at y=0
             grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
             scene.add(grid);
         }
 
         function resetGame() {
-             // Clear the logical grid
             for (let x = 0; x < GRID_WIDTH; x++) {
                 for (let y = 0; y < GRID_HEIGHT; y++) {
                     placedBlocks[x][y] = false;
                 }
             }
-            // Clear visual blocks from scene and array
             for (let block of placedBlocksVisual) {
                 scene.remove(block);
             }
@@ -272,10 +273,8 @@
         }
 
         function gridToWorld(x, y) {
-            // Convert grid coordinates (0,0 bottom-left) to Three.js world coordinates
-            // Assumes grid is centered at (0, gridHeight/2 - 0.5, -1.5)
             const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
-            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5; // Bottom of grid is at y = -0.5
+            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5;
             const worldZ = -1.5;
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
@@ -286,7 +285,6 @@
 
             const group = new THREE.Group();
             const blockSize = GRID_CELL_SIZE;
-            // Slightly smaller blocks for visual separation
             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
             const blockMaterial = new THREE.MeshStandardMaterial({ color: definition.color });
 
@@ -295,10 +293,12 @@
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                        // Position blocks relative to the piece's origin (top-left of the shape)
+                         // --- Mark as interactive piece ---
+                        block.userData = { isPiece: true, originalColor: definition.color };
+                        // ---
                         block.position.set(
                             x * blockSize,
-                            -y * blockSize, // Invert Y so shape orientation matches grid Y+
+                            -y * blockSize,
                             0
                         );
                         group.add(block);
@@ -306,12 +306,11 @@
                 }
             }
 
-            // Position the new piece at the top center of the grid
-            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2; // Just above the grid
+            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2;
             const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
-            const startPosY = GRID_HEIGHT; // Start above the grid
+            const startPosY = GRID_HEIGHT;
 
-            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Adjust for block origin
+            group.position.copy(gridToWorld(startPosX, startPosY - 1));
 
             return {
                 mesh: group,
@@ -329,13 +328,17 @@
             activePiece = createPiece(randomType);
 
             if (activePiece) {
+                 // --- Mark active piece's child meshes as interactive ---
+                 activePiece.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = { isPiece: true, originalColor: TETROMINOES[activePiece.type].color };
+                    }
+                });
+                // ---
                 scene.add(activePiece.mesh);
-                // Check for immediate collision (game over)
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
-                    // Optional: Add game over visual feedback
-                    // For now, we just stop spawning
                 }
             }
         }
@@ -350,21 +353,19 @@
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const checkX = newX + x;
-                        const checkY = newY - y; // Remember piece Y is top-based, grid Y is bottom-based
+                        const checkY = newY - y;
 
-                        // Check boundaries
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
-                            return true; // Collision with wall or floor
+                            return true;
                         }
 
-                        // Check collision with placed blocks (only if within grid height)
                         if (checkY < GRID_HEIGHT && placedBlocks[checkX][checkY]) {
-                            return true; // Collision with another piece
+                            return true;
                         }
                     }
                 }
             }
-            return false; // No collision
+            return false;
         }
 
         function movePiece(piece, dx, dy) {
@@ -373,7 +374,7 @@
                 piece.x += dx;
                 piece.y += dy;
                 piece.mesh.position.x += dx * GRID_CELL_SIZE;
-                piece.mesh.position.y += dy * GRID_CELL_SIZE; // Y+ is up in Three.js
+                piece.mesh.position.y += dy * GRID_CELL_SIZE;
                 return true;
             }
             return false;
@@ -390,41 +391,40 @@
                         const gridX = piece.x + x;
                         const gridY = piece.y - y;
 
-                        // Only place if within the grid bounds
                         if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                             // Update logical grid
                             placedBlocks[gridX][gridY] = { color: color };
 
-                            // Create and add visual block
                             const blockSize = GRID_CELL_SIZE;
                             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
                             const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
                             const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                            // --- Mark as interactive piece ---
+                            blockMesh.userData = { isPiece: true, originalColor: color };
+                            // ---
 
-                            // Position the block in the world
                             blockMesh.position.copy(gridToWorld(gridX, gridY));
                             scene.add(blockMesh);
-                            placedBlocksVisual.push(blockMesh); // Keep reference for cleanup
+                            placedBlocksVisual.push(blockMesh);
                         }
                     }
                 }
             }
 
-            // Remove the active piece's mesh
             scene.remove(piece.mesh);
             activePiece = null;
             console.log(`Piece placed.`);
         }
 
+        // --- Controller & Laser Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
-            // controller1.addEventListener('selectstart', onSelectStart);
-            // controller1.addEventListener('selectend', onSelectEnd);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
 
             controller2 = renderer.xr.getController(1);
-            // controller2.addEventListener('selectstart', onSelectStart);
-            // controller2.addEventListener('selectend', onSelectEnd);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -440,17 +440,120 @@
 
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
+
+            // --- Setup Laser Pointers ---
+            setupLaserPointer(controller1, 0);
+            setupLaserPointer(controller2, 1);
+            // ---
         }
 
-        // Placeholder functions for controller events
-        // function onSelectStart(event) { }
-        // function onSelectEnd(event) { }
+        function setupLaserPointer(controller, index) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
+            const material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true
+            });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 5;
+            line.visible = false;
+
+            const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
+            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
+            const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+            hitPoint.visible = false;
+
+            controller.add(line);
+            controller.add(hitPoint);
+
+            pointers[index] = {
+                controller: controller,
+                line: line,
+                hitPoint: hitPoint,
+                isSelecting: false
+            };
+
+            controller.addEventListener('connected', function () {
+                 line.visible = true;
+            });
+            controller.addEventListener('disconnected', function () {
+                line.visible = false;
+                hitPoint.visible = false;
+            });
+        }
+
+        function onSelectStart(event) {
+            const controller = event.target;
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = true;
+            }
+            // Check for piece interaction on Select Start
+            checkAndInteract(controller);
+        }
+
+        function onSelectEnd(event) {
+            const controller = event.target;
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = false;
+            }
+        }
+
+        function checkAndInteract(controller) {
+             tempMatrix.identity().extractRotation(controller.matrixWorld);
+             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+             // Check intersection with all objects in the scene
+             const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
+
+             // Find the first intersected object that is a piece
+             for (let i = 0; i < intersects.length; i++) {
+                 const object = intersects[i].object;
+                 if (object.userData && object.userData.isPiece) {
+                     // Change color to white when clicked
+                     if (object.material) {
+                         object.material.color.setHex(0xffffff);
+                         // Optional: Revert color after a short delay
+                         // setTimeout(() => {
+                         //     if (object.material && object.userData.originalColor !== undefined) {
+                         //         object.material.color.setHex(object.userData.originalColor);
+                         //     }
+                         // }, 200);
+                     }
+                     break; // Only interact with the first hit piece
+                 }
+             }
+        }
+
+        function updateLasers() {
+            for (let i = 0; i < pointers.length; i++) {
+                const pointer = pointers[i];
+                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
+                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
+                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
+                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+                // Optional: Check for intersection with the grid or other specific objects
+                // For now, lasers just extend out
+                pointer.line.scale.z = 5;
+                pointer.hitPoint.visible = false; // Hide hit point as we are not targeting a specific object visually
+            }
+        }
+        // --- End Controller & Laser Functions ---
 
         function animate() {
             renderer.setAnimationLoop(render);
         }
 
         function render() {
+            // Update laser pointers every frame
+            updateLasers();
+
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
