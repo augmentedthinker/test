@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Float & Drop</title>
+    <title>AR Tetris - Joystick & Click</title>
     <style>
         body {
             margin: 0;
@@ -36,10 +36,6 @@
             color: #4dccff;
             text-shadow: 0 0 8px rgba(77, 204, 255, 0.7);
         }
-        #score {
-            font-size: 1.2em;
-            color: #aaffaa;
-        }
         #instructions {
             font-size: 0.9em;
             max-width: 80%;
@@ -56,9 +52,8 @@
 </head>
 <body>
     <div id="uiContainer">
-        <div id="title">AR Tetris - Float & Drop</div>
-        <div id="score">Score: 0</div>
-        <div id="instructions">Use controller position to move piece. Raise controller to drop.</div>
+        <div id="title">AR Tetris - Joystick & Click</div>
+        <div id="instructions">Joystick: Move Piece. A/X Button: Rotate. B/Y Button: Soft Drop</div>
         <div id="status"></div>
     </div>
 
@@ -73,7 +68,6 @@
 
     <script type="module">
         import * as THREE from 'three';
-        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
         // --- Inlined ARButton.js (Simplified) ---
@@ -102,11 +96,14 @@
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
                         currentSession = null;
+                        // Cleanup
                         if (controller1) scene.remove(controller1);
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        pointers.length = 0;
+                        if (controllerModel1) controllerGrip1.remove(controllerModel1);
+                        if (controllerModel2) controllerGrip2.remove(controllerModel2);
+                        controllers.length = 0;
                         if (gridHelper) scene.remove(gridHelper);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
                         for (let group of placedPieces) {
@@ -190,7 +187,8 @@
         // --- Main Application Logic ---
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
-        const pointers = [];
+        let controllerModel1, controllerModel2;
+        const controllers = []; // Store controller data
         const tempMatrix = new THREE.Matrix4();
         const tempVector = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
@@ -210,16 +208,9 @@
         const DROP_INTERVAL = 1000; // ms
         let placedPieces = []; // Store Group objects for placed pieces
         let gameOver = false;
-        let score = 0;
 
         // --- UI Elements ---
-        const scoreElement = document.getElementById('score');
         const statusElement = document.getElementById('status');
-
-        function updateScore(points) {
-            score += points;
-            scoreElement.textContent = `Score: ${score}`;
-        }
 
         function updateStatus(message) {
             statusElement.textContent = message;
@@ -236,6 +227,17 @@
             L: { shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: 0xff7f00 }
         };
         const TETROMINO_NAMES = Object.keys(TETROMINOES);
+
+        // --- Input State ---
+        const inputState = {
+            left: false,
+            right: false,
+            down: false,
+            rotate: false,
+            softDrop: false
+        };
+        let lastMoveTime = 0;
+        const MOVE_INTERVAL = 100; // ms for joystick repeat
 
         init();
         animate();
@@ -285,7 +287,6 @@
             const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
             const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
 
-            // Create a visual grid helper
             const gridHelperGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
             const gridHelperMaterial = new THREE.MeshBasicMaterial({
                 color: 0x22aaff,
@@ -297,7 +298,6 @@
             gridHelper.position.set(0, gridHeight / 2 - 0.5, -1.2);
             scene.add(gridHelper);
 
-            // Initialize the grid state array
             gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
         }
 
@@ -312,7 +312,6 @@
             }
             activePiece = null;
 
-            // Reset grid state
             for (let y = 0; y < GRID_HEIGHT; y++) {
                 for (let x = 0; x < GRID_WIDTH; x++) {
                     gridState[y][x] = 0;
@@ -321,15 +320,14 @@
 
             gameOver = false;
             lastDropTime = 0;
-            score = 0;
-            updateScore(0);
+            lastMoveTime = 0;
             console.log("Game reset");
         }
 
         function gridToWorld(x, y) {
             const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
             const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5;
-            const worldZ = -1.2; // Align with gridHelper Z
+            const worldZ = -1.2;
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
 
@@ -365,7 +363,7 @@
             }
 
             const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
-            const startPosY = GRID_HEIGHT; // Start above the grid
+            const startPosY = GRID_HEIGHT;
 
             group.position.copy(gridToWorld(startPosX, startPosY - 1));
             return {
@@ -408,11 +406,9 @@
                         const checkX = newX + x;
                         const checkY = newY - y;
 
-                        // Check boundaries
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
                             return true;
                         }
-                        // Check against placed pieces using gridState
                         if (checkY < GRID_HEIGHT && gridState[checkY][checkX]) {
                             return true;
                         }
@@ -434,13 +430,57 @@
             return false;
         }
 
+        function rotatePiece(piece) {
+             if (!piece || !gameStarted || gameOver) return;
+             // --- Rotation Logic ---
+             // Store the original shape and position
+             const originalShape = piece.shape;
+             const originalX = piece.x;
+             // Create a new, rotated shape matrix (90 degrees clockwise)
+             const newShape = [];
+             const height = originalShape.length;
+             const width = originalShape[0].length;
+             for (let x = 0; x < width; x++) {
+                 const newRow = [];
+                 for (let y = height - 1; y >= 0; y--) {
+                     newRow.push(originalShape[y][x]);
+                 }
+                 newShape.push(newRow);
+             }
+             // Temporarily update the piece's shape to test collision
+             piece.shape = newShape;
+             // --- Wall Kick Attempt ---
+             // Simple wall kick: try shifting left/right if initial rotation causes collision
+             let kickSuccess = false;
+             const kickOffsets = [0, -1, 1, -2, 2]; // Try no shift, left 1, right 1, etc.
+             for (let offset of kickOffsets) {
+                 if (!checkCollision(piece, offset, 0)) {
+                     // Valid rotation with kick
+                     piece.x += offset;
+                     piece.mesh.position.x += offset * GRID_CELL_SIZE;
+                     kickSuccess = true;
+                     break;
+                 }
+             }
+             if (!kickSuccess) {
+                 // Revert to original shape and position if no kick worked
+                 piece.shape = originalShape;
+                 piece.x = originalX;
+             }
+             // ---
+             // If rotation (with or without kick) was successful, update the mesh visually
+             if (kickSuccess) {
+                 // Rotate the mesh group itself
+                 piece.mesh.rotateZ(-Math.PI / 2); // Negative because Three.js Z is towards viewer
+             }
+        }
+
+
         function lockPiece(piece) {
             if (!piece || gameOver) return;
 
             const shape = piece.shape;
             const blockSize = GRID_CELL_SIZE;
-
-            // Create a new Group for the placed piece
             const landedPieceGroup = new THREE.Group();
             landedPieceGroup.position.copy(piece.mesh.position);
             landedPieceGroup.quaternion.copy(piece.mesh.quaternion);
@@ -459,8 +499,6 @@
                         blockMesh.castShadow = true;
                         blockMesh.receiveShadow = true;
                         blockMesh.userData = { isPiece: true };
-
-                        // Position relative to the group
                         blockMesh.position.set(
                             x * blockSize,
                             -y * blockSize,
@@ -468,11 +506,10 @@
                         );
                         landedPieceGroup.add(blockMesh);
 
-                        // Update gridState
                         const gridX = piece.x + x;
                         const gridY = piece.y - y;
                         if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                            gridState[gridY][gridX] = 1; // Mark as occupied
+                            gridState[gridY][gridX] = 1;
                         }
                     }
                 }
@@ -483,72 +520,62 @@
             scene.remove(piece.mesh);
             activePiece = null;
 
-            // Check for line clears after placing a piece
             checkLineClears();
-
-            updateScore(10); // Points for placing a piece
             console.log("Piece locked and stacked with orientation.");
         }
 
         function checkLineClears() {
-            let linesCleared = 0;
-            for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
-                let isLineFull = true;
-                for (let x = 0; x < GRID_WIDTH; x++) {
-                    if (gridState[y][x] === 0) {
-                        isLineFull = false;
-                        break;
-                    }
-                }
-                if (isLineFull) {
-                    linesCleared++;
-                    // Clear the line visually and in gridState
-                    clearLine(y);
-                    // Shift all lines above down
-                    shiftLinesDown(y);
-                    // Since we shifted, we need to check the same line index again
-                    y++;
-                }
-            }
-            if (linesCleared > 0) {
-                const points = [0, 100, 300, 500, 800][linesCleared] || 800; // Points for 1,2,3,4+ lines
-                updateScore(points);
-                console.log(`Cleared ${linesCleared} line(s)!`);
-            }
+             // Simplified line clear check, same as before
+             let linesToClear = [];
+             for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                 let isLineFull = true;
+                 for (let x = 0; x < GRID_WIDTH; x++) {
+                     if (gridState[y][x] === 0) {
+                         isLineFull = false;
+                         break;
+                     }
+                 }
+                 if (isLineFull) {
+                     linesToClear.push(y);
+                 }
+             }
+
+             if (linesToClear.length > 0) {
+                 // Clear lines from bottom up
+                 for (let lineY of linesToClear) {
+                     clearLine(lineY);
+                 }
+                 // Shift lines down for all cleared lines
+                 for (let lineY of linesToClear.sort((a,b)=>a-b)) { // Process from top down
+                     shiftLinesDown(lineY);
+                 }
+                 console.log(`Cleared ${linesToClear.length} line(s)!`);
+             }
         }
 
         function clearLine(lineY) {
-             // Iterate through placedPieces and remove blocks on this line
             for (let i = placedPieces.length - 1; i >= 0; i--) {
                 const group = placedPieces[i];
                 const groupWorldPos = new THREE.Vector3();
                 group.getWorldPosition(groupWorldPos);
-
-                // Convert lineY (grid index) to world Y
                 const worldLineY = gridToWorld(0, lineY).y;
 
                 for (let j = group.children.length - 1; j >= 0; j--) {
                     const block = group.children[j];
                     const blockWorldPos = new THREE.Vector3();
                     block.getWorldPosition(blockWorldPos);
-
-                    // Check if block is on the line to clear (with small tolerance)
                     if (Math.abs(blockWorldPos.y - worldLineY) < GRID_CELL_SIZE / 2) {
                         group.remove(block);
-                        // Mark grid cell as empty
                         const gridX = Math.round((blockWorldPos.x - groupWorldPos.x) / GRID_CELL_SIZE + (GRID_WIDTH / 2 - 0.5));
                         gridState[lineY][gridX] = 0;
                     }
                 }
-
-                // If the group is now empty, remove it from the scene and array
                 if (group.children.length === 0) {
                     scene.remove(group);
                     placedPieces.splice(i, 1);
                 }
             }
         }
-
 
         function shiftLinesDown(startY) {
             // Shift gridState data down
@@ -557,7 +584,6 @@
                     gridState[y][x] = gridState[y-1][x];
                 }
             }
-            // Clear the top line
             for (let x = 0; x < GRID_WIDTH; x++) {
                 gridState[0][x] = 0;
             }
@@ -566,15 +592,12 @@
             for (let group of placedPieces) {
                 const groupWorldPos = new THREE.Vector3();
                 group.getWorldPosition(groupWorldPos);
-
-                // Convert startY grid index to world Y
                 const worldStartY = gridToWorld(0, startY).y;
 
                 let needsShift = false;
                 for (let block of group.children) {
                     const blockWorldPos = new THREE.Vector3();
                     block.getWorldPosition(blockWorldPos);
-                    // If any block is above the cleared line, shift the whole group
                     if (blockWorldPos.y > worldStartY + GRID_CELL_SIZE / 2) {
                          needsShift = true;
                          break;
@@ -586,12 +609,16 @@
             }
         }
 
-
         // --- Controller & Interaction Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('connected', onControllerConnected);
+            controller1.addEventListener('disconnected', onControllerDisconnected);
             scene.add(controller1);
+
             controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('connected', onControllerConnected);
+            controller2.addEventListener('disconnected', onControllerDisconnected);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -600,104 +627,151 @@
             scene.add(controllerGrip2);
 
             const controllerModelFactory = new XRControllerModelFactory();
-            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
+            controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
-            const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
+            controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-
-            setupLaserPointer(controller1, 0);
-            setupLaserPointer(controller2, 1);
         }
 
-        function setupLaserPointer(controller, index) {
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3));
-            const material = new THREE.LineBasicMaterial({
-                vertexColors: true,
-                blending: THREE.AdditiveBlending,
-                depthTest: false,
-                transparent: true
-            });
-            const line = new THREE.Line(geometry, material);
-            line.scale.z = 5;
-            line.visible = false;
-            controller.add(line);
-
-            pointers[index] = { controller: controller, line: line };
-            controller.addEventListener('connected', () => line.visible = true);
-            controller.addEventListener('disconnected', () => line.visible = false);
+        function onControllerConnected(event) {
+             const controller = event.target;
+             const index = controllers.length;
+             const data = {
+                 controller: controller,
+                 gamepad: null // Will be set in updateControllerInput
+             };
+             controllers.push(data);
+             console.log(`Controller ${index} connected.`);
         }
 
-        function updateControllerInteraction() {
-            if (!gameStarted || gameOver || !activePiece) return;
-
-            // Use the first available controller for interaction
-            let controllerToUse = null;
-            if (controller1 && controller1.visible) controllerToUse = controller1;
-            else if (controller2 && controller2.visible) controllerToUse = controller2;
-
-            if (!controllerToUse) return;
-
-            // --- Horizontal Movement based on Controller X Position ---
-            const controllerPos = new THREE.Vector3();
-            controllerToUse.getWorldPosition(controllerPos);
-
-            // Define a world space range for movement (e.g., -0.4 to 0.4 meters)
-            const moveRange = 0.4;
-            const clampedX = THREE.MathUtils.clamp(controllerPos.x, -moveRange, moveRange);
-
-            // Map clampedX to grid columns (0 to GRID_WIDTH - 1)
-            const gridX = Math.floor(THREE.MathUtils.mapLinear(clampedX, -moveRange, moveRange, 0, GRID_WIDTH - 1));
-
-            // Calculate desired piece X position
-            const desiredPieceX = gridX - Math.floor(activePiece.shape[0].length / 2); // Center the piece
-
-            // Move the piece horizontally
-            const dx = desiredPieceX - activePiece.x;
-            if (dx !== 0) {
-                movePiece(activePiece, dx, 0);
-            }
-
-            // --- Drop based on Controller Height ---
-            // Define a height threshold above the grid (e.g., 0.1 meters)
-            const dropThreshold = gridToWorld(0, GRID_HEIGHT - 1).y + 0.1;
-            if (controllerPos.y > dropThreshold) {
-                 // Attempt to drop the piece immediately
-                 const moved = movePiece(activePiece, 0, -1);
-                 if (!moved) {
-                     lockPiece(activePiece);
-                     spawnNewPiece();
-                 }
-                 // Reset drop timer to prevent normal drop during manual drop
-                 lastDropTime = performance.now();
-            }
+        function onControllerDisconnected(event) {
+             const controller = event.target;
+             const index = controllers.findIndex(c => c.controller === controller);
+             if (index !== -1) {
+                 controllers.splice(index, 1);
+                 console.log(`Controller ${index} disconnected.`);
+             }
         }
 
-        function updateLasers() {
-            for (let i = 0; i < pointers.length; i++) {
-                const pointer = pointers[i];
-                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
-                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
-                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
-                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-                pointer.line.scale.z = 5;
+        function updateControllerInput() {
+            if (!gameStarted || gameOver) return;
+
+            for (let i = 0; i < controllers.length; i++) {
+                const controllerData = controllers[i];
+                const controller = controllerData.controller;
+                const inputSource = controller.xrInputSource; // Get the XRInputSource
+
+                if (inputSource && inputSource.gamepad) {
+                    const gamepad = inputSource.gamepad;
+                    controllerData.gamepad = gamepad; // Store for potential future use
+
+                    // --- Joystick Movement ---
+                    const axes = gamepad.axes;
+                    if (axes.length >= 2) {
+                        const xAxis = axes[0]; // Left/Right
+                        const yAxis = axes[1]; // Forward/Back (Up/Down in our case)
+
+                        // Horizontal movement (Left Stick X)
+                        if (xAxis < -0.5) { // Left
+                            inputState.left = true;
+                        } else if (xAxis > 0.5) { // Right
+                            inputState.right = true;
+                        } else {
+                            // Reset if stick is centered
+                            if (Math.abs(xAxis) < 0.2) {
+                                inputState.left = false;
+                                inputState.right = false;
+                            }
+                        }
+
+                        // Vertical movement (Left Stick Y - inverted)
+                        if (yAxis > 0.5) { // Down (pushing stick down)
+                            inputState.down = true;
+                        } else {
+                            // Reset if stick is centered
+                            if (Math.abs(yAxis) < 0.2) {
+                                inputState.down = false;
+                            }
+                        }
+                    }
+
+                    // --- Button Actions ---
+                    const buttons = gamepad.buttons;
+                    if (buttons.length >= 2) {
+                        // A/X Button (index 0) - Rotate
+                        if (buttons[0] && buttons[0].pressed && !controllerData.wasRotatePressed) {
+                            inputState.rotate = true;
+                            controllerData.wasRotatePressed = true; // Debounce
+                        } else if (buttons[0] && !buttons[0].pressed) {
+                             controllerData.wasRotatePressed = false;
+                        }
+
+                        // B/Y Button (index 1) - Soft Drop
+                        if (buttons[1] && buttons[1].pressed && !controllerData.wasSoftDropPressed) {
+                            inputState.softDrop = true;
+                            controllerData.wasSoftDropPressed = true; // Debounce
+                        } else if (buttons[1] && !buttons[1].pressed) {
+                             controllerData.wasSoftDropPressed = false;
+                        }
+                    }
+                }
             }
         }
 
         // --- End Controller & Interaction Functions ---
+
+        function processInput() {
+             if (!gameStarted || gameOver || !activePiece) return;
+
+             const currentTime = performance.now();
+             let moved = false;
+
+             // --- Process Movement Inputs ---
+             if (currentTime - lastMoveTime > MOVE_INTERVAL) {
+                  if (inputState.left) {
+                      moved = movePiece(activePiece, -1, 0) || moved;
+                  }
+                  if (inputState.right) {
+                      moved = movePiece(activePiece, 1, 0) || moved;
+                  }
+                  if (inputState.down) {
+                      moved = movePiece(activePiece, 0, -1) || moved;
+                  }
+                  if (moved) {
+                      lastMoveTime = currentTime;
+                  }
+             }
+
+             // --- Process Action Inputs ---
+             if (inputState.rotate) {
+                 rotatePiece(activePiece);
+                 inputState.rotate = false; // Consume the input
+             }
+             if (inputState.softDrop) {
+                 // Move piece down immediately
+                 const movedDown = movePiece(activePiece, 0, -1);
+                 if (!movedDown) {
+                     lockPiece(activePiece);
+                     spawnNewPiece();
+                     // Reset drop timer to prevent double drop
+                     lastDropTime = currentTime;
+                 }
+                 inputState.softDrop = false; // Consume the input
+             }
+        }
+
 
         function animate() {
             renderer.setAnimationLoop(render);
         }
 
         function render() {
-            updateLasers();
-            updateControllerInteraction(); // Handle controller-driven piece movement/drop
+            updateControllerInput(); // Read controller state
+            processInput(); // Apply inputs to game logic
 
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
-                // Normal auto-drop logic
+                // Normal auto-drop logic (can be overridden by soft drop)
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
                     const moved = movePiece(activePiece, 0, -1);
                     if (!moved) {
