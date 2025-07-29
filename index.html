@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Fixed Falling Through & Placement Orientation</div>
+    <div id="info">AR Tetris - Fixed Falling & Placement Snapping</div>
 
     <script type="importmap">
         {
@@ -295,7 +295,7 @@
                         block.userData = { isPiece: true };
                         block.position.set(
                             x * blockSize,
-                            -y * blockSize,
+                            -y * blockSize, // Align shape with grid Y+
                             0
                         );
                         group.add(block);
@@ -303,17 +303,18 @@
                 }
             }
 
-            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2;
+            // Position the new piece at the top center of the grid
+            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2; // Just above the grid
             const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
-            const startPosY = GRID_HEIGHT;
+            const startPosY = GRID_HEIGHT; // Start above the grid
 
-            group.position.copy(gridToWorld(startPosX, startPosY - 1));
+            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Adjust for block origin
 
             return {
                 mesh: group,
                 type: type,
-                x: startPosX,
-                y: startPosY,
+                x: startPosX, // Grid X coordinate
+                y: startPosY, // Grid Y coordinate (top-based)
                 shape: shape
             };
         }
@@ -325,15 +326,17 @@
             activePiece = createPiece(randomType);
 
             if (activePiece) {
-                 activePiece.mesh.traverse((child) => {
+                activePiece.mesh.traverse((child) => {
                     if (child.isMesh) {
                         child.userData = { isPiece: true };
                     }
                 });
                 scene.add(activePiece.mesh);
+                // Check for immediate collision (game over)
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
+                    // Optional: Add game over visual feedback
                 }
             }
         }
@@ -348,87 +351,85 @@
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const checkX = newX + x;
-                        const checkY = newY - y;
+                        const checkY = newY - y; // Remember piece Y is top-based, grid Y is bottom-based
 
+                        // Check boundaries
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
-                            return true;
+                            return true; // Collision with wall or floor
                         }
 
+                        // Check collision with placed blocks (only if within grid height)
                         if (checkY < GRID_HEIGHT && placedBlocks[checkX][checkY]) {
-                            return true;
+                            return true; // Collision with another piece
                         }
                     }
                 }
+            }
+            return false; // No collision
+        }
+
+        function movePiece(piece, dx, dy) {
+            if (!piece || !gameStarted || gameOver) return false;
+            if (!checkCollision(piece, dx, dy)) {
+                piece.x += dx;
+                piece.y += dy;
+                piece.mesh.position.x += dx * GRID_CELL_SIZE;
+                piece.mesh.position.y += dy * GRID_CELL_SIZE; // Y+ is up in Three.js
+                return true;
             }
             return false;
         }
 
-        // --- FIXED movePiece ---
-        function movePiece(piece, dx, dy) {
-            if (!piece || !gameStarted || gameOver) return false;
-            
-            // Check collision at the *new* position BEFORE moving
-            if (!checkCollision(piece, dx, dy)) {
-                // If no collision, update logical and visual positions
-                piece.x += dx;
-                piece.y += dy;
-                piece.mesh.position.x += dx * GRID_CELL_SIZE;
-                piece.mesh.position.y += dy * GRID_CELL_SIZE;
-                return true; // Move successful
-            }
-            return false; // Move blocked
-        }
-        // --- END FIXED movePiece ---
-
-        // --- FIXED placePiece ---
         function placePiece(piece) {
             if (!piece || gameOver) return;
-            
-            // Use the piece's current world transformation (position and rotation)
-            const pieceWorldMatrix = piece.mesh.matrixWorld;
-            const blockSize = GRID_CELL_SIZE;
-            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
+            const shape = piece.shape;
             const color = TETROMINOES[piece.type].color;
-            const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
 
-            // Iterate through the piece's child blocks
-            piece.mesh.updateMatrixWorld(); // Ensure world matrices are up-to-date
-            piece.mesh.traverse((child) => {
-                if (child.isMesh && child !== piece.mesh) { // Ensure it's a block mesh, not the group itself
-                    // Get the block's world position
-                    const blockWorldPosition = new THREE.Vector3();
-                    child.getWorldPosition(blockWorldPosition);
+            // Iterate through the piece's blocks based on its shape
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        // Calculate the grid coordinates for this block
+                        const gridX = piece.x + x;
+                        const gridY = piece.y - y; // Convert piece's top-based Y to grid's bottom-based Y
 
-                    // Convert world position to grid coordinates
-                    const gridX = Math.round((blockWorldPosition.x / GRID_CELL_SIZE) + (GRID_WIDTH / 2) - 0.5);
-                    const gridY = Math.round((blockWorldPosition.y / GRID_CELL_SIZE) + 0.5); // Adjust for grid origin
+                        // Only place if within the grid bounds
+                        if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
+                            // Update logical grid
+                            placedBlocks[gridX][gridY] = { color: color };
 
-                    // Place block in logical grid if within bounds
-                    if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                        placedBlocks[gridX][gridY] = { color: color };
+                            // --- Find the corresponding block mesh in the piece's group ---
+                            let blockMesh = null;
+                            piece.mesh.traverse((child) => {
+                                if (child.isMesh && Math.abs(child.position.x - x * GRID_CELL_SIZE) < 0.001 && Math.abs(child.position.y - (-y * GRID_CELL_SIZE)) < 0.001) {
+                                    blockMesh = child;
+                                }
+                            });
 
-                        // Create a new visual block using the original block's world transform
-                        const newBlockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
-                        
-                        // Apply the block's world transform directly to the new mesh
-                        // This preserves its exact position and rotation relative to the world
-                        newBlockMesh.matrix.copy(child.matrixWorld);
-                        newBlockMesh.matrix.decompose(newBlockMesh.position, newBlockMesh.quaternion, newBlockMesh.scale);
-                        newBlockMesh.matrixAutoUpdate = false; // Use the manually set matrix
+                            if (blockMesh) {
+                                // --- Detach the block mesh from the piece group ---
+                                piece.mesh.remove(blockMesh);
 
-                        newBlockMesh.userData = { isPiece: true };
-                        scene.add(newBlockMesh);
-                        placedBlocksVisual.push(newBlockMesh);
+                                // --- Add it to the scene at its current world position ---
+                                // The blockMesh is already at the correct world position
+                                scene.add(blockMesh);
+
+                                // --- Update its userData to mark it as placed ---
+                                blockMesh.userData = { isPlacedBlock: true, originalColor: color };
+
+                                // --- Add to the visual blocks array for cleanup ---
+                                placedBlocksVisual.push(blockMesh);
+                            }
+                        }
                     }
                 }
-            });
+            }
 
-            // Remove the original active piece group
+            // Remove the now-empty piece group from the scene
             scene.remove(piece.mesh);
-            activePiece = null;
-            console.log(`Piece placed.`);
+            activePiece = null; // Clear the active piece reference
+            console.log(`Piece placed at (${piece.x}, ${piece.y}).`);
         }
-        // --- END FIXED placePiece ---
 
         // --- Controller & Laser Functions ---
         function setupControllers() {
@@ -463,7 +464,7 @@
         function setupLaserPointer(controller, index) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
             const material = new THREE.LineBasicMaterial({
                 vertexColors: true,
                 blending: THREE.AdditiveBlending,
@@ -475,7 +476,7 @@
             line.visible = false;
 
             const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
-            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
             const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
             hitPoint.visible = false;
 
@@ -531,6 +532,8 @@
                      }
                      if (pieceGroup) {
                          pieceGroup.rotateZ(Math.PI / 2);
+                         // Update the piece's logical shape or grid coordinates if needed for future collision checks
+                         // For now, rotation is purely visual
                          console.log("Piece rotated");
                      } else {
                          object.rotateZ(Math.PI / 2);
@@ -564,10 +567,13 @@
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
-                    // Try to move the piece down
-                    const moved = movePiece(activePiece, 0, -1);
-                    if (!moved) {
-                        // If it couldn't move down, it has landed
+                    // --- Fix: Check collision *before* moving ---
+                    // Check if the piece can move down by one step
+                    if (!checkCollision(activePiece, 0, -1)) {
+                        // If no collision, move the piece down
+                        movePiece(activePiece, 0, -1);
+                    } else {
+                        // If collision detected, place the piece immediately at its current position
                         placePiece(activePiece);
                         spawnNewPiece(); // Spawn the next piece
                     }
