@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Stacking with Orientation</title>
+    <title>AR Tetris - Piece-to-Piece Collision</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Pieces Stack with Landed Position & Rotation</div>
+    <div id="info">AR Tetris - Pieces Collide with Each Other</div>
 
     <script type="importmap">
         {
@@ -73,11 +73,9 @@
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        // Cleanup pointers
                         pointers.length = 0;
                         if (grid) scene.remove(grid);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
-                        // Cleanup placed piece groups
                         for (let group of placedPieceGroups) {
                             scene.remove(group);
                         }
@@ -186,8 +184,7 @@
         const DROP_INTERVAL = 1000;
 
         // --- Game State ---
-        // Store references to the Group objects representing placed pieces
-        let placedPieceGroups = [];
+        let placedPieceGroups = []; // Stores THREE.Group objects of placed pieces
         let gameOver = false;
 
         // --- Tetromino Definitions ---
@@ -255,7 +252,6 @@
         }
 
         function resetGame() {
-            // Clear visual piece groups from scene
             for (let group of placedPieceGroups) {
                 scene.remove(group);
             }
@@ -277,6 +273,21 @@
             return new THREE.Vector3(worldX, worldY, worldZ);
         }
 
+        // Helper to convert world coordinates back to grid coordinates
+        function worldToGrid(worldPos) {
+             // Grid origin (bottom-left-front corner) in world space
+             const gridOriginX = (-GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
+             const gridOriginY = (0 + 0.5) * GRID_CELL_SIZE - 0.5; // Bottom of grid is at y = -0.5
+             const gridOriginZ = -1.5;
+
+             const gridX = Math.floor((worldPos.x - gridOriginX) / GRID_CELL_SIZE);
+             const gridY = Math.floor((worldPos.y - gridOriginY) / GRID_CELL_SIZE);
+             // const gridZ = Math.floor((worldPos.z - gridOriginZ) / GRID_CELL_SIZE); // Not used for 2D grid
+
+             return { x: gridX, y: gridY };
+        }
+
+
         function createPiece(type) {
             const definition = TETROMINOES[type];
             if (!definition) return null;
@@ -291,12 +302,10 @@
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                         // --- Mark as interactive piece ---
                         block.userData = { isPiece: true };
-                        // ---
                         block.position.set(
                             x * blockSize,
-                            -y * blockSize, // Align shape correctly
+                            -y * blockSize,
                             0
                         );
                         group.add(block);
@@ -306,9 +315,9 @@
 
             const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2;
             const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
-            const startPosY = GRID_HEIGHT; // Start above the grid
+            const startPosY = GRID_HEIGHT;
 
-            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Initial position
+            group.position.copy(gridToWorld(startPosX, startPosY - 1));
 
             return {
                 mesh: group,
@@ -326,13 +335,11 @@
             activePiece = createPiece(randomType);
 
             if (activePiece) {
-                 // --- Mark active piece's child meshes as interactive ---
                  activePiece.mesh.traverse((child) => {
                     if (child.isMesh) {
                         child.userData = { isPiece: true };
                     }
                 });
-                // ---
                 scene.add(activePiece.mesh);
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
@@ -341,7 +348,7 @@
             }
         }
 
-        function checkCollision(piece, offsetX, offsetY) {
+       function checkCollision(piece, offsetX, offsetY) {
             if (!piece) return true;
             const shape = piece.shape;
             const newX = piece.x + offsetX;
@@ -353,19 +360,44 @@
                         const checkX = newX + x;
                         const checkY = newY - y; // Convert piece Y to grid Y
 
-                        // Check boundaries
+                        // 1. Check boundaries (walls and floor)
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
                             return true; // Collision with wall or floor
                         }
 
-                        // In a full implementation, you would check against other placed pieces here.
-                        // For simplicity in this step, we assume no piece-piece collision check yet.
-                        // You would need a data structure (e.g., a 2D array) tracking occupied cells.
+                        // 2. Check collision with placed pieces
+                        // We need to check if the grid cell (checkX, checkY) is occupied.
+                        // Since we don't have a simple 2D array anymore, we iterate through placedPieceGroups.
+                        // We need to find the world position of the cell (checkX, checkY) and see if any block
+                        // in a placedPieceGroup occupies that space.
+
+                        // Get the world position of the grid cell we are checking
+                        const cellWorldPos = gridToWorld(checkX, checkY);
+
+                        // Iterate through all placed piece groups
+                        for (const group of placedPieceGroups) {
+                            // Iterate through each block in the group
+                            for (const block of group.children) {
+                                // Get the world position of the placed block
+                                const blockWorldPos = new THREE.Vector3();
+                                block.getWorldPosition(blockWorldPos);
+
+                                // Compare world positions. Due to floating point precision,
+                                // we check if they are very close.
+                                const distance = blockWorldPos.distanceTo(cellWorldPos);
+                                // console.log(`Checking (${checkX},${checkY}) vs block at (${blockWorldPos.x.toFixed(3)},${blockWorldPos.y.toFixed(3)}). Distance: ${distance.toFixed(4)}`);
+                                if (distance < GRID_CELL_SIZE * 0.5) { // Threshold for "same cell"
+                                     // console.log("Collision detected with placed piece!");
+                                    return true; // Collision with another piece
+                                }
+                            }
+                        }
                     }
                 }
             }
             return false; // No collision
         }
+
 
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
@@ -373,7 +405,7 @@
                 piece.x += dx;
                 piece.y += dy;
                 piece.mesh.position.x += dx * GRID_CELL_SIZE;
-                piece.mesh.position.y += dy * GRID_CELL_SIZE; // Y+ is up in Three.js
+                piece.mesh.position.y += dy * GRID_CELL_SIZE;
                 return true;
             }
             return false;
@@ -382,16 +414,12 @@
         function placePiece(piece) {
             if (!piece || gameOver) return;
 
-            // --- Create a new Group to hold the blocks in their current orientation ---
             const landedPieceGroup = new THREE.Group();
             const color = TETROMINOES[piece.type].color;
 
-            // Copy the position and rotation of the active piece's mesh
             landedPieceGroup.position.copy(piece.mesh.position);
-            landedPieceGroup.quaternion.copy(piece.mesh.quaternion); // Copy rotation
+            landedPieceGroup.quaternion.copy(piece.mesh.quaternion);
 
-            // Add the individual block meshes as children to this new group
-            // We iterate through the piece's shape to create blocks only where needed
             const shape = piece.shape;
             const blockSize = GRID_CELL_SIZE;
             const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
@@ -400,27 +428,21 @@
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
-                        // Create a new block mesh for the placed piece
                         const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
-                        // Position it relative to the new group (same as in the active piece's local space)
                         blockMesh.position.set(
                             x * blockSize,
                             -y * blockSize,
                             0
                         );
-                        // Mark as interactive
                         blockMesh.userData = { isPiece: true };
                         landedPieceGroup.add(blockMesh);
                     }
                 }
             }
 
-            // Add the new group (representing the placed piece) to the scene and our tracking array
             scene.add(landedPieceGroup);
             placedPieceGroups.push(landedPieceGroup);
-            // ---
 
-            // Remove the active piece's mesh from the scene
             scene.remove(piece.mesh);
             activePiece = null;
             console.log(`Piece placed and stacked with orientation.`);
@@ -452,10 +474,8 @@
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
 
-            // --- Setup Laser Pointers ---
             setupLaserPointer(controller1, 0);
             setupLaserPointer(controller2, 1);
-            // ---
         }
 
         function setupLaserPointer(controller, index) {
@@ -502,7 +522,6 @@
             if (pointers[index]) {
                 pointers[index].isSelecting = true;
             }
-            // Check for piece interaction on Select Start
             checkAndInteract(controller);
         }
 
@@ -519,31 +538,26 @@
              raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
              raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-             // Check intersection with all objects in the scene
-             const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
+             const intersects = raycaster.intersectObjects(scene.children, true);
 
-             // Find the first intersected object that is a piece
              for (let i = 0; i < intersects.length; i++) {
                  const object = intersects[i].object;
                  if (object.userData && object.userData.isPiece) {
-                     // --- Rotate the piece 90 degrees around its local Z-axis ---
-                     // Find the root piece group (the parent Group of the block mesh)
                      let pieceGroup = object;
                      while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
                          pieceGroup = pieceGroup.parent;
                      }
                      if (pieceGroup) {
-                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
+                         pieceGroup.rotateZ(Math.PI / 2);
                          console.log("Piece rotated");
+                         // After rotation, we should ideally re-check for collisions
+                         // with the grid boundaries or other pieces, but for simplicity,
+                         // we'll allow the rotation and let the next drop/move handle it.
                      } else {
-                         // If it's a placed block (not in a group, though unlikely if grouped correctly),
-                         // or a block directly under the scene, rotate the block itself.
-                         // This case is less likely now with grouping, but kept for robustness.
                          object.rotateZ(Math.PI / 2);
                          console.log("Block rotated");
                      }
-                     // ---
-                     break; // Only interact with the first hit piece
+                     break;
                  }
              }
         }
@@ -556,10 +570,8 @@
                 raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-                // Optional: Check for intersection with the grid or other specific objects
-                // For now, lasers just extend out
                 pointer.line.scale.z = 5;
-                pointer.hitPoint.visible = false; // Hide hit point as we are not targeting a specific object visually
+                pointer.hitPoint.visible = false;
             }
         }
         // --- End Controller & Laser Functions ---
@@ -569,7 +581,6 @@
         }
 
         function render() {
-            // Update laser pointers every frame
             updateLasers();
 
             if (gameStarted && !gameOver && activePiece) {
