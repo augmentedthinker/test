@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Controllers Only</title>
+    <title>AR Tetris - Grid</title>
     <style>
         body {
             margin: 0;
@@ -13,11 +13,21 @@
             color: #fff;
             overflow: hidden;
         }
-        /* AR Button styles are handled by the ARButton script below */
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            padding: 10px 0;
+            pointer-events: none; /* Allow clicking through the info text */
+        }
     </style>
 </head>
 <body>
-    <!-- Using an import map for Three.js modules -->
+    <div id="info">AR Tetris - Grid Initialized</div>
+
     <script type="importmap">
         {
             "imports": {
@@ -27,7 +37,6 @@
         }
     </script>
     <script type="module">
-        // Import necessary Three.js modules
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
@@ -47,7 +56,7 @@
                         button.textContent = 'STOP AR';
                         currentSession = session;
                         if (currentSession) {
-                            setupControllers(); // Setup controllers on session start
+                            setupControllers();
                         }
                     }
 
@@ -55,11 +64,11 @@
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
                         currentSession = null;
-                        // Cleanup Controllers
                         if (controller1) scene.remove(controller1);
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
+                        if (grid) scene.remove(grid);
                     }
 
                     button.style.cssText = `
@@ -116,7 +125,6 @@
                     return button;
                 } else {
                     const message = document.createElement('a');
-                    // message.href = 'https://immersiveweb.dev/'; // Uncomment if needed
                     message.innerHTML = 'WEBXR NOT AVAILABLE';
                     message.style.cssText = `
                         position: absolute;
@@ -145,6 +153,13 @@
         let controllerGrip1, controllerGrip2;
         let controllerModelFactory;
 
+        // --- Tetris Grid Variables ---
+        let grid; // The wireframe grid object
+        const GRID_WIDTH = 10;   // Number of columns
+        const GRID_HEIGHT = 20;  // Number of rows
+        const GRID_DEPTH = 1;    // Number of layers (typically 1 for standard Tetris)
+        const GRID_CELL_SIZE = 0.1; // Size of each grid cell
+
         init();
         animate();
 
@@ -155,16 +170,22 @@
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true; // Enable WebXR
+            renderer.xr.enabled = true;
             document.body.appendChild(renderer.domElement);
 
-            // Add the AR button to the document body
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-            // Add some basic lighting for the controller models
+            // --- Create the Tetris Grid ---
+            createGrid();
+
             const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
             light.position.set(0.5, 1, 0.25);
             scene.add(light);
+
+            // Add a directional light for better 3D perception of the grid
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(1, 1, 1).normalize();
+            scene.add(dirLight);
 
             window.addEventListener('resize', onWindowResize, false);
         }
@@ -175,10 +196,37 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
+        function createGrid() {
+            // Calculate the overall dimensions of the grid
+            const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
+            const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
+            const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
+
+            // Create a BoxGeometry for the wireframe
+            const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
+
+            // Create a basic line material for the wireframe
+            const gridMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff, // Cyan color
+                wireframe: true, // This makes it a wireframe
+                transparent: true,
+                opacity: 0.5
+            });
+
+            // Create the mesh and add it to the scene
+            grid = new THREE.Mesh(gridGeometry, gridMaterial);
+
+            // Position the grid in front of the user
+            // Adjust these values to change the grid's placement in the AR space
+            grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
+
+            scene.add(grid);
+        }
+
+
         function setupControllers() {
-            // Get controller input sources
             controller1 = renderer.xr.getController(0);
-            // Add event listeners for controller events (optional for basic display)
+            // Add event listeners for controller events (to be used later)
             // controller1.addEventListener('selectstart', onSelectStart);
             // controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
@@ -188,14 +236,12 @@
             // controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
 
-            // Get controller grip spaces for visual models
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
 
             controllerGrip2 = renderer.xr.getControllerGrip(1);
             scene.add(controllerGrip2);
 
-            // Create controller models
             controllerModelFactory = new XRControllerModelFactory();
 
             const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
@@ -205,7 +251,7 @@
             controllerGrip2.add(controllerModel2);
         }
 
-        // Placeholder functions for controller events (not used in this minimal version)
+        // Placeholder functions for controller events
         // function onSelectStart(event) { }
         // function onSelectEnd(event) { }
 
@@ -214,10 +260,7 @@
         }
 
         function render() {
-            // In a full application, you would update controller elements like lasers here
-            // based on their current pose.
-
-            // Render the scene from the camera's perspective
+            // Future: Update controller elements like lasers or visual feedback
             renderer.render(scene, camera);
         }
     </script>
