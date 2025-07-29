@@ -3,42 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris Screen</title>
+    <title>AR Screen</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: sans-serif;
-            background-color: #111;
-            color: #fff;
-            overflow: hidden;
-        }
-        #info {
-            position: absolute;
-            top: 10px;
-            width: 100%;
-            text-align: center;
-            z-index: 100;
-            display: block;
-            padding: 10px 0;
-            pointer-events: none;
-        }
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Screen Setup</div>
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-            }
-        }
+        { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
     </script>
     <script type="module">
         import * as THREE from 'three';
 
-        // --- Inlined ARButton.js (Simplified) ---
+        // --- Minimal AR Button ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
@@ -55,146 +32,70 @@
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
                         currentSession = null;
-                        if (screen) scene.remove(screen);
+                        if (screenGroup) scene.remove(screenGroup);
                     }
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 50px);
-                        width: 100px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        opacity: 0.5;
-                        cursor: pointer;
-                        z-index: 999;
-                    `;
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
+                        cursor: pointer; z-index: 999;`;
                     button.textContent = 'START AR';
-                    button.onclick = function () {
-                        if (currentSession === null) {
-                            navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-                        } else {
-                            currentSession.end();
-                        }
-                    };
-                    button.onmouseenter = () => button.style.opacity = '1.0';
-                    button.onmouseleave = () => button.style.opacity = '0.5';
+                    button.onclick = () => currentSession ? currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
                 }
                 function showARNotSupported() {
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 75px);
-                        width: 150px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        opacity: 0.5;
-                        z-index: 999;
-                    `;
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`;
                     button.textContent = 'AR NOT SUPPORTED';
                 }
                 if ('xr' in navigator) {
-                    navigator.xr.isSessionSupported('immersive-ar')
-                        .then(supported => supported ? showStartAR() : showARNotSupported())
-                        .catch(showARNotSupported);
+                    navigator.xr.isSessionSupported('immersive-ar').then(supported => supported ? showStartAR() : showARNotSupported()).catch(showARNotSupported);
                     return button;
                 } else {
                     const message = document.createElement('a');
                     message.innerHTML = 'WEBXR NOT AVAILABLE';
-                    message.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 90px);
-                        width: 180px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        text-decoration: none;
-                        opacity: 0.5;
-                        z-index: 999;
-                    `;
+                    message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
+                        text-decoration: none; z-index: 999;`;
                     return message;
                 }
             }
         }
 
-        // --- Main Application Logic ---
-        let camera, scene, renderer;
-        let screen;
+        // --- Core Three.js Setup ---
+        let camera, scene, renderer, screenGroup;
 
-        init();
-        animate();
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+        scene.add(light);
 
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
-
-            window.addEventListener('resize', onWindowResize, false);
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
+        // --- Screen Creation Logic ---
         function createScreen() {
-            if (screen) scene.remove(screen);
+            if (screenGroup) scene.remove(screenGroup);
 
-            const screenWidth = 1.6;  // 16:9 aspect ratio
-            const screenHeight = 0.9;
-            const screenDepth = 0.01;
+            const width = 1.6, height = 0.9, depth = 0.01;
+            const geometry = new THREE.BoxGeometry(width, height, depth);
+            const material = new THREE.MeshStandardMaterial({ color: 0x222222 });
+            const screen = new THREE.Mesh(geometry, material);
 
-            const screenGeometry = new THREE.BoxGeometry(screenWidth, screenHeight, screenDepth);
-            const screenMaterial = new THREE.MeshStandardMaterial({
-                color: 0x222222,
-                metalness: 0.1,
-                roughness: 0.8
-            });
-
-            screen = new THREE.Mesh(screenGeometry, screenMaterial);
-
-            // Position the screen 1.5 meters in front of the user
+            // Position screen 1.5 meters in front of the user origin
             screen.position.set(0, 0, -1.5);
 
-            scene.add(screen);
+            screenGroup = new THREE.Group();
+            screenGroup.add(screen);
+            scene.add(screenGroup);
             console.log("AR Screen created");
         }
 
-        // Hook into XR session events to create the screen
-        renderer.xr.addEventListener('sessionstart', () => {
-            createScreen();
-        });
-
-        function animate() {
-            renderer.setAnimationLoop(render);
-        }
-
-        function render() {
-            renderer.render(scene, camera);
-        }
+        renderer.xr.addEventListener('sessionstart', createScreen);
+        renderer.setAnimationLoop(() => renderer.render(scene, camera));
     </script>
 </body>
 </html>
