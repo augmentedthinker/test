@@ -3,30 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Full Game Logic</title>
+    <title>AR Tetris - Float & Drop</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
-            background-color: #111;
-            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(to bottom, #1a1a2e, #16213e);
+            color: #e6e6e6;
             overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
-        #info {
+        #uiContainer {
             position: absolute;
-            top: 10px;
+            top: 0;
+            left: 0;
             width: 100%;
+            padding: 15px 0;
             text-align: center;
             z-index: 100;
-            display: block;
-            padding: 10px 0;
-            pointer-events: none;
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+        #title {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #4dccff;
+            text-shadow: 0 0 8px rgba(77, 204, 255, 0.7);
+        }
+        #score {
+            font-size: 1.2em;
+            color: #aaffaa;
+        }
+        #instructions {
+            font-size: 0.9em;
+            max-width: 80%;
+            margin: 10px auto 0;
+            color: #cccccc;
+        }
+        #status {
+            margin-top: 8px;
+            font-style: italic;
+            color: #ff9999;
+            height: 1.2em; /* Reserve space */
         }
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Full Game Logic with Collision</div>
+    <div id="uiContainer">
+        <div id="title">AR Tetris - Float & Drop</div>
+        <div id="score">Score: 0</div>
+        <div id="instructions">Use controller position to move piece. Raise controller to drop.</div>
+        <div id="status"></div>
+    </div>
 
     <script type="importmap">
         {
@@ -36,6 +70,7 @@
             }
         }
     </script>
+
     <script type="module">
         import * as THREE from 'three';
         import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
@@ -45,10 +80,8 @@
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
-
                 function showStartAR() {
                     let currentSession = null;
-
                     async function onSessionStarted(session) {
                         session.addEventListener('end', onSessionEnded);
                         renderer.xr.setReferenceSpaceType('local');
@@ -61,10 +94,10 @@
                                 gameStarted = true;
                                 resetGame();
                                 spawnNewPiece();
+                                updateStatus("Game Started!");
                             }
                         }
                     }
-
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
@@ -74,31 +107,32 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         pointers.length = 0;
-                        if (grid) scene.remove(grid);
+                        if (gridHelper) scene.remove(gridHelper);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
-                        for (let group of placedPieceGroups) {
+                        for (let group of placedPieces) {
                             scene.remove(group);
                         }
-                        placedPieceGroups.length = 0;
+                        placedPieces.length = 0;
                         activePiece = null;
                         gameStarted = false;
+                        gameOver = false;
+                        updateStatus("");
                     }
-
                     button.style.cssText = `
                         position: absolute;
                         bottom: 20px;
                         left: calc(50% - 50px);
                         width: 100px;
                         padding: 12px 6px;
-                        border: 1px solid #fff;
+                        border: 1px solid #4dccff;
                         border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
+                        background: rgba(20, 30, 48, 0.7);
+                        color: #4dccff;
                         font: normal 13px sans-serif;
                         text-align: center;
-                        opacity: 0.5;
                         cursor: pointer;
                         z-index: 999;
+                        box-shadow: 0 0 8px rgba(77, 204, 255, 0.5);
                     `;
                     button.textContent = 'START AR';
                     button.onclick = function () {
@@ -108,10 +142,7 @@
                             currentSession.end();
                         }
                     };
-                    button.onmouseenter = () => button.style.opacity = '1.0';
-                    button.onmouseleave = () => button.style.opacity = '0.5';
                 }
-
                 function showARNotSupported() {
                     button.style.cssText = `
                         position: absolute;
@@ -119,25 +150,23 @@
                         left: calc(50% - 75px);
                         width: 150px;
                         padding: 12px 6px;
-                        border: 1px solid #fff;
+                        border: 1px solid #ff6666;
                         border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
+                        background: rgba(30, 20, 20, 0.7);
+                        color: #ff9999;
                         font: normal 13px sans-serif;
                         text-align: center;
-                        opacity: 0.5;
                         z-index: 999;
                     `;
                     button.textContent = 'AR NOT SUPPORTED';
                 }
-
                 if ('xr' in navigator) {
                     navigator.xr.isSessionSupported('immersive-ar')
                         .then(supported => supported ? showStartAR() : showARNotSupported())
                         .catch(showARNotSupported);
                     return button;
                 } else {
-                    const message = document.createElement('a');
+                    const message = document.createElement('div');
                     message.innerHTML = 'WEBXR NOT AVAILABLE';
                     message.style.cssText = `
                         position: absolute;
@@ -145,14 +174,12 @@
                         left: calc(50% - 90px);
                         width: 180px;
                         padding: 12px 6px;
-                        border: 1px solid #fff;
+                        border: 1px solid #ff6666;
                         border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
+                        background: rgba(30, 20, 20, 0.7);
+                        color: #ff9999;
                         font: normal 13px sans-serif;
                         text-align: center;
-                        text-decoration: none;
-                        opacity: 0.5;
                         z-index: 999;
                     `;
                     return message;
@@ -162,32 +189,41 @@
 
         // --- Main Application Logic ---
         let camera, scene, renderer;
-        let controller1, controller2;
-        let controllerGrip1, controllerGrip2;
-        let controllerModelFactory;
-
-        // --- Controller & Laser Variables ---
+        let controller1, controller2, controllerGrip1, controllerGrip2;
         const pointers = [];
         const tempMatrix = new THREE.Matrix4();
+        const tempVector = new THREE.Vector3();
         const raycaster = new THREE.Raycaster();
 
         // --- Tetris Grid Variables ---
-        let grid;
         const GRID_WIDTH = 10;
         const GRID_HEIGHT = 20;
         const GRID_DEPTH = 1;
-        const GRID_CELL_SIZE = 0.1;
+        const GRID_CELL_SIZE = 0.08;
+        let gridState = []; // 2D array to track occupied cells [y][x]
+        let gridHelper = null;
 
         // --- Tetris Piece Variables ---
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000;
-
-        // --- Game State ---
-        let placedPieceGroups = [];
-        let gameGrid = []; // Logical grid for collision detection
+        const DROP_INTERVAL = 1000; // ms
+        let placedPieces = []; // Store Group objects for placed pieces
         let gameOver = false;
+        let score = 0;
+
+        // --- UI Elements ---
+        const scoreElement = document.getElementById('score');
+        const statusElement = document.getElementById('status');
+
+        function updateScore(points) {
+            score += points;
+            scoreElement.textContent = `Score: ${score}`;
+        }
+
+        function updateStatus(message) {
+            statusElement.textContent = message;
+        }
 
         // --- Tetromino Definitions ---
         const TETROMINOES = {
@@ -206,21 +242,34 @@
 
         function init() {
             scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0c0c1a);
+
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
             document.body.appendChild(renderer.domElement);
             document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
             createGrid();
 
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-            dirLight.position.set(1, 1, 1).normalize();
-            scene.add(dirLight);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const hemisphereLight = new THREE.HemisphereLight(0x80deff, 0x404040, 1);
+            hemisphereLight.position.set(0, 2, 0);
+            scene.add(hemisphereLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(1, 3, 1);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            scene.add(directionalLight);
 
             window.addEventListener('resize', onWindowResize, false);
         }
@@ -235,35 +284,53 @@
             const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
             const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
             const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
-            const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
-            const gridMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.5 });
-            grid = new THREE.Mesh(gridGeometry, gridMaterial);
-            grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
-            scene.add(grid);
+
+            // Create a visual grid helper
+            const gridHelperGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
+            const gridHelperMaterial = new THREE.MeshBasicMaterial({
+                color: 0x22aaff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.3
+            });
+            gridHelper = new THREE.Mesh(gridHelperGeometry, gridHelperMaterial);
+            gridHelper.position.set(0, gridHeight / 2 - 0.5, -1.2);
+            scene.add(gridHelper);
+
+            // Initialize the grid state array
+            gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
         }
 
         function resetGame() {
-            for (let group of placedPieceGroups) {
+            for (let group of placedPieces) {
                 scene.remove(group);
             }
-            placedPieceGroups.length = 0;
-
-            // Initialize logical grid
-            gameGrid = Array.from({ length: GRID_HEIGHT }, () => Array(GRID_WIDTH).fill(0));
+            placedPieces.length = 0;
 
             if (activePiece && activePiece.mesh) {
                 scene.remove(activePiece.mesh);
             }
             activePiece = null;
+
+            // Reset grid state
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    gridState[y][x] = 0;
+                }
+            }
+
             gameOver = false;
             lastDropTime = 0;
-            console.log("Game reset. Logical grid created.");
+            score = 0;
+            updateScore(0);
+            console.log("Game reset");
         }
 
         function gridToWorld(x, y) {
             const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
-            const worldY = (y - GRID_HEIGHT / 2 + 0.5) * GRID_CELL_SIZE - 0.5; // Adjusted for grid origin
-            return new THREE.Vector3(worldX, worldY, grid.position.z + GRID_CELL_SIZE);
+            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5;
+            const worldZ = -1.2; // Align with gridHelper Z
+            return new THREE.Vector3(worldX, worldY, worldZ);
         }
 
         function createPiece(type) {
@@ -272,151 +339,259 @@
 
             const group = new THREE.Group();
             const blockSize = GRID_CELL_SIZE;
-            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
-            const blockMaterial = new THREE.MeshStandardMaterial({ color: definition.color });
+            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 0.9, blockSize * 0.9);
+            const blockMaterial = new THREE.MeshStandardMaterial({
+                color: definition.color,
+                metalness: 0.2,
+                roughness: 0.3
+            });
 
             const shape = definition.shape;
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                        block.castShadow = true;
+                        block.receiveShadow = true;
                         block.userData = { isPiece: true };
-                        block.position.set((x - shape.length / 2) * blockSize, (-y + shape.length / 2) * blockSize, 0);
+                        block.position.set(
+                            x * blockSize,
+                            -y * blockSize,
+                            0
+                        );
                         group.add(block);
                     }
                 }
             }
 
-            const startX = Math.floor(GRID_WIDTH / 2) - 1;
-            const startY = GRID_HEIGHT - 1; // Start at the top
+            const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
+            const startPosY = GRID_HEIGHT; // Start above the grid
 
+            group.position.copy(gridToWorld(startPosX, startPosY - 1));
             return {
                 mesh: group,
                 type: type,
-                x: startX,
-                y: startY,
+                x: startPosX,
+                y: startPosY,
                 shape: shape
             };
         }
 
         function spawnNewPiece() {
             if (!gameStarted || gameOver) return;
-
             const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
             activePiece = createPiece(randomType);
-
             if (activePiece) {
-                activePiece.mesh.position.copy(gridToWorld(activePiece.x, activePiece.y));
+                activePiece.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        child.userData = { isPiece: true };
+                    }
+                });
                 scene.add(activePiece.mesh);
-
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
                     gameOver = true;
-                    // Optionally display a game over message
+                    updateStatus("Game Over! Restart AR session.");
                 }
             }
         }
-        
-        function checkCollision(piece, offsetX, offsetY, shape = null) {
-            const currentShape = shape || piece.shape;
+
+        function checkCollision(piece, offsetX, offsetY) {
+            if (!piece) return true;
+            const shape = piece.shape;
             const newX = piece.x + offsetX;
             const newY = piece.y + offsetY;
 
-            for (let y = 0; y < currentShape.length; y++) {
-                for (let x = 0; x < currentShape[y].length; x++) {
-                    if (currentShape[y][x]) {
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
                         const checkX = newX + x;
-                        const checkY = newY - y + Math.floor(currentShape.length / 2); // Adjust for shape pivot
+                        const checkY = newY - y;
 
-                        // 1. Boundary Check
+                        // Check boundaries
                         if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
-                            return true; // Collision with walls or floor
+                            return true;
                         }
-                        
-                        // 2. Placed Piece Check (only for valid grid coordinates)
-                        if (checkY < GRID_HEIGHT && gameGrid[checkY][checkX] !== 0) {
-                             return true; // Collision with another piece
+                        // Check against placed pieces using gridState
+                        if (checkY < GRID_HEIGHT && gridState[checkY][checkX]) {
+                            return true;
                         }
                     }
                 }
             }
-            return false; // No collision
+            return false;
         }
-
 
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
             if (!checkCollision(piece, dx, dy)) {
                 piece.x += dx;
                 piece.y += dy;
-                piece.mesh.position.copy(gridToWorld(piece.x, piece.y));
+                piece.mesh.position.x += dx * GRID_CELL_SIZE;
+                piece.mesh.position.y += dy * GRID_CELL_SIZE;
                 return true;
             }
             return false;
         }
-        
-        function rotatePiece(piece) {
-            if (!piece || !gameStarted || gameOver) return;
-            
-            // Create a new rotated shape matrix
-            const shape = piece.shape;
-            const N = shape.length;
-            const newShape = Array.from({ length: N }, () => Array(N).fill(0));
-            for (let y = 0; y < N; y++) {
-                for (let x = 0; x < N; x++) {
-                    newShape[y][x] = shape[N - 1 - x][y];
-                }
-            }
-            
-            // Check if the rotation is valid
-            if (!checkCollision(piece, 0, 0, newShape)) {
-                piece.shape = newShape;
-                piece.mesh.rotateZ(-Math.PI / 2); // Rotate visual mesh
-                console.log("Piece rotated");
-            } else {
-                 console.log("Invalid rotation");
-            }
-        }
 
-
-        function placePiece(piece) {
+        function lockPiece(piece) {
             if (!piece || gameOver) return;
-            
-            // Update the logical grid
+
             const shape = piece.shape;
+            const blockSize = GRID_CELL_SIZE;
+
+            // Create a new Group for the placed piece
+            const landedPieceGroup = new THREE.Group();
+            landedPieceGroup.position.copy(piece.mesh.position);
+            landedPieceGroup.quaternion.copy(piece.mesh.quaternion);
+
+            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.9, blockSize * 0.9, blockSize * 0.9);
+            const blockMaterial = new THREE.MeshStandardMaterial({
+                color: TETROMINOES[piece.type].color,
+                metalness: 0.2,
+                roughness: 0.3
+            });
+
             for (let y = 0; y < shape.length; y++) {
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
+                        const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                        blockMesh.castShadow = true;
+                        blockMesh.receiveShadow = true;
+                        blockMesh.userData = { isPiece: true };
+
+                        // Position relative to the group
+                        blockMesh.position.set(
+                            x * blockSize,
+                            -y * blockSize,
+                            0
+                        );
+                        landedPieceGroup.add(blockMesh);
+
+                        // Update gridState
                         const gridX = piece.x + x;
-                        const gridY = piece.y - y + Math.floor(shape.length / 2);
-                        if (gridY >= 0 && gridY < GRID_HEIGHT && gridX >= 0 && gridX < GRID_WIDTH) {
-                            gameGrid[gridY][gridX] = 1; // Mark cell as occupied
+                        const gridY = piece.y - y;
+                        if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
+                            gridState[gridY][gridX] = 1; // Mark as occupied
                         }
                     }
                 }
             }
 
-            // Create a static visual group for the placed piece
-            const landedPieceGroup = piece.mesh.clone();
-            landedPieceGroup.position.copy(piece.mesh.position);
-            landedPieceGroup.quaternion.copy(piece.mesh.quaternion);
             scene.add(landedPieceGroup);
-            placedPieceGroups.push(landedPieceGroup);
-
-            // Remove the active piece and flag for new piece spawn
+            placedPieces.push(landedPieceGroup);
             scene.remove(piece.mesh);
             activePiece = null;
-            console.log(`Piece placed. Grid updated.`);
+
+            // Check for line clears after placing a piece
+            checkLineClears();
+
+            updateScore(10); // Points for placing a piece
+            console.log("Piece locked and stacked with orientation.");
         }
 
-        // --- Controller & Laser Functions ---
+        function checkLineClears() {
+            let linesCleared = 0;
+            for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                let isLineFull = true;
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    if (gridState[y][x] === 0) {
+                        isLineFull = false;
+                        break;
+                    }
+                }
+                if (isLineFull) {
+                    linesCleared++;
+                    // Clear the line visually and in gridState
+                    clearLine(y);
+                    // Shift all lines above down
+                    shiftLinesDown(y);
+                    // Since we shifted, we need to check the same line index again
+                    y++;
+                }
+            }
+            if (linesCleared > 0) {
+                const points = [0, 100, 300, 500, 800][linesCleared] || 800; // Points for 1,2,3,4+ lines
+                updateScore(points);
+                console.log(`Cleared ${linesCleared} line(s)!`);
+            }
+        }
+
+        function clearLine(lineY) {
+             // Iterate through placedPieces and remove blocks on this line
+            for (let i = placedPieces.length - 1; i >= 0; i--) {
+                const group = placedPieces[i];
+                const groupWorldPos = new THREE.Vector3();
+                group.getWorldPosition(groupWorldPos);
+
+                // Convert lineY (grid index) to world Y
+                const worldLineY = gridToWorld(0, lineY).y;
+
+                for (let j = group.children.length - 1; j >= 0; j--) {
+                    const block = group.children[j];
+                    const blockWorldPos = new THREE.Vector3();
+                    block.getWorldPosition(blockWorldPos);
+
+                    // Check if block is on the line to clear (with small tolerance)
+                    if (Math.abs(blockWorldPos.y - worldLineY) < GRID_CELL_SIZE / 2) {
+                        group.remove(block);
+                        // Mark grid cell as empty
+                        const gridX = Math.round((blockWorldPos.x - groupWorldPos.x) / GRID_CELL_SIZE + (GRID_WIDTH / 2 - 0.5));
+                        gridState[lineY][gridX] = 0;
+                    }
+                }
+
+                // If the group is now empty, remove it from the scene and array
+                if (group.children.length === 0) {
+                    scene.remove(group);
+                    placedPieces.splice(i, 1);
+                }
+            }
+        }
+
+
+        function shiftLinesDown(startY) {
+            // Shift gridState data down
+            for (let y = startY; y > 0; y--) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    gridState[y][x] = gridState[y-1][x];
+                }
+            }
+            // Clear the top line
+            for (let x = 0; x < GRID_WIDTH; x++) {
+                gridState[0][x] = 0;
+            }
+
+            // Shift visual pieces down
+            for (let group of placedPieces) {
+                const groupWorldPos = new THREE.Vector3();
+                group.getWorldPosition(groupWorldPos);
+
+                // Convert startY grid index to world Y
+                const worldStartY = gridToWorld(0, startY).y;
+
+                let needsShift = false;
+                for (let block of group.children) {
+                    const blockWorldPos = new THREE.Vector3();
+                    block.getWorldPosition(blockWorldPos);
+                    // If any block is above the cleared line, shift the whole group
+                    if (blockWorldPos.y > worldStartY + GRID_CELL_SIZE / 2) {
+                         needsShift = true;
+                         break;
+                    }
+                }
+                if (needsShift) {
+                     group.position.y -= GRID_CELL_SIZE;
+                }
+            }
+        }
+
+
+        // --- Controller & Interaction Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart);
             scene.add(controller1);
-
             controller2 = renderer.xr.getController(1);
-            controller2.addEventListener('selectstart', onSelectStart);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -424,7 +599,7 @@
             controllerGrip2 = renderer.xr.getControllerGrip(1);
             scene.add(controllerGrip2);
 
-            controllerModelFactory = new XRControllerModelFactory();
+            const controllerModelFactory = new XRControllerModelFactory();
             const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
@@ -435,40 +610,101 @@
         }
 
         function setupLaserPointer(controller, index) {
-            const geometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-            const line = new THREE.Line(geometry);
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3));
+            const material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true
+            });
+            const line = new THREE.Line(geometry, material);
             line.scale.z = 5;
+            line.visible = false;
             controller.add(line);
-            pointers[index] = { line: line };
+
+            pointers[index] = { controller: controller, line: line };
+            controller.addEventListener('connected', () => line.visible = true);
+            controller.addEventListener('disconnected', () => line.visible = false);
         }
 
-        function onSelectStart(event) {
-             if (gameOver) return;
-             // Any select press rotates the active piece
-             rotatePiece(activePiece);
+        function updateControllerInteraction() {
+            if (!gameStarted || gameOver || !activePiece) return;
+
+            // Use the first available controller for interaction
+            let controllerToUse = null;
+            if (controller1 && controller1.visible) controllerToUse = controller1;
+            else if (controller2 && controller2.visible) controllerToUse = controller2;
+
+            if (!controllerToUse) return;
+
+            // --- Horizontal Movement based on Controller X Position ---
+            const controllerPos = new THREE.Vector3();
+            controllerToUse.getWorldPosition(controllerPos);
+
+            // Define a world space range for movement (e.g., -0.4 to 0.4 meters)
+            const moveRange = 0.4;
+            const clampedX = THREE.MathUtils.clamp(controllerPos.x, -moveRange, moveRange);
+
+            // Map clampedX to grid columns (0 to GRID_WIDTH - 1)
+            const gridX = Math.floor(THREE.MathUtils.mapLinear(clampedX, -moveRange, moveRange, 0, GRID_WIDTH - 1));
+
+            // Calculate desired piece X position
+            const desiredPieceX = gridX - Math.floor(activePiece.shape[0].length / 2); // Center the piece
+
+            // Move the piece horizontally
+            const dx = desiredPieceX - activePiece.x;
+            if (dx !== 0) {
+                movePiece(activePiece, dx, 0);
+            }
+
+            // --- Drop based on Controller Height ---
+            // Define a height threshold above the grid (e.g., 0.1 meters)
+            const dropThreshold = gridToWorld(0, GRID_HEIGHT - 1).y + 0.1;
+            if (controllerPos.y > dropThreshold) {
+                 // Attempt to drop the piece immediately
+                 const moved = movePiece(activePiece, 0, -1);
+                 if (!moved) {
+                     lockPiece(activePiece);
+                     spawnNewPiece();
+                 }
+                 // Reset drop timer to prevent normal drop during manual drop
+                 lastDropTime = performance.now();
+            }
         }
 
         function updateLasers() {
-            // Laser logic can be expanded here if needed
+            for (let i = 0; i < pointers.length; i++) {
+                const pointer = pointers[i];
+                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
+                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
+                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
+                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+                pointer.line.scale.z = 5;
+            }
         }
-        // --- End Controller & Laser Functions ---
+
+        // --- End Controller & Interaction Functions ---
 
         function animate() {
             renderer.setAnimationLoop(render);
         }
 
         function render() {
-            if (gameStarted && !gameOver) {
-                if (activePiece) {
-                    const currentTime = performance.now();
-                    if (currentTime - lastDropTime > DROP_INTERVAL) {
-                        const moved = movePiece(activePiece, 0, -1); // Move down
-                        if (!moved) {
-                            placePiece(activePiece);
-                            spawnNewPiece();
-                        }
-                        lastDropTime = currentTime;
+            updateLasers();
+            updateControllerInteraction(); // Handle controller-driven piece movement/drop
+
+            if (gameStarted && !gameOver && activePiece) {
+                const currentTime = performance.now();
+                // Normal auto-drop logic
+                if (currentTime - lastDropTime > DROP_INTERVAL) {
+                    const moved = movePiece(activePiece, 0, -1);
+                    if (!moved) {
+                        lockPiece(activePiece);
+                        spawnNewPiece();
                     }
+                    lastDropTime = currentTime;
                 }
             }
             renderer.render(scene, camera);
