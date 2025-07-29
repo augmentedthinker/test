@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Lasers & Piece Rotation</title>
+    <title>AR Tetris - Fixed Falling & Placement</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Shoot Lasers, Click Pieces to Rotate</div>
+    <div id="info">AR Tetris - Fixed Falling Through & Placement Orientation</div>
 
     <script type="importmap">
         {
@@ -73,7 +73,6 @@
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        // Cleanup pointers
                         pointers.length = 0;
                         if (grid) scene.remove(grid);
                         if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
@@ -181,7 +180,7 @@
         let activePiece = null;
         let gameStarted = false;
         let lastDropTime = 0;
-        const DROP_INTERVAL = 1000;
+        const DROP_INTERVAL = 1000; // milliseconds
 
         // --- Game State ---
         let placedBlocks = Array(GRID_WIDTH).fill().map(() => Array(GRID_HEIGHT).fill(false));
@@ -293,9 +292,7 @@
                 for (let x = 0; x < shape[y].length; x++) {
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                         // --- Mark as interactive piece ---
                         block.userData = { isPiece: true };
-                        // ---
                         block.position.set(
                             x * blockSize,
                             -y * blockSize,
@@ -328,13 +325,11 @@
             activePiece = createPiece(randomType);
 
             if (activePiece) {
-                 // --- Mark active piece's child meshes as interactive ---
                  activePiece.mesh.traverse((child) => {
                     if (child.isMesh) {
                         child.userData = { isPiece: true };
                     }
                 });
-                // ---
                 scene.add(activePiece.mesh);
                 if (checkCollision(activePiece, 0, 0)) {
                     console.log("Game Over!");
@@ -368,52 +363,72 @@
             return false;
         }
 
+        // --- FIXED movePiece ---
         function movePiece(piece, dx, dy) {
             if (!piece || !gameStarted || gameOver) return false;
+            
+            // Check collision at the *new* position BEFORE moving
             if (!checkCollision(piece, dx, dy)) {
+                // If no collision, update logical and visual positions
                 piece.x += dx;
                 piece.y += dy;
                 piece.mesh.position.x += dx * GRID_CELL_SIZE;
                 piece.mesh.position.y += dy * GRID_CELL_SIZE;
-                return true;
+                return true; // Move successful
             }
-            return false;
+            return false; // Move blocked
         }
+        // --- END FIXED movePiece ---
 
+        // --- FIXED placePiece ---
         function placePiece(piece) {
             if (!piece || gameOver) return;
-            const shape = piece.shape;
+            
+            // Use the piece's current world transformation (position and rotation)
+            const pieceWorldMatrix = piece.mesh.matrixWorld;
+            const blockSize = GRID_CELL_SIZE;
+            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
             const color = TETROMINOES[piece.type].color;
+            const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
 
-            for (let y = 0; y < shape.length; y++) {
-                for (let x = 0; x < shape[y].length; x++) {
-                    if (shape[y][x]) {
-                        const gridX = piece.x + x;
-                        const gridY = piece.y - y;
+            // Iterate through the piece's child blocks
+            piece.mesh.updateMatrixWorld(); // Ensure world matrices are up-to-date
+            piece.mesh.traverse((child) => {
+                if (child.isMesh && child !== piece.mesh) { // Ensure it's a block mesh, not the group itself
+                    // Get the block's world position
+                    const blockWorldPosition = new THREE.Vector3();
+                    child.getWorldPosition(blockWorldPosition);
 
-                        if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
-                            placedBlocks[gridX][gridY] = { color: color };
+                    // Convert world position to grid coordinates
+                    const gridX = Math.round((blockWorldPosition.x / GRID_CELL_SIZE) + (GRID_WIDTH / 2) - 0.5);
+                    const gridY = Math.round((blockWorldPosition.y / GRID_CELL_SIZE) + 0.5); // Adjust for grid origin
 
-                            const blockSize = GRID_CELL_SIZE;
-                            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
-                            const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
-                            const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
-                            // --- Mark as interactive piece ---
-                            blockMesh.userData = { isPiece: true };
-                            // ---
+                    // Place block in logical grid if within bounds
+                    if (gridX >= 0 && gridX < GRID_WIDTH && gridY >= 0 && gridY < GRID_HEIGHT) {
+                        placedBlocks[gridX][gridY] = { color: color };
 
-                            blockMesh.position.copy(gridToWorld(gridX, gridY));
-                            scene.add(blockMesh);
-                            placedBlocksVisual.push(blockMesh);
-                        }
+                        // Create a new visual block using the original block's world transform
+                        const newBlockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                        
+                        // Apply the block's world transform directly to the new mesh
+                        // This preserves its exact position and rotation relative to the world
+                        newBlockMesh.matrix.copy(child.matrixWorld);
+                        newBlockMesh.matrix.decompose(newBlockMesh.position, newBlockMesh.quaternion, newBlockMesh.scale);
+                        newBlockMesh.matrixAutoUpdate = false; // Use the manually set matrix
+
+                        newBlockMesh.userData = { isPiece: true };
+                        scene.add(newBlockMesh);
+                        placedBlocksVisual.push(newBlockMesh);
                     }
                 }
-            }
+            });
 
+            // Remove the original active piece group
             scene.remove(piece.mesh);
             activePiece = null;
             console.log(`Piece placed.`);
         }
+        // --- END FIXED placePiece ---
 
         // --- Controller & Laser Functions ---
         function setupControllers() {
@@ -441,16 +456,14 @@
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
 
-            // --- Setup Laser Pointers ---
             setupLaserPointer(controller1, 0);
             setupLaserPointer(controller2, 1);
-            // ---
         }
 
         function setupLaserPointer(controller, index) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3));
             const material = new THREE.LineBasicMaterial({
                 vertexColors: true,
                 blending: THREE.AdditiveBlending,
@@ -462,7 +475,7 @@
             line.visible = false;
 
             const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
-            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
+            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
             const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
             hitPoint.visible = false;
 
@@ -491,7 +504,6 @@
             if (pointers[index]) {
                 pointers[index].isSelecting = true;
             }
-            // Check for piece interaction on Select Start
             checkAndInteract(controller);
         }
 
@@ -508,29 +520,23 @@
              raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
              raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-             // Check intersection with all objects in the scene
-             const intersects = raycaster.intersectObjects(scene.children, true); // true for recursive
+             const intersects = raycaster.intersectObjects(scene.children, true);
 
-             // Find the first intersected object that is a piece
              for (let i = 0; i < intersects.length; i++) {
                  const object = intersects[i].object;
                  if (object.userData && object.userData.isPiece) {
-                     // --- Rotate the piece 90 degrees around its local Z-axis ---
-                     // Find the root piece group (the parent Group of the block mesh)
                      let pieceGroup = object;
                      while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
                          pieceGroup = pieceGroup.parent;
                      }
                      if (pieceGroup) {
-                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
+                         pieceGroup.rotateZ(Math.PI / 2);
                          console.log("Piece rotated");
                      } else {
-                         // If it's a placed block (not in a group), rotate the block itself
                          object.rotateZ(Math.PI / 2);
                          console.log("Block rotated");
                      }
-                     // ---
-                     break; // Only interact with the first hit piece
+                     break;
                  }
              }
         }
@@ -542,11 +548,8 @@
                 tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
                 raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-                // Optional: Check for intersection with the grid or other specific objects
-                // For now, lasers just extend out
                 pointer.line.scale.z = 5;
-                pointer.hitPoint.visible = false; // Hide hit point as we are not targeting a specific object visually
+                pointer.hitPoint.visible = false;
             }
         }
         // --- End Controller & Laser Functions ---
@@ -556,16 +559,17 @@
         }
 
         function render() {
-            // Update laser pointers every frame
             updateLasers();
 
             if (gameStarted && !gameOver && activePiece) {
                 const currentTime = performance.now();
                 if (currentTime - lastDropTime > DROP_INTERVAL) {
+                    // Try to move the piece down
                     const moved = movePiece(activePiece, 0, -1);
                     if (!moved) {
+                        // If it couldn't move down, it has landed
                         placePiece(activePiece);
-                        spawnNewPiece();
+                        spawnNewPiece(); // Spawn the next piece
                     }
                     lastDropTime = currentTime;
                 }
