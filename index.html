@@ -3,30 +3,116 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Color Screen</title>
+    <title>Vortex VR Tetris</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            font-family: sans-serif;
-            background-color: #111;
-            color: #fff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e, #16213e);
+            color: #00ffcc;
             overflow: hidden;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        #info {
-            position: absolute;
-            top: 10px;
-            width: 100%;
+        #uiContainer {
             text-align: center;
+            z-index: 10;
+            padding: 20px;
+            background: rgba(0, 20, 30, 0.7);
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
+            backdrop-filter: blur(5px);
+            max-width: 90%;
+        }
+        h1 {
+            margin-top: 0;
+            font-size: 2.5em;
+            text-shadow: 0 0 10px #00ffcc;
+            letter-spacing: 2px;
+        }
+        #scoreDisplay {
+            font-size: 1.8em;
+            margin: 15px 0;
+        }
+        #gameOverDisplay {
+            font-size: 2em;
+            color: #ff3366;
+            margin: 20px 0;
+            display: none;
+        }
+        #instructions {
+            margin-top: 20px;
+            font-size: 1em;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        #startButton {
+            background: linear-gradient(to right, #00c9ff, #00ffcc);
+            border: none;
+            color: #0a1929;
+            padding: 15px 30px;
+            font-size: 1.2em;
+            border-radius: 30px;
+            cursor: pointer;
+            margin-top: 20px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0, 201, 255, 0.4);
+        }
+        #startButton:hover {
+            transform: scale(1.05);
+            box-shadow: 0 7px 20px rgba(0, 201, 255, 0.6);
+        }
+        #rendererContainer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        /* Inlined ARButton styles adapted for VR */
+        #vrButton {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 15px 25px;
+            background: rgba(0, 30, 60, 0.8);
+            color: #00ffcc;
+            border: 2px solid #00ffcc;
+            border-radius: 30px;
+            font-size: 1.1em;
+            cursor: pointer;
             z-index: 100;
-            display: block;
-            padding: 10px 0;
-            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        #vrButton:hover {
+            background: rgba(0, 60, 100, 0.9);
+            box-shadow: 0 0 15px #00ffcc;
         }
     </style>
 </head>
 <body>
-    <div id="info">AR Color Screen - Point and Click to Change Color</div>
+    <div id="uiContainer">
+        <h1>VORTEX VR TETRIS</h1>
+        <div id="scoreDisplay">Score: 0</div>
+        <div id="gameOverDisplay">GAME OVER</div>
+        <div id="instructions">
+            <p><b>Right Controller:</b></p>
+            <p>/thumbstick/: Move Left/Right</p>
+            <p>/squeeze/: Rotate (Twist)</p>
+            <p>/select/: Rotate (Spin)</p>
+            <p>/thumbstick up/: Drop Piece</p>
+        </div>
+        <button id="startButton">START GAME</button>
+    </div>
+    <div id="rendererContainer"></div>
+    <button id="vrButton">ENTER VR</button>
+
     <script type="importmap">
         {
             "imports": {
@@ -37,167 +123,112 @@
     </script>
     <script type="module">
         import * as THREE from 'three';
+        import { VRButton } from 'three/addons/webxr/VRButton.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- Inlined ARButton.js (Simplified) ---
-        class ARButton {
-            static createButton(renderer, sessionInit = {}) {
-                const button = document.createElement('button');
-                function showStartAR() {
-                    let currentSession = null;
-                    async function onSessionStarted(session) {
-                        session.addEventListener('end', onSessionEnded);
-                        renderer.xr.setReferenceSpaceType('local');
-                        await renderer.xr.setSession(session);
-                        button.textContent = 'STOP AR';
-                        currentSession = session;
-                        if (currentSession) {
-                            setupControllers();
-                        }
-                    }
-                    function onSessionEnded() {
-                        currentSession.removeEventListener('end', onSessionEnded);
-                        button.textContent = 'START AR';
-                        currentSession = null;
-                        if (controller1) scene.remove(controller1);
-                        if (controller2) scene.remove(controller2);
-                        if (controllerGrip1) scene.remove(controllerGrip1);
-                        if (controllerGrip2) scene.remove(controllerGrip2);
-                        pointers.length = 0;
-                        if (screenPlane) scene.remove(screenPlane);
-                    }
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 50px);
-                        width: 100px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        opacity: 0.5;
-                        cursor: pointer;
-                        z-index: 999;
-                    `;
-                    button.textContent = 'START AR';
-                    button.onclick = function () {
-                        if (currentSession === null) {
-                            navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-                        } else {
-                            currentSession.end();
-                        }
-                    };
-                    button.onmouseenter = () => button.style.opacity = '1.0';
-                    button.onmouseleave = () => button.style.opacity = '0.5';
-                }
-                function showARNotSupported() {
-                    button.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 75px);
-                        width: 150px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        opacity: 0.5;
-                        z-index: 999;
-                    `;
-                    button.textContent = 'AR NOT SUPPORTED';
-                }
-                if ('xr' in navigator) {
-                    navigator.xr.isSessionSupported('immersive-ar')
-                        .then(supported => supported ? showStartAR() : showARNotSupported())
-                        .catch(showARNotSupported);
-                    return button;
-                } else {
-                    const message = document.createElement('a');
-                    message.innerHTML = 'WEBXR NOT AVAILABLE';
-                    message.style.cssText = `
-                        position: absolute;
-                        bottom: 20px;
-                        left: calc(50% - 90px);
-                        width: 180px;
-                        padding: 12px 6px;
-                        border: 1px solid #fff;
-                        border-radius: 4px;
-                        background: rgba(0,0,0,0.1);
-                        color: #fff;
-                        font: normal 13px sans-serif;
-                        text-align: center;
-                        text-decoration: none;
-                        opacity: 0.5;
-                        z-index: 999;
-                    `;
-                    return message;
-                }
-            }
-        }
-
-        // --- Main Application Logic ---
+        // --- Main Application Variables ---
         let camera, scene, renderer;
         let controller1, controller2;
         let controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-        // --- Controller & Laser Variables ---
-        const pointers = [];
+
+        // --- Game State Variables ---
+        const GRID_WIDTH = 10;
+        const GRID_HEIGHT = 20;
+        const GRID_DEPTH = 1;
+        const GRID_CELL_SIZE = 0.1;
+        let grid; // Visual representation
+        let gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0)); // 0 = empty, 1 = filled
+        let activePiece = null;
+        let gameStarted = false;
+        let gameOver = false;
+        let score = 0;
+        let lastDropTime = 0;
+        const DROP_INTERVAL = 1000; // ms
+
+        // --- UI Elements ---
+        const uiContainer = document.getElementById('uiContainer');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const gameOverDisplay = document.getElementById('gameOverDisplay');
+        const startButton = document.getElementById('startButton');
+        const vrButton = document.getElementById('vrButton');
+
+        // --- Tetromino Definitions ---
+        const TETROMINOES = {
+            I: { shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: 0x00ffff },
+            O: { shape: [[1, 1], [1, 1]], color: 0xffff00 },
+            T: { shape: [[0, 1, 0], [1, 1, 1], [0, 0, 0]], color: 0x800080 },
+            S: { shape: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], color: 0x00ff00 },
+            Z: { shape: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], color: 0xff0000 },
+            J: { shape: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], color: 0x0000ff },
+            L: { shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: 0xff7f00 }
+        };
+        const TETROMINO_NAMES = Object.keys(TETROMINOES);
+
+        // --- Controller Interaction ---
         const tempMatrix = new THREE.Matrix4();
         const raycaster = new THREE.Raycaster();
-        // --- Screen Plane ---
-        let screenPlane;
-        const SCREEN_WIDTH = 1.5; // Meters
-        const SCREEN_HEIGHT = 1.0; // Meters
-        let currentColorIndex = 0;
-        const COLORS = [
-            0xff0000, // Red
-            0x00ff00, // Green
-            0x0000ff, // Blue
-            0xffff00, // Yellow
-            0xff00ff, // Magenta
-            0x00ffff, // Cyan
-            0xffffff  // White
-        ];
 
         init();
-        animate();
+        setupEventListeners();
 
         function init() {
+            // --- Scene Setup ---
             scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a1929);
+
+            // --- Camera Setup ---
             camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+            // In VR, camera will be replaced by XR camera, but we need it for non-VR view
+
+            // --- Renderer Setup ---
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+            document.getElementById('rendererContainer').appendChild(renderer.domElement);
 
-            // Create the screen plane
-            const screenGeometry = new THREE.PlaneGeometry(SCREEN_WIDTH, SCREEN_HEIGHT);
-            const screenMaterial = new THREE.MeshStandardMaterial({
-                color: COLORS[currentColorIndex],
-                metalness: 0.1,
-                roughness: 0.1,
-                side: THREE.DoubleSide
-            });
-            screenPlane = new THREE.Mesh(screenGeometry, screenMaterial);
-            // Position the screen in front of the user
-            screenPlane.position.set(0, 0, -1.5);
-            scene.add(screenPlane);
+            // --- Lighting ---
+            const ambientLight = new THREE.AmbientLight(0xaaaaaa, 1.5);
+            scene.add(ambientLight);
 
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight1.position.set(1, 1, 1).normalize();
+            scene.add(directionalLight1);
 
-            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-            dirLight.position.set(1, 1, 1).normalize();
-            scene.add(dirLight);
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.7);
+            directionalLight2.position.set(-1, -1, -1).normalize();
+            scene.add(directionalLight2);
 
+            // --- VR Button ---
+            document.body.appendChild(VRButton.createButton(renderer));
+            vrButton.style.display = 'none'; // Hide custom button if Three.js one is used
+
+            // --- Initial Grid Creation (for non-VR preview) ---
+            createGrid();
+
+            // --- Window Resize ---
             window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function setupEventListeners() {
+            startButton.addEventListener('click', onStartButtonClick);
+        }
+
+        function onStartButtonClick() {
+            if (!gameStarted) {
+                startGame();
+            }
+        }
+
+        function startGame() {
+            gameStarted = true;
+            gameOver = false;
+            score = 0;
+            updateScore();
+            gameOverDisplay.style.display = 'none';
+            startButton.textContent = "RESTART GAME";
+            resetGame();
+            spawnNewPiece();
         }
 
         function onWindowResize() {
@@ -206,21 +237,457 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function changeScreenColor() {
-            currentColorIndex = (currentColorIndex + 1) % COLORS.length;
-            if (screenPlane && screenPlane.material) {
-                screenPlane.material.color.set(COLORS[currentColorIndex]);
+        function createGrid() {
+            // Remove existing grid if present
+            if (grid) scene.remove(grid);
+            
+            const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
+            const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
+            const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
+
+            const gridGroup = new THREE.Group();
+
+            // Outer wireframe box
+            const outerBoxGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
+            const outerBoxMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffcc,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.3
+            });
+            const outerBox = new THREE.Mesh(outerBoxGeometry, outerBoxMaterial);
+            gridGroup.add(outerBox);
+
+            // Inner grid lines
+            const innerLineMaterial = new THREE.LineBasicMaterial({ color: 0x0088aa, transparent: true, opacity: 0.2 });
+            // Vertical lines
+            for (let i = 1; i < GRID_WIDTH; i++) {
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3((i - GRID_WIDTH/2) * GRID_CELL_SIZE, -gridHeight/2,  gridDepth/2),
+                    new THREE.Vector3((i - GRID_WIDTH/2) * GRID_CELL_SIZE, -gridHeight/2, -gridDepth/2),
+                    new THREE.Vector3((i - GRID_WIDTH/2) * GRID_CELL_SIZE,  gridHeight/2, -gridDepth/2),
+                    new THREE.Vector3((i - GRID_WIDTH/2) * GRID_CELL_SIZE,  gridHeight/2,  gridDepth/2),
+                    new THREE.Vector3((i - GRID_WIDTH/2) * GRID_CELL_SIZE, -gridHeight/2,  gridDepth/2),
+                ]);
+                const line = new THREE.Line(lineGeo, innerLineMaterial);
+                gridGroup.add(line);
+            }
+            // Horizontal lines
+            for (let i = 1; i < GRID_HEIGHT; i++) {
+                const lineGeo = new THREE.BufferGeometry().setFromPoints([
+                    new THREE.Vector3(-gridWidth/2, (i - GRID_HEIGHT/2) * GRID_CELL_SIZE,  gridDepth/2),
+                    new THREE.Vector3(-gridWidth/2, (i - GRID_HEIGHT/2) * GRID_CELL_SIZE, -gridDepth/2),
+                    new THREE.Vector3( gridWidth/2, (i - GRID_HEIGHT/2) * GRID_CELL_SIZE, -gridDepth/2),
+                    new THREE.Vector3( gridWidth/2, (i - GRID_HEIGHT/2) * GRID_CELL_SIZE,  gridDepth/2),
+                    new THREE.Vector3(-gridWidth/2, (i - GRID_HEIGHT/2) * GRID_CELL_SIZE,  gridDepth/2),
+                ]);
+                const line = new THREE.Line(lineGeo, innerLineMaterial);
+                gridGroup.add(line);
+            }
+
+            gridGroup.position.set(0, 0, -1.5); // Position in front of the player
+            scene.add(gridGroup);
+            grid = gridGroup; // Store reference
+        }
+
+
+        function resetGame() {
+            // Clear grid state
+            for (let y = 0; y < GRID_HEIGHT; y++) {
+                for (let x = 0; x < GRID_WIDTH; x++) {
+                    gridState[y][x] = 0;
+                }
+            }
+
+            // Remove any existing active piece
+            if (activePiece && activePiece.mesh) {
+                scene.remove(activePiece.mesh);
+            }
+            activePiece = null;
+
+            // Clear visual piece blocks from scene (if any were added directly)
+            // Note: In this improved version, we don't add individual blocks to the scene root.
+            // They are part of the active piece group or cleared implicitly.
+
+            lastDropTime = 0;
+            console.log("Game reset");
+        }
+
+        function gridToWorld(x, y) {
+            // Convert grid coordinates (0,0 bottom-left) to Three.js world coordinates
+            // Grid is centered at origin in X, bottom at Y=0
+            const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
+            const worldY = (y + 0.5) * GRID_CELL_SIZE - (GRID_HEIGHT * GRID_CELL_SIZE) / 2;
+            const worldZ = -1.5; // Consistent Z position
+            return new THREE.Vector3(worldX, worldY, worldZ);
+        }
+
+        function worldToGrid(worldPos) {
+             // Convert Three.js world coordinates to grid coordinates
+             const gridX = Math.floor((worldPos.x / GRID_CELL_SIZE) + GRID_WIDTH / 2);
+             const gridY = Math.floor((worldPos.y / GRID_CELL_SIZE) + GRID_HEIGHT / 2);
+             return { x: gridX, y: gridY };
+        }
+
+        function createPiece(type) {
+            const definition = TETROMINOES[type];
+            if (!definition) return null;
+
+            const group = new THREE.Group();
+            const blockSize = GRID_CELL_SIZE;
+            // Use a slightly shinier material
+            const blockMaterial = new THREE.MeshStandardMaterial({
+                color: definition.color,
+                metalness: 0.3,
+                roughness: 0.2
+            });
+
+            const shape = definition.shape;
+            const blockMeshes = [];
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
+                        const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                        block.position.set(
+                            (x - shape[0].length / 2 + 0.5) * blockSize, // Center the piece shape
+                            (-y + shape.length / 2 - 0.5) * blockSize,
+                            0
+                        );
+                        group.add(block);
+                        blockMeshes.push(block);
+                    }
+                }
+            }
+
+            // Initial spawn position: top center of the grid
+            const startPosX = Math.floor(GRID_WIDTH / 2) - Math.floor(shape[0].length / 2);
+            const startPosY = GRID_HEIGHT - 1; // Start at the very top
+
+            group.position.copy(gridToWorld(startPosX, startPosY));
+            
+            return {
+                mesh: group,
+                type: type,
+                gridX: startPosX,
+                gridY: startPosY,
+                shape: shape,
+                blocks: blockMeshes // Keep reference to blocks for easier access
+            };
+        }
+
+        function spawnNewPiece() {
+            if (!gameStarted || gameOver) return;
+            const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
+            activePiece = createPiece(randomType);
+            if (activePiece) {
+                scene.add(activePiece.mesh);
+                if (checkCollision(activePiece, 0, 0)) {
+                    console.log("Game Over!");
+                    gameOver = true;
+                    gameOverDisplay.style.display = 'block';
+                }
             }
         }
 
-        // --- Controller & Laser Functions ---
+        function checkCollision(piece, dGridX, dGridY) {
+            if (!piece) return true;
+            const shape = piece.shape;
+            const newGridX = piece.gridX + dGridX;
+            const newGridY = piece.gridY + dGridY;
+
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const checkX = newGridX + x;
+                        const checkY = newGridY - y;
+
+                        // Check boundaries
+                        if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0 || checkY >= GRID_HEIGHT) {
+                            return true; // Collision with walls or floor/ceiling
+                        }
+                        
+                        // Check grid for existing pieces
+                        if (gridState[checkY][checkX]) {
+                            return true; // Collision with another piece
+                        }
+                    }
+                }
+            }
+            return false; // No collision
+        }
+        
+        function rotatePiece(piece, axis) { // axis: 'X' or 'Y'
+            if (!piece || !gameStarted || gameOver) return;
+            
+            // Determine the bounding box of the piece in its local grid
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            const shape = piece.shape;
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        minX = Math.min(minX, x);
+                        minY = Math.min(minY, y);
+                        maxX = Math.max(maxX, x);
+                        maxY = Math.max(maxY, y);
+                    }
+                }
+            }
+            const width = maxX - minX + 1;
+            const height = maxY - minY + 1;
+            
+            // Create a temporary grid for the piece's shape
+            let pieceGrid = Array(height).fill().map(() => Array(width).fill(0));
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        pieceGrid[y - minY][x - minX] = 1;
+                    }
+                }
+            }
+
+            // Rotate the temporary grid
+            let newPieceGrid, newWidth, newHeight;
+            if (axis === 'X') {
+                 // Rotate 90 degrees counter-clockwise
+                 newWidth = height;
+                 newHeight = width;
+                 newPieceGrid = Array(newHeight).fill().map(() => Array(newWidth).fill(0));
+                 for (let y = 0; y < height; y++) {
+                     for (let x = 0; x < width; x++) {
+                         newPieceGrid[newHeight - 1 - x][y] = pieceGrid[y][x];
+                     }
+                 }
+            } else if (axis === 'Y') {
+                // Rotate 90 degrees clockwise
+                newWidth = height;
+                newHeight = width;
+                newPieceGrid = Array(newHeight).fill().map(() => Array(newWidth).fill(0));
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        newPieceGrid[x][newWidth - 1 - y] = pieceGrid[y][x];
+                    }
+                }
+            } else { // Z-axis (like before)
+                 // Rotate 90 degrees clockwise
+                 newWidth = height;
+                 newHeight = width;
+                 newPieceGrid = Array(newHeight).fill().map(() => Array(newWidth).fill(0));
+                 for (let y = 0; y < height; y++) {
+                     for (let x = 0; x < width; x++) {
+                         newPieceGrid[x][newWidth - 1 - y] = pieceGrid[y][x];
+                     }
+                 }
+            }
+
+            // Calculate new shape dimensions
+            let newMinX = Infinity, newMinY = Infinity, newMaxX = -Infinity, newMaxY = -Infinity;
+            for (let y = 0; y < newHeight; y++) {
+                for (let x = 0; x < newWidth; x++) {
+                    if (newPieceGrid[y][x]) {
+                        newMinX = Math.min(newMinX, x);
+                        newMinY = Math.min(newMinY, y);
+                        newMaxX = Math.max(newMaxX, x);
+                        newMaxY = Math.max(newMaxY, y);
+                    }
+                }
+            }
+            const newShapeWidth = newMaxX - newMinX + 1;
+            const newShapeHeight = newMaxY - newMinY + 1;
+
+            // Create a new shape array
+            const newShape = Array(newShapeHeight).fill().map(() => Array(newShapeWidth).fill(0));
+            for (let y = newMinY; y <= newMaxY; y++) {
+                for (let x = newMinX; x <= newMaxX; x++) {
+                    if (newPieceGrid[y][x]) {
+                        newShape[y - newMinY][x - newMinX] = 1;
+                    }
+                }
+            }
+            
+            // Offset to keep the pivot point (center of original bounding box) consistent
+            const oldCenterX = minX + (width - 1) / 2;
+            const oldCenterY = minY + (height - 1) / 2;
+            const newCenterX = newMinX + (newShapeWidth - 1) / 2;
+            const newCenterY = newMinY + (newShapeHeight - 1) / 2;
+            
+            const offsetGridX = Math.round(oldCenterX - newCenterX);
+            const offsetGridY = Math.round(oldCenterY - newCenterY);
+            
+            // Test collision at the new orientation
+            const testPiece = {
+                ...piece,
+                shape: newShape,
+                gridX: piece.gridX + offsetGridX,
+                gridY: piece.gridY - offsetGridY // Y axis is inverted in grid coordinates
+            };
+
+            if (!checkCollision(testPiece, 0, 0)) {
+                // No collision, apply the rotation
+                piece.shape = newShape;
+                
+                // Update block positions
+                let blockIndex = 0;
+                for (let y = 0; y < newShape.length; y++) {
+                    for (let x = 0; x < newShape[y].length; x++) {
+                        if (newShape[y][x]) {
+                            if (blockIndex < piece.blocks.length) {
+                                piece.blocks[blockIndex].position.set(
+                                    (x - newShape[0].length / 2 + 0.5) * GRID_CELL_SIZE,
+                                    (-y + newShape.length / 2 - 0.5) * GRID_CELL_SIZE,
+                                    0
+                                );
+                                blockIndex++;
+                            }
+                        }
+                    }
+                }
+                // Hide any extra blocks (shouldn't happen with standard pieces, but safe)
+                for (let i = blockIndex; i < piece.blocks.length; i++) {
+                    piece.blocks[i].visible = false;
+                }
+                return true; // Rotation successful
+            }
+            return false; // Rotation failed due to collision
+        }
+
+
+        function movePiece(piece, dGridX, dGridY) {
+            if (!piece || !gameStarted || gameOver) return false;
+            if (!checkCollision(piece, dGridX, dGridY)) {
+                piece.gridX += dGridX;
+                piece.gridY += dGridY;
+                piece.mesh.position.copy(gridToWorld(piece.gridX, piece.gridY));
+                return true;
+            }
+            return false;
+        }
+
+        function dropPiece(piece) {
+            if (!piece || !gameStarted || gameOver) return;
+            while (movePiece(piece, 0, -1)) {
+                // Keep moving down until collision
+            }
+            placePiece(piece);
+            clearLines();
+            spawnNewPiece();
+        }
+
+        function placePiece(piece) {
+            if (!piece || gameOver) return;
+            const shape = piece.shape;
+            const color = TETROMINOES[piece.type].color;
+
+            // Update grid state and create visual blocks
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const gridX = piece.gridX + x;
+                        const gridY = piece.gridY - y;
+                        
+                        // Update logical grid
+                        if (gridY >= 0 && gridY < GRID_HEIGHT && gridX >= 0 && gridX < GRID_WIDTH) {
+                             gridState[gridY][gridX] = 1;
+                        }
+
+                        // Create a permanent visual block at the world position
+                        const blockSize = GRID_CELL_SIZE;
+                        const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95);
+                        const blockMaterial = new THREE.MeshStandardMaterial({
+                            color: color,
+                            metalness: 0.2,
+                            roughness: 0.3
+                        });
+                        const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                        
+                        // Calculate world position for this specific block
+                        const blockWorldPos = gridToWorld(piece.gridX + x, piece.gridY - y);
+                        blockMesh.position.copy(blockWorldPos);
+                        
+                        scene.add(blockMesh);
+                        // Note: These blocks are now independent in the scene.
+                        // They are not managed in an array like placedPieceGroups were.
+                        // For a full game, you might want to manage them for effects.
+                    }
+                }
+            }
+
+            // Remove the active piece's mesh
+            scene.remove(piece.mesh);
+            activePiece = null;
+            
+            // Increase score for placing a piece
+            score += 10;
+            updateScore();
+            console.log(`Piece placed.`);
+        }
+
+        function clearLines() {
+             let linesCleared = 0;
+             for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                 let isLineFull = true;
+                 for (let x = 0; x < GRID_WIDTH; x++) {
+                     if (gridState[y][x] === 0) {
+                         isLineFull = false;
+                         break;
+                     }
+                 }
+                 if (isLineFull) {
+                     // Remove blocks in this line from the scene
+                     // This simple version doesn't remove individual blocks,
+                     // but a full implementation would need to manage them.
+                     
+                     // Shift all lines above down
+                     for (let yy = y; yy < GRID_HEIGHT - 1; yy++) {
+                         for (let x = 0; x < GRID_WIDTH; x++) {
+                             gridState[yy][x] = gridState[yy + 1][x];
+                         }
+                     }
+                     // Clear the top line
+                     for (let x = 0; x < GRID_WIDTH; x++) {
+                         gridState[GRID_HEIGHT - 1][x] = 0;
+                     }
+                     
+                     linesCleared++;
+                     y++; // Recheck the same index because lines shifted down
+                 }
+             }
+             
+             if (linesCleared > 0) {
+                 // Simple scoring: more points for more lines
+                 const points = [0, 100, 300, 500, 800]; // Points for 0,1,2,3,4 lines
+                 score += points[linesCleared] || 1000; // Default for >4 (unlikely)
+                 updateScore();
+                 console.log(`Cleared ${linesCleared} lines.`);
+                 // In a full game, you would re-render the affected blocks here.
+             }
+        }
+
+        function updateScore() {
+            scoreDisplay.textContent = `Score: ${score}`;
+        }
+
+        // --- Controller Setup & Interaction ---
         function setupControllers() {
+            // Remove old controllers if they exist
+            if (controller1) scene.remove(controller1);
+            if (controller2) scene.remove(controller2);
+            if (controllerGrip1) scene.remove(controllerGrip1);
+            if (controllerGrip2) scene.remove(controllerGrip2);
+
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectstart', onController1SelectStart);
+            controller1.addEventListener('selectend', onController1SelectEnd);
+            controller1.addEventListener('squeezestart', onController1SqueezeStart);
+            controller1.addEventListener('squeezeend', onController1SqueezeEnd);
+            // Thumbstick events
+            controller1.addEventListener('thumbstickaxes', onController1ThumbstickAxes);
+            controller1.addEventListener('thumbstickdown', onController1ThumbstickDown);
+            
             scene.add(controller1);
 
             controller2 = renderer.xr.getController(1);
-            controller2.addEventListener('selectstart', onSelectStart);
+            // Add listeners for controller 2 if needed
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -230,112 +697,89 @@
             scene.add(controllerGrip2);
 
             controllerModelFactory = new XRControllerModelFactory();
+
             const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
 
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-
-            // --- Setup Laser Pointers ---
-            setupLaserPointer(controller1, 0);
-            setupLaserPointer(controller2, 1);
-            // ---
         }
 
-        function setupLaserPointer(controller, index) {
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
-            const material = new THREE.LineBasicMaterial({
-                vertexColors: true,
-                blending: THREE.AdditiveBlending,
-                depthTest: false,
-                transparent: true
-            });
-            const line = new THREE.Line(geometry, material);
-            line.scale.z = 5;
-            line.visible = false;
-
-            const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
-            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
-            const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
-            hitPoint.visible = false;
-
-            controller.add(line);
-            controller.add(hitPoint);
-
-            pointers[index] = {
-                controller: controller,
-                line: line,
-                hitPoint: hitPoint
-            };
-
-            controller.addEventListener('connected', function () {
-                 line.visible = true;
-            });
-            controller.addEventListener('disconnected', function () {
-                line.visible = false;
-                hitPoint.visible = false;
-            });
+        // Controller 1 Event Handlers
+        function onController1SelectStart(event) {
+            if (gameStarted && !gameOver && activePiece) {
+                rotatePiece(activePiece, 'Y'); // Spin
+            }
         }
-
-        function onSelectStart(event) {
-            // Check for screen interaction on Select Start
-            checkAndInteract(event.target);
+        function onController1SelectEnd(event) {}
+        function onController1SqueezeStart(event) {
+            if (gameStarted && !gameOver && activePiece) {
+                rotatePiece(activePiece, 'X'); // Twist
+            }
         }
-
-        function checkAndInteract(controller) {
-             tempMatrix.identity().extractRotation(controller.matrixWorld);
-             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-             // Check intersection specifically with the screen plane
-             const intersects = raycaster.intersectObject(screenPlane);
-             if (intersects.length > 0) {
-                 console.log("Screen clicked");
-                 changeScreenColor();
+        function onController1SqueezeEnd(event) {}
+        
+        let lastThumbstickX = 0;
+        let lastMoveTime = 0;
+        const MOVE_DELAY = 200; // ms
+        function onController1ThumbstickAxes(event) {
+             if (gameStarted && !gameOver && activePiece) {
+                 const currentTime = performance.now();
+                 if (currentTime - lastMoveTime > MOVE_DELAY) {
+                     const axes = event.axes; // [x, y]
+                     const x = axes[0];
+                     
+                     // Simple threshold for left/right movement
+                     if (x < -0.7 && lastThumbstickX >= -0.7) {
+                         movePiece(activePiece, -1, 0); // Move Left
+                         lastMoveTime = currentTime;
+                     } else if (x > 0.7 && lastThumbstickX <= 0.7) {
+                         movePiece(activePiece, 1, 0); // Move Right
+                         lastMoveTime = currentTime;
+                     }
+                     lastThumbstickX = x;
+                 }
+             }
+        }
+        function onController1ThumbstickDown(event) {
+             if (gameStarted && !gameOver && activePiece) {
+                 // Thumbstick pressed down - drop piece
+                 dropPiece(activePiece);
              }
         }
 
-        // --- Corrected updateLasers function ---
-        function updateLasers() {
-            // Make sure screenPlane exists before trying to intersect with it
-            if (!screenPlane) return;
-
-            for (let i = 0; i < pointers.length; i++) {
-                const pointer = pointers[i];
-                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
-                
-                // Set up the raycaster based on the controller's current pose
-                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
-                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
-                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-                // Check for intersection specifically with the screenPlane
-                const intersects = raycaster.intersectObject(screenPlane);
-                if (intersects.length > 0) {
-                    // If it hits, update the laser line length and move the hit point
-                    pointer.line.scale.z = intersects[0].distance;
-                    pointer.hitPoint.position.copy(intersects[0].point);
-                    pointer.hitPoint.visible = true; // Show the hit point
-                } else {
-                    // If it doesn't hit, make the laser line long (5 units) and hide the hit point
-                    pointer.line.scale.z = 5;
-                    pointer.hitPoint.visible = false;
-                }
-            }
-        }
-        // --- End Controller & Laser Functions ---
-
+        // --- Animation Loop ---
         function animate() {
             renderer.setAnimationLoop(render);
         }
+        animate(); // Start the animation loop immediately
 
         function render() {
-            // Update laser pointers every frame
-            updateLasers();
+            // Handle non-VR fallback controls (optional, for testing)
+            // if (!renderer.xr.isPresenting) { ... }
+
+            if (renderer.xr.isPresenting) {
+                // Setup controllers only once when session starts
+                if (!controller1) {
+                    setupControllers();
+                }
+            }
+
+            if (gameStarted && !gameOver && activePiece) {
+                const currentTime = performance.now();
+                if (currentTime - lastDropTime > DROP_INTERVAL) {
+                    const moved = movePiece(activePiece, 0, -1);
+                    if (!moved) {
+                        placePiece(activePiece);
+                        clearLines();
+                        spawnNewPiece();
+                    }
+                    lastDropTime = currentTime;
+                }
+            }
             renderer.render(scene, camera);
         }
+
     </script>
 </body>
 </html>
