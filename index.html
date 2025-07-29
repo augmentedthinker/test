@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Lasers & Piece Interaction</title>
+    <title>AR Tetris - Lasers & Piece Rotation</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Shoot Lasers, Click Pieces to Change Color</div>
+    <div id="info">AR Tetris - Shoot Lasers, Click Pieces to Rotate</div>
 
     <script type="importmap">
         {
@@ -294,7 +294,7 @@
                     if (shape[y][x]) {
                         const block = new THREE.Mesh(blockGeometry, blockMaterial);
                          // --- Mark as interactive piece ---
-                        block.userData = { isPiece: true, originalColor: definition.color };
+                        block.userData = { isPiece: true };
                         // ---
                         block.position.set(
                             x * blockSize,
@@ -331,7 +331,7 @@
                  // --- Mark active piece's child meshes as interactive ---
                  activePiece.mesh.traverse((child) => {
                     if (child.isMesh) {
-                        child.userData = { isPiece: true, originalColor: TETROMINOES[activePiece.type].color };
+                        child.userData = { isPiece: true };
                     }
                 });
                 // ---
@@ -399,7 +399,7 @@
                             const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
                             const blockMesh = new THREE.Mesh(blockGeometry, blockMaterial);
                             // --- Mark as interactive piece ---
-                            blockMesh.userData = { isPiece: true, originalColor: color };
+                            blockMesh.userData = { isPiece: true };
                             // ---
 
                             blockMesh.position.copy(gridToWorld(gridX, gridY));
@@ -515,16 +515,21 @@
              for (let i = 0; i < intersects.length; i++) {
                  const object = intersects[i].object;
                  if (object.userData && object.userData.isPiece) {
-                     // Change color to white when clicked
-                     if (object.material) {
-                         object.material.color.setHex(0xffffff);
-                         // Optional: Revert color after a short delay
-                         // setTimeout(() => {
-                         //     if (object.material && object.userData.originalColor !== undefined) {
-                         //         object.material.color.setHex(object.userData.originalColor);
-                         //     }
-                         // }, 200);
+                     // --- Rotate the piece 90 degrees around its local Z-axis ---
+                     // Find the root piece group (the parent Group of the block mesh)
+                     let pieceGroup = object;
+                     while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
+                         pieceGroup = pieceGroup.parent;
                      }
+                     if (pieceGroup) {
+                         pieceGroup.rotateZ(Math.PI / 2); // Rotate 90 degrees (PI/2 radians)
+                         console.log("Piece rotated");
+                     } else {
+                         // If it's a placed block (not in a group), rotate the block itself
+                         object.rotateZ(Math.PI / 2);
+                         console.log("Block rotated");
+                     }
+                     // ---
                      break; // Only interact with the first hit piece
                  }
              }
