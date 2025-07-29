@@ -4,12 +4,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Screen with Laser Interaction</title>
+    <title>AR Breakout</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        #instructions {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-family: sans-serif;
+            font-size: 18px;
+            z-index: 100;
+            pointer-events: none; /* So it doesn't block AR clicks */
+        }
     </style>
 </head>
 <body>
+    <div id="instructions">Move controller left/right to move paddle. Squeeze trigger to launch/start.</div>
     <script type="importmap">
         {
             "imports": {
@@ -47,11 +59,6 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (screenGroup) scene.remove(screenGroup);
-                        // Clean up any remaining pulse spheres
-                        for (let i = pulseSpheres.length - 1; i >= 0; i--) {
-                            scene.remove(pulseSpheres[i].mesh);
-                        }
-                        pulseSpheres.length = 0;
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -86,16 +93,19 @@
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
 
-        // --- Controller & Laser Variables ---
-        const pointers = [];
+        // --- Breakout Game Variables ---
+        let paddle, ball, bricks = [];
+        let ballVelocity = new THREE.Vector3();
+        const PADDLE_SPEED = 0.05;
+        const BALL_SPEED = 0.02;
+        let gameStarted = false;
+        let leftBoundary, rightBoundary; // For paddle movement limits
+
         const tempMatrix = new THREE.Matrix4();
         const raycaster = new THREE.Raycaster();
 
-        // --- Pulse Sphere Variables ---
-        const pulseSpheres = []; // Array to hold active pulse spheres
-        const PULSE_DURATION = 1000; // ms
-
         scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111); // Dark background for contrast
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -110,15 +120,18 @@
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
             controller1.addEventListener('selectstart', onSelectStart);
+            // Listen for axis movement for paddle control
+            controller1.addEventListener(' axeschanged', onAxisChanged);
             scene.add(controller1);
 
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener(' axeschanged', onAxisChanged);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
-            controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerGrep2 = renderer.xr.getControllerGrip(1);
             scene.add(controllerGrip2);
 
             controllerModelFactory = new XRControllerModelFactory();
@@ -126,112 +139,215 @@
             controllerGrip1.add(controllerModel1);
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-
-            setupLaserPointer(controller1, 0);
-            setupLaserPointer(controller2, 1);
-        }
-
-        function setupLaserPointer(controller, index) {
-            const geometry = new THREE.BufferGeometry();
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
-            const line = new THREE.Line(geometry, material);
-            line.scale.z = 5;
-            line.visible = false;
-
-            controller.add(line);
-            pointers[index] = { controller: controller, line: line };
-
-            controller.addEventListener('connected', function () { line.visible = true; });
-            controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
         function onSelectStart(event) {
-            const controller = event.target;
-            const index = controller === controller1 ? 0 : 1;
-            checkAndInteract(controller);
+            if (!gameStarted) {
+                launchBall();
+            }
         }
 
-        function checkAndInteract(controller) {
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+        function onAxisChanged(event) {
+            // Use the X-axis of the primary joystick/thumbstick to move the paddle
+            if (paddle && screenGroup) {
+                const controller = event.target;
+                const axes = controller.gamepad.axes;
+                if (axes.length >= 2) {
+                    const xAxis = axes[2]; // Often the x-axis of the primary stick
+                    // Map axis (-1 to 1) to paddle position within boundaries
+                    const newPosition = paddle.position.x + xAxis * PADDLE_SPEED;
+                    paddle.position.x = Math.max(leftBoundary, Math.min(rightBoundary, newPosition));
+                }
+            }
+        }
 
-            // Check intersection only with the screen
+        function launchBall() {
+            if (!gameStarted && ball) {
+                gameStarted = true;
+                // Reset ball to above paddle
+                ball.position.copy(paddle.position);
+                ball.position.y += 0.15; // Slightly above paddle
+
+                // Launch in a randomish upward direction
+                const angle = (Math.random() * Math.PI / 3) + Math.PI / 3; // 30-60 degrees
+                ballVelocity.set(Math.cos(angle) * BALL_SPEED, Math.sin(angle) * BALL_SPEED, 0);
+                ballVelocity.x *= (Math.random() > 0.5) ? 1 : -1; // Random left/right start
+            }
+        }
+
+        // --- Breakout Game Logic ---
+        function createBreakoutGame() {
             if (screenGroup) {
-                const intersects = raycaster.intersectObject(screenGroup, true);
-                if (intersects.length > 0) {
-                    const point = intersects[0].point;
-                    createPulseSphere(point);
+                // Clear any existing game objects
+                if (paddle) screenGroup.remove(paddle);
+                if (ball) screenGroup.remove(ball);
+                bricks.forEach(b => screenGroup.remove(b));
+                bricks.length = 0;
+
+                const screenWidth = 1.6;
+                const screenHeight = 0.9;
+                const screenDepth = 0.01;
+
+                // --- Create Paddle ---
+                const paddleWidth = 0.3;
+                const paddleHeight = 0.05;
+                const paddleDepth = 0.05;
+                const paddleGeometry = new THREE.BoxGeometry(paddleWidth, paddleHeight, paddleDepth);
+                const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x00aaff });
+                paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
+                paddle.position.set(0, -screenHeight / 2 + paddleHeight, screenDepth / 2 + 0.01);
+                screenGroup.add(paddle);
+
+                // Set movement boundaries for the paddle
+                leftBoundary = -screenWidth / 2 + paddleWidth / 2;
+                rightBoundary = screenWidth / 2 - paddleWidth / 2;
+
+                // --- Create Ball ---
+                const ballRadius = 0.03;
+                const ballGeometry = new THREE.SphereGeometry(ballRadius, 16, 16);
+                const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xff5500 });
+                ball = new THREE.Mesh(ballGeometry, ballMaterial);
+                // Ball starts resting on paddle
+                ball.position.copy(paddle.position);
+                ball.position.y += 0.15;
+                screenGroup.add(ball);
+                ballVelocity.set(0, 0, 0); // Start stationary
+
+                // --- Create Bricks ---
+                const brickWidth = 0.15;
+                const brickHeight = 0.05;
+                const brickDepth = 0.05;
+                const brickPadding = 0.01;
+                const brickRows = 4;
+                const brickCols = Math.floor(screenWidth / (brickWidth + brickPadding)) - 1;
+                const brickOffsetTop = 0.2;
+                const brickOffsetLeft = -(brickCols * (brickWidth + brickPadding)) / 2 + brickWidth / 2;
+
+                const colors = [0xff3333, 0xffaa33, 0x33ff33, 0x3333ff]; // Red, Orange, Green, Blue
+
+                for (let r = 0; r < brickRows; r++) {
+                    for (let c = 0; c < brickCols; c++) {
+                        const brickGeometry = new THREE.BoxGeometry(brickWidth, brickHeight, brickDepth);
+                        const brickMaterial = new THREE.MeshStandardMaterial({ color: colors[r] });
+                        const brick = new THREE.Mesh(brickGeometry, brickMaterial);
+                        const x = c * (brickWidth + brickPadding) + brickOffsetLeft;
+                        const y = screenHeight / 2 - brickOffsetTop - r * (brickHeight + brickPadding);
+                        brick.position.set(x, y, screenDepth / 2 + 0.01);
+                        screenGroup.add(brick);
+                        bricks.push(brick);
+                    }
                 }
+
+                gameStarted = false; // Reset game state
+                console.log("Breakout game created on AR screen");
             }
         }
 
-        function createPulseSphere(position) {
-            const geometry = new THREE.SphereGeometry(0.03, 16, 16);
-            const material = new THREE.MeshBasicMaterial({
-                color: 0x00ffff,
-                transparent: true,
-                opacity: 0.8
-            });
-            const sphere = new THREE.Mesh(geometry, material);
-            sphere.position.copy(position);
-            scene.add(sphere);
+        function updateGame() {
+            if (!gameStarted || !ball || !paddle || !screenGroup) return;
 
-            const startTime = performance.now();
-            pulseSpheres.push({ mesh: sphere, startTime: startTime });
-        }
+            // Move the ball
+            ball.position.add(ballVelocity);
 
-        function updatePulseSpheres() {
-            const currentTime = performance.now();
-            for (let i = pulseSpheres.length - 1; i >= 0; i--) {
-                const pulse = pulseSpheres[i];
-                const elapsed = currentTime - pulse.startTime;
-                const progress = Math.min(elapsed / PULSE_DURATION, 1.0);
+            const screenWidth = 1.6;
+            const screenHeight = 0.9;
+            const ballRadius = 0.03;
 
-                if (progress >= 1.0) {
-                    scene.remove(pulse.mesh);
-                    pulseSpheres.splice(i, 1);
-                } else {
-                    // Scale up and fade out
-                    const scale = 1.0 + progress * 3.0;
-                    pulse.mesh.scale.set(scale, scale, scale);
-                    pulse.mesh.material.opacity = 0.8 * (1.0 - progress);
+            // Wall collisions (left, right, top)
+            if (ball.position.x < -screenWidth / 2 + ballRadius || ball.position.x > screenWidth / 2 - ballRadius) {
+                ballVelocity.x = -ballVelocity.x;
+            }
+            if (ball.position.y > screenHeight / 2 - ballRadius) {
+                ballVelocity.y = -ballVelocity.y;
+            }
+
+            // Bottom boundary (lose life - for now, just reset)
+            if (ball.position.y < -screenHeight / 2 - 0.1) {
+                gameStarted = false;
+                ball.position.copy(paddle.position);
+                ball.position.y += 0.15;
+                ballVelocity.set(0, 0, 0);
+                return; // Stop further checks
+            }
+
+            // Paddle collision
+            if (ball.position.y - ballRadius < paddle.position.y + 0.025 && // Ball bottom vs paddle top
+                ball.position.y + ballRadius > paddle.position.y - 0.025 && // Ball top vs paddle bottom
+                ball.position.x > paddle.position.x - 0.15 && // Ball right vs paddle left
+                ball.position.x < paddle.position.x + 0.15) { // Ball left vs paddle right
+                // Simple bounce, angle could be more complex based on where it hits the paddle
+                ballVelocity.y = Math.abs(ballVelocity.y); // Ensure it bounces upwards
+                // Add a little horizontal deflection based on where it hit the paddle
+                const diff = (ball.position.x - paddle.position.x) / 0.15;
+                ballVelocity.x = diff * BALL_SPEED * 0.5;
+            }
+
+            // Brick collisions
+            for (let i = bricks.length - 1; i >= 0; i--) {
+                const brick = bricks[i];
+                // Simple AABB collision check
+                if (ball.position.x + ballRadius > brick.position.x - 0.075 &&
+                    ball.position.x - ballRadius < brick.position.x + 0.075 &&
+                    ball.position.y + ballRadius > brick.position.y - 0.025 &&
+                    ball.position.y - ballRadius < brick.position.y + 0.025) {
+
+                    // Determine bounce side (simplified)
+                    const dx1 = Math.abs(ball.position.x - (brick.position.x - 0.075));
+                    const dx2 = Math.abs(ball.position.x - (brick.position.x + 0.075));
+                    const dy1 = Math.abs(ball.position.y - (brick.position.y - 0.025));
+                    const dy2 = Math.abs(ball.position.y - (brick.position.y + 0.025));
+                    const min = Math.min(dx1, dx2, dy1, dy2);
+
+                    if (min === dy1 || min === dy2) {
+                        ballVelocity.y = -ballVelocity.y; // Hit top/bottom
+                    } else {
+                        ballVelocity.x = -ballVelocity.x; // Hit left/right
+                    }
+
+                    screenGroup.remove(brick);
+                    bricks.splice(i, 1);
+                    break; // Only hit one brick per frame
                 }
             }
-        }
 
-        function updateLasers() {
-            for (let i = 0; i < pointers.length; i++) {
-                const pointer = pointers[i];
-                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
-                // Lasers are always visible and extend, no need to update length unless hitting something
+            // Check win condition
+            if (bricks.length === 0) {
+                 gameStarted = false;
+                 ball.position.copy(paddle.position);
+                 ball.position.y += 0.15;
+                 ballVelocity.set(0, 0, 0);
+                 // Recreate bricks for next round
+                 setTimeout(createBreakoutGame, 1000); // Delay to show win
             }
         }
 
         // --- Screen Creation Logic ---
         function createScreen() {
             if (screenGroup) scene.remove(screenGroup);
-
             const width = 1.6, height = 0.9, depth = 0.01;
             const geometry = new THREE.BoxGeometry(width, height, depth);
             const material = new THREE.MeshStandardMaterial({ color: 0x222222 });
             const screen = new THREE.Mesh(geometry, material);
             screen.position.set(0, 0, -1.5);
-
             screenGroup = new THREE.Group();
             screenGroup.add(screen);
             scene.add(screenGroup);
-            console.log("AR Screen with interaction created");
+            console.log("AR Screen created");
+            createBreakoutGame(); // Create the game on the new screen
         }
-
         renderer.xr.addEventListener('sessionstart', createScreen);
 
         // --- Animation Loop ---
         renderer.setAnimationLoop(() => {
-            updateLasers();
-            updatePulseSpheres();
+            updateGame();
             renderer.render(scene, camera);
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
         });
     </script>
 </body>
