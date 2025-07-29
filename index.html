@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Grid</title>
+    <title>AR Tetris - Falling Pieces</title>
     <style>
         body {
             margin: 0;
@@ -26,7 +26,7 @@
     </style>
 </head>
 <body>
-    <div id="info">AR Tetris - Grid Initialized</div>
+    <div id="info">AR Tetris - Pieces Falling</div>
 
     <script type="importmap">
         {
@@ -57,6 +57,11 @@
                         currentSession = session;
                         if (currentSession) {
                             setupControllers();
+                            // Start the game when AR session begins
+                            if (!gameStarted) {
+                                gameStarted = true;
+                                spawnNewPiece(); // Spawn the first piece
+                            }
                         }
                     }
 
@@ -69,6 +74,10 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (grid) scene.remove(grid);
+                        if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
+                        activePiece = null;
+                        gameStarted = false;
+                        // Reset game state if needed
                     }
 
                     button.style.cssText = `
@@ -160,6 +169,45 @@
         const GRID_DEPTH = 1;    // Number of layers (typically 1 for standard Tetris)
         const GRID_CELL_SIZE = 0.1; // Size of each grid cell
 
+        // --- Tetris Piece Variables ---
+        let activePiece = null; // The piece currently falling
+        let gameStarted = false;
+        let lastDropTime = 0;
+        const DROP_INTERVAL = 1000; // milliseconds
+
+        // --- Tetromino Definitions (relative to their center) ---
+        const TETROMINOES = {
+            I: {
+                shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]],
+                color: 0x00ffff // Cyan
+            },
+            O: {
+                shape: [[1, 1], [1, 1]],
+                color: 0xffff00 // Yellow
+            },
+            T: {
+                shape: [[0, 1, 0], [1, 1, 1], [0, 0, 0]],
+                color: 0x800080 // Purple
+            },
+            S: {
+                shape: [[0, 1, 1], [1, 1, 0], [0, 0, 0]],
+                color: 0x00ff00 // Green
+            },
+            Z: {
+                shape: [[1, 1, 0], [0, 1, 1], [0, 0, 0]],
+                color: 0xff0000 // Red
+            },
+            J: {
+                shape: [[1, 0, 0], [1, 1, 1], [0, 0, 0]],
+                color: 0x0000ff // Blue
+            },
+            L: {
+                shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]],
+                color: 0xff7f00 // Orange
+            }
+        };
+        const TETROMINO_NAMES = Object.keys(TETROMINOES);
+
         init();
         animate();
 
@@ -197,32 +245,107 @@
         }
 
         function createGrid() {
-            // Calculate the overall dimensions of the grid
             const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
             const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
             const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
 
-            // Create a BoxGeometry for the wireframe
             const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
-
-            // Create a basic line material for the wireframe
             const gridMaterial = new THREE.MeshBasicMaterial({
                 color: 0x00ffff, // Cyan color
-                wireframe: true, // This makes it a wireframe
+                wireframe: true,
                 transparent: true,
                 opacity: 0.5
             });
 
-            // Create the mesh and add it to the scene
             grid = new THREE.Mesh(gridGeometry, gridMaterial);
-
-            // Position the grid in front of the user
-            // Adjust these values to change the grid's placement in the AR space
-            grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
-
+            grid.position.set(0, gridHeight / 2 - 0.5, -1.5); // Position grid
             scene.add(grid);
         }
 
+        function createPiece(type) {
+            const definition = TETROMINOES[type];
+            if (!definition) return null;
+
+            const group = new THREE.Group();
+            const blockSize = GRID_CELL_SIZE;
+            const blockGeometry = new THREE.BoxGeometry(blockSize * 0.95, blockSize * 0.95, blockSize * 0.95); // Slightly smaller for visual spacing
+            const blockMaterial = new THREE.MeshStandardMaterial({ color: definition.color });
+
+            const shape = definition.shape;
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                        // Position blocks relative to the piece's origin (centered)
+                        block.position.set(
+                            (x - Math.floor(shape[0].length / 2)) * blockSize,
+                            (Math.floor(shape.length / 2) - y) * blockSize,
+                            0
+                        );
+                        group.add(block);
+                    }
+                }
+            }
+
+            // Position the new piece at the top center of the grid
+            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5; // Align with grid top
+            const pieceHeight = (shape.length - 1) * blockSize; // Approx height offset
+            group.position.set(0, gridTopY - pieceHeight / 2, -1.5); // Start at top, aligned with grid Z
+
+            return {
+                mesh: group,
+                type: type,
+                x: Math.floor(GRID_WIDTH / 2) - Math.floor(shape[0].length / 2), // Start roughly centered
+                y: GRID_HEIGHT - shape.length, // Start at the top row
+                shape: shape
+            };
+        }
+
+        function spawnNewPiece() {
+            if (!gameStarted) return;
+
+            const randomType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
+            activePiece = createPiece(randomType);
+
+            if (activePiece) {
+                scene.add(activePiece.mesh);
+                console.log(`Spawned new piece: ${activePiece.type}`);
+            } else {
+                console.error("Failed to create piece");
+            }
+        }
+
+        // Placeholder collision check - always returns false for now
+        function checkCollision(piece, offsetX = 0, offsetY = 0) {
+            // TODO: Implement actual collision logic against grid boundaries and placed pieces
+            // For now, just prevent moving below the grid floor
+            if (piece.y + offsetY < 0) {
+                return true; // Collision with floor
+            }
+            // Add more checks here later (walls, other pieces)
+            return false;
+        }
+
+        function movePiece(piece, dx, dy) {
+            if (!piece || !gameStarted) return false;
+            if (!checkCollision(piece, dx, dy)) {
+                piece.x += dx;
+                piece.y += dy;
+                piece.mesh.position.x += dx * GRID_CELL_SIZE;
+                piece.mesh.position.y += dy * GRID_CELL_SIZE;
+                return true; // Move successful
+            }
+            return false; // Move blocked
+        }
+
+        function placePiece(piece) {
+            if (!piece) return;
+            // TODO: Add piece blocks to the static grid representation
+            console.log(`Piece placed at grid (${piece.x}, ${piece.y})`);
+            scene.remove(piece.mesh);
+            activePiece = null;
+            // In a full game, you'd check for line clears here
+        }
 
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
@@ -260,7 +383,22 @@
         }
 
         function render() {
-            // Future: Update controller elements like lasers or visual feedback
+             // Future: Update controller elements like lasers or visual feedback
+
+            if (gameStarted && activePiece) {
+                const currentTime = performance.now();
+                if (currentTime - lastDropTime > DROP_INTERVAL) {
+                    // Try to move the piece down
+                    const moved = movePiece(activePiece, 0, -1);
+                    if (!moved) {
+                        // If it couldn't move down, it has landed
+                        placePiece(activePiece);
+                        spawnNewPiece(); // Spawn the next piece
+                    }
+                    lastDropTime = currentTime;
+                }
+            }
+
             renderer.render(scene, camera);
         }
     </script>
