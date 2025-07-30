@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 3</title>
+    <title>AR Tetris - Step 4</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -106,6 +106,7 @@
         let lastFallTime = 0;
         let piecePosition = { row: 0, col: 3 }; // Starting position (top center)
         let isPieceActive = true;
+        let boardState = []; // 2D array to track occupied cells
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -192,6 +193,9 @@
 
         // --- Game Initialization ---
         function initGame() {
+            // Initialize board state (empty board)
+            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            
             // Create the first piece (I-piece)
             createPiece();
             lastFallTime = performance.now();
@@ -253,24 +257,69 @@
         }
 
         function movePieceDown() {
-            // Check if piece is at the bottom
-            if (piecePosition.row >= BOARD_HEIGHT - 1) {
+            // Check if piece can move down
+            if (canMoveDown()) {
+                // Move the piece down (negative Y direction)
+                piecePosition.row++;
+                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+            } else {
                 // Lock the piece in place
-                isPieceActive = false;
-                console.log("Piece locked at bottom");
+                lockPiece();
+            }
+        }
+
+        function canMoveDown() {
+            // Get the shape of the current piece
+            const pieceShape = [
+                { x: 3, y: 0 },
+                { x: 4, y: 0 },
+                { x: 5, y: 0 },
+                { x: 6, y: 0 }
+            ];
+            
+            // Check each block of the piece
+            for (let block of pieceShape) {
+                const newRow = piecePosition.row + 1; // Next row down
+                const newCol = piecePosition.col + (block.x - 3); // Adjust for piece position
                 
-                // Create a new piece after a short delay
-                setTimeout(() => {
-                    createPiece();
-                    lastFallTime = performance.now();
-                }, 500); // 500ms delay before spawning new piece
+                // Check if block is at the bottom
+                if (newRow >= BOARD_HEIGHT) {
+                    return false;
+                }
                 
-                return;
+                // Check if block would collide with a locked piece
+                if (boardState[newRow][newCol] === 1) {
+                    return false;
+                }
             }
             
-            // Move the piece down (negative Y direction)
-            piecePosition.row++;
-            currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+            return true;
+        }
+
+        function lockPiece() {
+            // Mark the piece as inactive
+            isPieceActive = false;
+            console.log("Piece locked in place");
+            
+            // Update board state with the locked piece
+            const pieceShape = [
+                { x: 3, y: 0 },
+                { x: 4, y: 0 },
+                { x: 5, y: 0 },
+                { x: 6, y: 0 }
+            ];
+            
+            for (let block of pieceShape) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + (block.x - 3); // Adjust for piece position
+                boardState[row][col] = 1;
+            }
+            
+            // Create a new piece after a short delay
+            setTimeout(() => {
+                createPiece();
+                lastFallTime = performance.now();
+            }, 500); // 500ms delay before spawning new piece
         }
 
         // --- Animation Loop ---
