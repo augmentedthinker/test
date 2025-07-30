@@ -101,7 +101,7 @@
         const BOARD_HEIGHT = 20; // 20 rows
         const CELL_SIZE = 0.1;   // Each cell is 0.1 units
         const FALL_SPEED = 1000; // ms per row
-        const MOVE_COOLDOWN = 200; // ms between horizontal moves
+        const JOYSTICK_THRESHOLD = 0.5; // Minimum joystick movement to trigger action
 
         // --- Tetris Pieces Definition ---
         const PIECES = {
@@ -186,7 +186,6 @@
 
         // --- Game State ---
         let lastFallTime = 0;
-        let lastMoveTime = 0;
         let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
         let isPieceActive = true;
         let boardState = []; // 2D array to track occupied cells
@@ -215,8 +214,8 @@
             setupLaserPointer(controller2);
             
             // Add joystick movement listeners
-            controller1.addEventListener('axismove', handleAxisMove);
-            controller2.addEventListener('axismove', handleAxisMove);
+            controller1.addEventListener('axismove', onAxisMove);
+            controller2.addEventListener('axismove', onAxisMove);
         }
 
         function setupLaserPointer(controller) {
@@ -238,24 +237,21 @@
         }
 
         // --- Joystick Movement Handler ---
-        function handleAxisMove(event) {
+        function onAxisMove(event) {
             if (!isPieceActive) return;
             
-            const axes = event.axes;
-            const now = performance.now();
+            const axes = event.target.axes;
+            const horizontalAxis = axes[0]; // Left/right axis
             
-            // Check if cooldown has passed
-            if (now - lastMoveTime < MOVE_COOLDOWN) {
-                return;
-            }
-            
-            // Check left stick x-axis (index 0)
-            if (axes[0] < -0.5) {
-                movePieceLeft();
-                lastMoveTime = now;
-            } else if (axes[0] > 0.5) {
-                movePieceRight();
-                lastMoveTime = now;
+            // Check if joystick is moved beyond threshold
+            if (Math.abs(horizontalAxis) > JOYSTICK_THRESHOLD) {
+                if (horizontalAxis < -JOYSTICK_THRESHOLD) {
+                    // Move left
+                    movePieceLeft();
+                } else if (horizontalAxis > JOYSTICK_THRESHOLD) {
+                    // Move right
+                    movePieceRight();
+                }
             }
         }
 
@@ -309,7 +305,6 @@
             // Create the first piece
             createPiece();
             lastFallTime = performance.now();
-            lastMoveTime = performance.now();
         }
 
         // --- Piece Creation ---
@@ -381,22 +376,16 @@
         }
 
         function movePieceLeft() {
-            // Check if piece can move left
             if (canMoveLeft()) {
-                // Move the piece left
                 piecePosition.col--;
-                currentPiece.position.x -= CELL_SIZE;
-                console.log("Piece moved left");
+                currentPiece.position.x = (piecePosition.col * CELL_SIZE);
             }
         }
 
         function movePieceRight() {
-            // Check if piece can move right
             if (canMoveRight()) {
-                // Move the piece right
                 piecePosition.col++;
-                currentPiece.position.x += CELL_SIZE;
-                console.log("Piece moved right");
+                currentPiece.position.x = (piecePosition.col * CELL_SIZE);
             }
         }
 
@@ -426,7 +415,7 @@
                 const newRow = piecePosition.row + block.y;
                 const newCol = piecePosition.col + block.x - 1;
                 
-                // Check if block is at the left boundary
+                // Check if block is at the left wall
                 if (newCol < 0) {
                     return false;
                 }
@@ -446,7 +435,7 @@
                 const newRow = piecePosition.row + block.y;
                 const newCol = piecePosition.col + block.x + 1;
                 
-                // Check if block is at the right boundary
+                // Check if block is at the right wall
                 if (newCol >= BOARD_WIDTH) {
                     return false;
                 }
@@ -476,7 +465,6 @@
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
-                lastMoveTime = performance.now();
             }, 500); // 500ms delay before spawning new piece
         }
 
