@@ -101,7 +101,6 @@
         const BOARD_HEIGHT = 20; // 20 rows
         const CELL_SIZE = 0.1;   // Each cell is 0.1 units
         const FALL_SPEED = 1000; // ms per row
-        const JOYSTICK_THRESHOLD = 0.5; // Minimum joystick movement to trigger action
 
         // --- Tetris Pieces Definition ---
         const PIECES = {
@@ -114,7 +113,8 @@
                 ],
                 color: 0x00ffff, // Cyan
                 width: 4,
-                height: 1
+                height: 1,
+                center: { x: 1.5, y: 0.5 }
             },
             O: {
                 shape: [
@@ -125,7 +125,8 @@
                 ],
                 color: 0xffff00, // Yellow
                 width: 2,
-                height: 2
+                height: 2,
+                center: { x: 0.5, y: 0.5 }
             },
             T: {
                 shape: [
@@ -136,7 +137,8 @@
                 ],
                 color: 0x800080, // Purple
                 width: 3,
-                height: 2
+                height: 2,
+                center: { x: 1, y: 1 }
             },
             S: {
                 shape: [
@@ -147,7 +149,8 @@
                 ],
                 color: 0x00ff00, // Green
                 width: 3,
-                height: 2
+                height: 2,
+                center: { x: 1, y: 1 }
             },
             Z: {
                 shape: [
@@ -158,7 +161,8 @@
                 ],
                 color: 0xff0000, // Red
                 width: 3,
-                height: 2
+                height: 2,
+                center: { x: 1, y: 1 }
             },
             J: {
                 shape: [
@@ -169,7 +173,8 @@
                 ],
                 color: 0x0000ff, // Blue
                 width: 3,
-                height: 2
+                height: 2,
+                center: { x: 1, y: 1 }
             },
             L: {
                 shape: [
@@ -180,23 +185,28 @@
                 ],
                 color: 0xffa500, // Orange
                 width: 3,
-                height: 2
+                height: 2,
+                center: { x: 1, y: 1 }
             }
         };
 
         // --- Game State ---
         let lastFallTime = 0;
-        let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
+        let piecePosition = { row: 0, col: 0 };
         let isPieceActive = true;
-        let boardState = []; // 2D array to track occupied cells
-        let currentPieceType = null; // Current piece type (I, O, T, etc.)
+        let boardState = [];
+        let currentPieceType = null;
+        let raycaster = new THREE.Raycaster();
+        let tempMatrix = new THREE.Matrix4();
 
         // --- Controller Setup ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
             scene.add(controller1);
 
             controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
             scene.add(controller2);
 
             controllerGrip1 = renderer.xr.getControllerGrip(0);
@@ -212,10 +222,6 @@
 
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
-            
-            // Add joystick movement listeners
-            controller1.addEventListener('axismove', onAxisMove);
-            controller2.addEventListener('axismove', onAxisMove);
         }
 
         function setupLaserPointer(controller) {
@@ -236,25 +242,6 @@
             controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
-        // --- Joystick Movement Handler ---
-        function onAxisMove(event) {
-            if (!isPieceActive) return;
-            
-            const axes = event.target.axes;
-            const horizontalAxis = axes[0]; // Left/right axis
-            
-            // Check if joystick is moved beyond threshold
-            if (Math.abs(horizontalAxis) > JOYSTICK_THRESHOLD) {
-                if (horizontalAxis < -JOYSTICK_THRESHOLD) {
-                    // Move left
-                    movePieceLeft();
-                } else if (horizontalAxis > JOYSTICK_THRESHOLD) {
-                    // Move right
-                    movePieceRight();
-                }
-            }
-        }
-
         // --- Game Board Creation ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
@@ -271,7 +258,6 @@
             // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
-                // Draw from top (y=0) to bottom (y=-BOARD_HEIGHT * CELL_SIZE)
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -282,7 +268,6 @@
             // Horizontal lines
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
-                // Draw from left to right at each row level
                 points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
@@ -290,8 +275,7 @@
                 gameBoard.add(line);
             }
             
-            // Position the board so top is at eye level
-            gameBoard.position.set(0, 1.6, -2); // Top of grid at eye level (1.6m)
+            gameBoard.position.set(0, 1.6, -2);
             
             scene.add(gameBoard);
             console.log("AR Tetris board created");
@@ -299,64 +283,147 @@
 
         // --- Game Initialization ---
         function initGame() {
-            // Initialize board state (empty board)
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            
-            // Create the first piece
             createPiece();
             lastFallTime = performance.now();
         }
 
         // --- Piece Creation ---
         function createPiece() {
-            // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
             
-            // Randomly select a piece type
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
             
-            // Calculate starting position to center the piece
             piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
             
-            // Create blocks for the piece
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             
             currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 
-                // Position the cube relative to the game board
                 const absX = piecePosition.col + block.x;
                 const absY = piecePosition.row + block.y;
                 
                 cube.position.set(
                     (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
+                    -absY * CELL_SIZE - CELL_SIZE/2,
                     0
                 );
                 
                 currentPiece.add(cube);
             });
             
-            // Add the piece to the game board
             gameBoard.add(currentPiece);
-            
-            // Set initial position (top of grid)
             currentPiece.position.y = 0;
-            
             isPieceActive = true;
             
             console.log(`New ${randomType}-piece created`);
+        }
+
+        // --- Controller Interaction ---
+        function onSelectStart(event) {
+            if (!isPieceActive) return;
+            
+            const controller = event.target;
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            
+            const intersects = raycaster.intersectObject(currentPiece, true);
+            
+            if (intersects.length > 0) {
+                rotatePiece();
+            }
+        }
+
+        // --- Piece Rotation ---
+        function rotatePiece() {
+            // Calculate rotated shape
+            const rotatedShape = [];
+            const center = currentPieceType.center;
+            
+            currentPieceType.shape.forEach(block => {
+                // Translate to origin
+                const x = block.x - center.x;
+                const y = block.y - center.y;
+                
+                // Rotate 90 degrees clockwise
+                const newX = y;
+                const newY = -x;
+                
+                // Translate back
+                rotatedShape.push({
+                    x: newX + center.x,
+                    y: newY + center.y
+                });
+            });
+            
+            // Check if rotation is valid
+            if (isValidRotation(rotatedShape)) {
+                // Update piece shape
+                currentPieceType.shape = rotatedShape;
+                
+                // Update 3D positions
+                updatePieceBlocks();
+                
+                console.log("Piece rotated successfully");
+            } else {
+                console.log("Rotation not valid");
+            }
+        }
+
+        function isValidRotation(rotatedShape) {
+            for (let block of rotatedShape) {
+                const absRow = piecePosition.row + block.y;
+                const absCol = piecePosition.col + block.x;
+                
+                // Check boundaries
+                if (absRow < 0 || absRow >= BOARD_HEIGHT || absCol < 0 || absCol >= BOARD_WIDTH) {
+                    return false;
+                }
+                
+                // Check collision with locked pieces
+                if (boardState[absRow][absCol] === 1) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function updatePieceBlocks() {
+            // Remove existing blocks
+            while (currentPiece.children.length > 0) {
+                currentPiece.remove(currentPiece.children[0]);
+            }
+            
+            // Add new blocks with updated positions
+            const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
+            
+            currentPieceType.shape.forEach(block => {
+                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                const cube = new THREE.Mesh(geometry, material);
+                
+                const absX = piecePosition.col + block.x;
+                const absY = piecePosition.row + block.y;
+                
+                cube.position.set(
+                    (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
+                    -absY * CELL_SIZE - CELL_SIZE/2,
+                    0
+                );
+                
+                currentPiece.add(cube);
+            });
         }
 
         // --- Game Logic ---
         function updateGame(timestamp) {
             if (!isPieceActive) return;
             
-            // Move the piece down at regular intervals
             if (timestamp - lastFallTime > FALL_SPEED) {
                 movePieceDown();
                 lastFallTime = timestamp;
@@ -364,108 +431,44 @@
         }
 
         function movePieceDown() {
-            // Check if piece can move down
             if (canMoveDown()) {
-                // Move the piece down (negative Y direction)
                 piecePosition.row++;
                 currentPiece.position.y = -piecePosition.row * CELL_SIZE;
             } else {
-                // Lock the piece in place
                 lockPiece();
             }
         }
 
-        function movePieceLeft() {
-            if (canMoveLeft()) {
-                piecePosition.col--;
-                currentPiece.position.x = (piecePosition.col * CELL_SIZE);
-            }
-        }
-
-        function movePieceRight() {
-            if (canMoveRight()) {
-                piecePosition.col++;
-                currentPiece.position.x = (piecePosition.col * CELL_SIZE);
-            }
-        }
-
         function canMoveDown() {
-            // Check each block of the current piece
             for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 
-                // Check if block is at the bottom
                 if (newRow >= BOARD_HEIGHT) {
                     return false;
                 }
                 
-                // Check if block would collide with a locked piece
                 if (boardState[newRow][newCol] === 1) {
                     return false;
                 }
             }
-            
-            return true;
-        }
-
-        function canMoveLeft() {
-            // Check each block of the current piece
-            for (let block of currentPieceType.shape) {
-                const newRow = piecePosition.row + block.y;
-                const newCol = piecePosition.col + block.x - 1;
-                
-                // Check if block is at the left wall
-                if (newCol < 0) {
-                    return false;
-                }
-                
-                // Check if block would collide with a locked piece
-                if (boardState[newRow][newCol] === 1) {
-                    return false;
-                }
-            }
-            
-            return true;
-        }
-
-        function canMoveRight() {
-            // Check each block of the current piece
-            for (let block of currentPieceType.shape) {
-                const newRow = piecePosition.row + block.y;
-                const newCol = piecePosition.col + block.x + 1;
-                
-                // Check if block is at the right wall
-                if (newCol >= BOARD_WIDTH) {
-                    return false;
-                }
-                
-                // Check if block would collide with a locked piece
-                if (boardState[newRow][newCol] === 1) {
-                    return false;
-                }
-            }
-            
             return true;
         }
 
         function lockPiece() {
-            // Mark the piece as inactive
             isPieceActive = false;
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
             
-            // Update board state with the locked piece
             for (let block of currentPieceType.shape) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
                 boardState[row][col] = 1;
             }
             
-            // Create a new piece after a short delay
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
-            }, 500); // 500ms delay before spawning new piece
+            }, 500);
         }
 
         // --- Animation Loop ---
