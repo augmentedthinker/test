@@ -91,6 +91,9 @@
         const cellSize = 0.1;
         let lastMoveTime = 0;
         const fallSpeed = 1000; // milliseconds between moves
+        
+        // Grid representation (2D array)
+        let grid = [];
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -187,6 +190,9 @@
 
         // --- Game Logic ---
         function initializeGame() {
+            // Initialize grid (2D array representing empty cells)
+            grid = Array(boardHeight).fill().map(() => Array(boardWidth).fill(null));
+            
             // Create group for locked pieces
             lockedPieces = new THREE.Group();
             scene.add(lockedPieces);
@@ -218,10 +224,10 @@
                 currentPiece.add(block);
             });
             
-            // Position at top center of board
+            // Position at top center of board (grid aligned)
             currentPiece.position.set(
                 0, // Center horizontally
-                0, // Top of board
+                0, // Top of board (row 0)
                 0  // Same depth as board
             );
             
@@ -232,20 +238,39 @@
         function movePieceDown() {
             if (!currentPiece) return;
             
-            // Calculate next position
-            const nextY = currentPiece.position.y - cellSize;
+            // Calculate next grid position
+            const currentY = currentPiece.position.y;
+            const nextY = currentY - cellSize;
             
             // Check if piece would go below board
-            if (nextY - cellSize < -boardHeight * cellSize) {
+            if (nextY < -boardHeight * cellSize) {
                 // Lock piece at bottom
                 lockPiece();
             } else {
-                // Move piece down
+                // Move piece down (grid aligned)
                 currentPiece.position.y = nextY;
             }
         }
 
         function lockPiece() {
+            // Convert piece position to grid coordinates
+            const gridX = Math.round((currentPiece.position.x + (boardWidth * cellSize)/2) / cellSize);
+            const gridY = Math.round(-currentPiece.position.y / cellSize);
+            
+            // Update grid with piece blocks
+            const blockPositions = [
+                { x: gridX, y: gridY },
+                { x: gridX + 1, y: gridY },
+                { x: gridX, y: gridY + 1 },
+                { x: gridX + 1, y: gridY + 1 }
+            ];
+            
+            blockPositions.forEach(pos => {
+                if (pos.x >= 0 && pos.x < boardWidth && pos.y >= 0 && pos.y < boardHeight) {
+                    grid[pos.y][pos.x] = 0xffff00; // Yellow color
+                }
+            });
+            
             // Move piece to locked group
             scene.remove(currentPiece);
             lockedPieces.add(currentPiece);
