@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 2</title>
+    <title>AR Tetris - Step 3</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -48,7 +48,6 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (currentPiece) scene.remove(currentPiece);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -188,7 +187,7 @@
             gameBoard.position.set(0, 1.6, -2); // Top of grid at eye level (1.6m)
             
             scene.add(gameBoard);
-            console.log("AR Tetris board created (corrected orientation)");
+            console.log("AR Tetris board created");
         }
 
         // --- Game Initialization ---
@@ -200,8 +199,7 @@
 
         // --- Piece Creation ---
         function createPiece() {
-            if (currentPiece) scene.remove(currentPiece);
-            
+            // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
             
             // I-piece shape (straight line)
@@ -233,7 +231,7 @@
             // Add the piece to the game board
             gameBoard.add(currentPiece);
             
-            // Reset piece position
+            // Reset piece position to top
             piecePosition = { row: 0, col: 3 };
             isPieceActive = true;
             
@@ -257,8 +255,16 @@
         function movePieceDown() {
             // Check if piece is at the bottom
             if (piecePosition.row >= BOARD_HEIGHT - 1) {
+                // Lock the piece in place
                 isPieceActive = false;
-                console.log("Piece reached the bottom");
+                console.log("Piece locked at bottom");
+                
+                // Create a new piece after a short delay
+                setTimeout(() => {
+                    createPiece();
+                    lastFallTime = performance.now();
+                }, 500); // 500ms delay before spawning new piece
+                
                 return;
             }
             
