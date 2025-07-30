@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 1</title>
+    <title>AR Tetris - Step 2</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -36,6 +36,7 @@
                         if (currentSession) {
                             setupControllers();
                             createGameBoard();
+                            initializeGame();
                         }
                     }
                     function onSessionEnded() {
@@ -47,6 +48,8 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
+                        if (lockedPieces) scene.remove(lockedPieces);
+                        if (currentPiece) scene.remove(currentPiece);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -80,7 +83,14 @@
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-        let gameBoard;
+        let gameBoard, lockedPieces, currentPiece;
+
+        // Game variables
+        const boardWidth = 10;
+        const boardHeight = 20;
+        const cellSize = 0.1;
+        let lastMoveTime = 0;
+        const fallSpeed = 1000; // milliseconds between moves
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -141,11 +151,6 @@
             
             gameBoard = new THREE.Group();
             
-            // Board dimensions
-            const boardWidth = 10;  // 10 columns
-            const boardHeight = 20; // 20 rows
-            const cellSize = 0.1;   // Each cell is 0.1 units
-            
             // Create grid lines
             const gridMaterial = new THREE.LineBasicMaterial({ 
                 color: 0x00ff00, 
@@ -157,7 +162,7 @@
             for (let x = 0; x <= boardWidth; x++) {
                 const points = [];
                 points.push(new THREE.Vector3(x * cellSize - (boardWidth * cellSize)/2, 0, 0));
-                points.push(new THREE.Vector3(x * cellSize - (boardWidth * cellSize)/2, boardHeight * cellSize, 0));
+                points.push(new THREE.Vector3(x * cellSize - (boardWidth * cellSize)/2, -boardHeight * cellSize, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
@@ -166,23 +171,102 @@
             // Horizontal lines
             for (let y = 0; y <= boardHeight; y++) {
                 const points = [];
-                points.push(new THREE.Vector3(-(boardWidth * cellSize)/2, y * cellSize, 0));
-                points.push(new THREE.Vector3((boardWidth * cellSize)/2, y * cellSize, 0));
+                points.push(new THREE.Vector3(-(boardWidth * cellSize)/2, -y * cellSize, 0));
+                points.push(new THREE.Vector3((boardWidth * cellSize)/2, -y * cellSize, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
             
             // Position the board in front of the user
-            // The top of the grid will now be at eye level (where the bottom was before)
-            gameBoard.position.set(0, -1, -2); // Lowered by 2 meters (full height of the board)
+            gameBoard.position.set(0, 0, -2); // Top at eye level, 2 meters away
             
             scene.add(gameBoard);
-            console.log("AR Tetris board created (lowered position)");
+            console.log("AR Tetris board created");
+        }
+
+        // --- Game Logic ---
+        function initializeGame() {
+            // Create group for locked pieces
+            lockedPieces = new THREE.Group();
+            scene.add(lockedPieces);
+            
+            // Spawn first piece
+            spawnPiece();
+        }
+
+        function spawnPiece() {
+            if (currentPiece) scene.remove(currentPiece);
+            
+            // Create O-piece (2x2 square)
+            currentPiece = new THREE.Group();
+            
+            const geometry = new THREE.BoxGeometry(cellSize, cellSize, cellSize);
+            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow
+            
+            // Create 4 blocks for the O-piece
+            const positions = [
+                { x: 0, y: 0 },      // Top-left
+                { x: cellSize, y: 0 }, // Top-right
+                { x: 0, y: -cellSize }, // Bottom-left
+                { x: cellSize, y: -cellSize }  // Bottom-right
+            ];
+            
+            positions.forEach(pos => {
+                const block = new THREE.Mesh(geometry, material);
+                block.position.set(pos.x, pos.y, 0);
+                currentPiece.add(block);
+            });
+            
+            // Position at top center of board
+            currentPiece.position.set(
+                0, // Center horizontally
+                0, // Top of board
+                0  // Same depth as board
+            );
+            
+            scene.add(currentPiece);
+            lastMoveTime = performance.now();
+        }
+
+        function movePieceDown() {
+            if (!currentPiece) return;
+            
+            // Calculate next position
+            const nextY = currentPiece.position.y - cellSize;
+            
+            // Check if piece would go below board
+            if (nextY - cellSize < -boardHeight * cellSize) {
+                // Lock piece at bottom
+                lockPiece();
+            } else {
+                // Move piece down
+                currentPiece.position.y = nextY;
+            }
+        }
+
+        function lockPiece() {
+            // Move piece to locked group
+            scene.remove(currentPiece);
+            lockedPieces.add(currentPiece);
+            currentPiece = null;
+            
+            // Spawn new piece after a short delay
+            setTimeout(() => {
+                spawnPiece();
+            }, 500);
         }
 
         // --- Animation Loop ---
         renderer.setAnimationLoop(() => {
+            const currentTime = performance.now();
+            
+            // Move piece down at regular intervals
+            if (currentPiece && currentTime - lastMoveTime > fallSpeed) {
+                movePieceDown();
+                lastMoveTime = currentTime;
+            }
+            
             renderer.render(scene, camera);
         });
     </script>
