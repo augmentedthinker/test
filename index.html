@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 5</title>
+    <title>AR Tetris - Step 6</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -101,6 +101,7 @@
         const BOARD_HEIGHT = 20; // 20 rows
         const CELL_SIZE = 0.1;   // Each cell is 0.1 units
         const FALL_SPEED = 1000; // ms per row
+        const MOVE_COOLDOWN = 200; // ms between horizontal moves
 
         // --- Tetris Pieces Definition ---
         const PIECES = {
@@ -185,6 +186,7 @@
 
         // --- Game State ---
         let lastFallTime = 0;
+        let lastMoveTime = 0;
         let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
         let isPieceActive = true;
         let boardState = []; // 2D array to track occupied cells
@@ -211,6 +213,10 @@
 
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
+            
+            // Add joystick movement listeners
+            controller1.addEventListener('axismove', handleAxisMove);
+            controller2.addEventListener('axismove', handleAxisMove);
         }
 
         function setupLaserPointer(controller) {
@@ -229,6 +235,28 @@
             controller.add(line);
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
+        }
+
+        // --- Joystick Movement Handler ---
+        function handleAxisMove(event) {
+            if (!isPieceActive) return;
+            
+            const axes = event.axes;
+            const now = performance.now();
+            
+            // Check if cooldown has passed
+            if (now - lastMoveTime < MOVE_COOLDOWN) {
+                return;
+            }
+            
+            // Check left stick x-axis (index 0)
+            if (axes[0] < -0.5) {
+                movePieceLeft();
+                lastMoveTime = now;
+            } else if (axes[0] > 0.5) {
+                movePieceRight();
+                lastMoveTime = now;
+            }
         }
 
         // --- Game Board Creation ---
@@ -281,6 +309,7 @@
             // Create the first piece
             createPiece();
             lastFallTime = performance.now();
+            lastMoveTime = performance.now();
         }
 
         // --- Piece Creation ---
@@ -351,6 +380,26 @@
             }
         }
 
+        function movePieceLeft() {
+            // Check if piece can move left
+            if (canMoveLeft()) {
+                // Move the piece left
+                piecePosition.col--;
+                currentPiece.position.x -= CELL_SIZE;
+                console.log("Piece moved left");
+            }
+        }
+
+        function movePieceRight() {
+            // Check if piece can move right
+            if (canMoveRight()) {
+                // Move the piece right
+                piecePosition.col++;
+                currentPiece.position.x += CELL_SIZE;
+                console.log("Piece moved right");
+            }
+        }
+
         function canMoveDown() {
             // Check each block of the current piece
             for (let block of currentPieceType.shape) {
@@ -359,6 +408,46 @@
                 
                 // Check if block is at the bottom
                 if (newRow >= BOARD_HEIGHT) {
+                    return false;
+                }
+                
+                // Check if block would collide with a locked piece
+                if (boardState[newRow][newCol] === 1) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function canMoveLeft() {
+            // Check each block of the current piece
+            for (let block of currentPieceType.shape) {
+                const newRow = piecePosition.row + block.y;
+                const newCol = piecePosition.col + block.x - 1;
+                
+                // Check if block is at the left boundary
+                if (newCol < 0) {
+                    return false;
+                }
+                
+                // Check if block would collide with a locked piece
+                if (boardState[newRow][newCol] === 1) {
+                    return false;
+                }
+            }
+            
+            return true;
+        }
+
+        function canMoveRight() {
+            // Check each block of the current piece
+            for (let block of currentPieceType.shape) {
+                const newRow = piecePosition.row + block.y;
+                const newCol = piecePosition.col + block.x + 1;
+                
+                // Check if block is at the right boundary
+                if (newCol >= BOARD_WIDTH) {
                     return false;
                 }
                 
@@ -387,6 +476,7 @@
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
+                lastMoveTime = performance.now();
             }, 500); // 500ms delay before spawning new piece
         }
 
