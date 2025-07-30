@@ -174,10 +174,11 @@
             }
             
             // Position the board in front of the user
-            gameBoard.position.set(0, 1, -2); // 1 meter high, 2 meters away
+            // The top of the grid will now be at eye level (where the bottom was before)
+            gameBoard.position.set(0, -1, -2); // Lowered by 2 meters (full height of the board)
             
             scene.add(gameBoard);
-            console.log("AR Tetris board created");
+            console.log("AR Tetris board created (lowered position)");
         }
 
         // --- Animation Loop ---
