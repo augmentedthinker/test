@@ -339,7 +339,7 @@
             currentPiece.position.y = 0;
             isPieceActive = true;
             
-            console.log(`New ${randomType}-piece created`);
+            console.log(`New ${randomType}-piece created at row ${piecePosition.row}`);
         }
 
         // --- Rotation Logic ---
@@ -411,6 +411,7 @@
             if (canMoveDown(currentShape)) {
                 piecePosition.row++;
                 currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+                console.log(`Piece moved to row ${piecePosition.row}`);
             } else {
                 lockPiece();
             }
@@ -421,11 +422,21 @@
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 
+                // Check if block is at the bottom
                 if (newRow >= BOARD_HEIGHT) {
+                    console.log(`Cannot move down: block at row ${newRow} (bottom)`);
                     return false;
                 }
                 
+                // Check if block is out of bounds horizontally
+                if (newCol < 0 || newCol >= BOARD_WIDTH) {
+                    console.log(`Cannot move down: block at col ${newCol} (out of bounds)`);
+                    return false;
+                }
+                
+                // Check if block would collide with a locked piece
                 if (boardState[newRow][newCol] === 1) {
+                    console.log(`Cannot move down: collision at (${newRow}, ${newCol})`);
                     return false;
                 }
             }
@@ -436,14 +447,23 @@
             isPieceActive = false;
             const currentShape = currentPieceType.shapes[currentRotation];
             
+            console.log(`Locking piece at row ${piecePosition.row}`);
+            
+            // Update board state with the locked piece
             for (let block of currentShape) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
-                boardState[row][col] = 1;
+                
+                // Only update if within bounds
+                if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
+                    boardState[row][col] = 1;
+                    console.log(`Locked block at (${row}, ${col})`);
+                }
             }
             
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
             
+            // Create a new piece after a short delay
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
