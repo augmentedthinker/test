@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 4</title>
+    <title>AR Tetris - Step 5</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -102,11 +102,81 @@
         const CELL_SIZE = 0.1;   // Each cell is 0.1 units
         const FALL_SPEED = 1000; // ms per row
 
+        // --- Tetris Pieces ---
+        const PIECES = {
+            I: {
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 2, y: 0 },
+                    { x: 3, y: 0 }
+                ],
+                color: 0x00ffff // Cyan
+            },
+            O: {
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 }
+                ],
+                color: 0xffff00 // Yellow
+            },
+            T: {
+                shape: [
+                    { x: 1, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
+                ],
+                color: 0xff00ff // Purple
+            },
+            S: {
+                shape: [
+                    { x: 1, y: 0 },
+                    { x: 2, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 }
+                ],
+                color: 0x00ff00 // Green
+            },
+            Z: {
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
+                ],
+                color: 0xff0000 // Red
+            },
+            J: {
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
+                ],
+                color: 0x0000ff // Blue
+            },
+            L: {
+                shape: [
+                    { x: 2, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
+                ],
+                color: 0xffa500 // Orange
+            }
+        };
+
+        const PIECE_TYPES = Object.keys(PIECES);
+
         // --- Game State ---
         let lastFallTime = 0;
-        let piecePosition = { row: 0, col: 3 }; // Starting position (top center)
+        let piecePosition = { row: 0, col: 0 }; // Will be calculated per piece
         let isPieceActive = true;
         let boardState = []; // 2D array to track occupied cells
+        let currentPieceType = null;
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -196,7 +266,7 @@
             // Initialize board state (empty board)
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
             
-            // Create the first piece (I-piece)
+            // Create the first piece
             createPiece();
             lastFallTime = performance.now();
         }
@@ -206,23 +276,22 @@
             // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
             
-            // I-piece shape (straight line)
-            const pieceShape = [
-                { x: 3, y: 0 }, // Left block
-                { x: 4, y: 0 }, // Center-left block
-                { x: 5, y: 0 }, // Center-right block
-                { x: 6, y: 0 }  // Right block
-            ];
+            // Randomly select a piece type
+            currentPieceType = PIECE_TYPES[Math.floor(Math.random() * PIECE_TYPES.length)];
+            const piece = PIECES[currentPieceType];
+            
+            // Calculate starting column to center the piece
+            const pieceWidth = Math.max(...piece.shape.map(block => block.x)) + 1;
+            const startCol = Math.floor((BOARD_WIDTH - pieceWidth) / 2);
             
             // Create blocks for the piece
-            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan color
+            const material = new THREE.MeshBasicMaterial({ color: piece.color });
             
-            pieceShape.forEach(block => {
+            piece.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 
                 // Position the cube relative to the game board
-                // Note: Y is negative because we're drawing downward
                 cube.position.set(
                     (block.x * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
                     -block.y * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
@@ -235,14 +304,14 @@
             // Add the piece to the game board
             gameBoard.add(currentPiece);
             
-            // Reset piece position to top
-            piecePosition = { row: 0, col: 3 };
+            // Reset piece position to top center
+            piecePosition = { row: 0, col: startCol };
             isPieceActive = true;
             
             // Set initial position (top of grid)
             currentPiece.position.y = 0;
             
-            console.log("New I-piece created");
+            console.log(`New ${currentPieceType}-piece created`);
         }
 
         // --- Game Logic ---
@@ -269,18 +338,12 @@
         }
 
         function canMoveDown() {
-            // Get the shape of the current piece
-            const pieceShape = [
-                { x: 3, y: 0 },
-                { x: 4, y: 0 },
-                { x: 5, y: 0 },
-                { x: 6, y: 0 }
-            ];
+            const piece = PIECES[currentPieceType];
             
             // Check each block of the piece
-            for (let block of pieceShape) {
-                const newRow = piecePosition.row + 1; // Next row down
-                const newCol = piecePosition.col + (block.x - 3); // Adjust for piece position
+            for (let block of piece.shape) {
+                const newRow = piecePosition.row + block.y + 1; // Next row down
+                const newCol = piecePosition.col + block.x;
                 
                 // Check if block is at the bottom
                 if (newRow >= BOARD_HEIGHT) {
@@ -299,19 +362,14 @@
         function lockPiece() {
             // Mark the piece as inactive
             isPieceActive = false;
-            console.log("Piece locked in place");
+            console.log(`${currentPieceType}-piece locked in place`);
             
             // Update board state with the locked piece
-            const pieceShape = [
-                { x: 3, y: 0 },
-                { x: 4, y: 0 },
-                { x: 5, y: 0 },
-                { x: 6, y: 0 }
-            ];
+            const piece = PIECES[currentPieceType];
             
-            for (let block of pieceShape) {
+            for (let block of piece.shape) {
                 const row = piecePosition.row + block.y;
-                const col = piecePosition.col + (block.x - 3); // Adjust for piece position
+                const col = piecePosition.col + block.x;
                 boardState[row][col] = 1;
             }
             
