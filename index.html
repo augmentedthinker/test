@@ -1,25 +1,57 @@
-Okay, vibe coder! I've adjusted the Breakout game code. The ball is now much slower, and instead of just moving the paddle based on the laser's X position, you can now **drag the paddle** by holding the trigger button and moving the controller.
-
-Here's the updated self-contained HTML file:
-
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Breakout - Drag Paddle</title>
+    <title>AR Tetris - Enhanced Edition</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
-        #instructions {
-            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
-            color: white; font-family: sans-serif; font-size: 16px; z-index: 100;
-            background: rgba(0,0,0,0.5); padding: 5px 10px; border-radius: 4px;
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: sans-serif;
+            background-color: #111;
+            color: #fff;
+            overflow: hidden;
+        }
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100;
+            display: block;
+            padding: 10px 0;
+            pointer-events: none;
+        }
+        #game-ui {
+            position: absolute;
+            bottom: 80px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 99;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        #game-ui div {
+            margin: 5px 0;
+        }
+        .label {
+            font-weight: bold;
+            color: #00ffff;
         }
     </style>
 </head>
 <body>
-    <div id="instructions">Hold trigger and move controller to drag paddle. Release to launch/restart.</div>
+    <div id="info">AR Tetris - Enhanced Edition</div>
+    <div id="game-ui">
+        <div><span class="label">Score:</span> <span id="score">0</span></div>
+        <div><span class="label">Level:</span> <span id="level">1</span></div>
+        <div><span class="label">Lines:</span> <span id="lines">0</span></div>
+        <div><span class="label">Next:</span> <span id="next-piece">-</span></div>
+    </div>
+
     <script type="importmap">
         {
             "imports": {
@@ -30,14 +62,17 @@ Here's the updated self-contained HTML file:
     </script>
     <script type="module">
         import * as THREE from 'three';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- Minimal AR Button ---
+        // --- Inlined ARButton.js (Simplified) ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
+
                 function showStartAR() {
                     let currentSession = null;
+
                     async function onSessionStarted(session) {
                         session.addEventListener('end', onSessionEnded);
                         renderer.xr.setReferenceSpaceType('local');
@@ -46,9 +81,14 @@ Here's the updated self-contained HTML file:
                         currentSession = session;
                         if (currentSession) {
                             setupControllers();
-                            createScreen(); // Create screen and game when session starts
+                            if (!gameStarted) {
+                                gameStarted = true;
+                                resetGame();
+                                spawnNewPiece();
+                            }
                         }
                     }
+
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
                         button.textContent = 'START AR';
@@ -57,352 +97,670 @@ Here's the updated self-contained HTML file:
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        if (screenGroup) scene.remove(screenGroup);
-                        resetGame();
+                        pointers.length = 0;
+                        if (grid) scene.remove(grid);
+                        if (activePiece && activePiece.mesh) scene.remove(activePiece.mesh);
+                        for (let group of placedPieceGroups) {
+                            scene.remove(group);
+                        }
+                        placedPieceGroups.length = 0;
+                        activePiece = null;
+                        gameStarted = false;
                     }
-                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
-                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
-                        cursor: pointer; z-index: 999;`;
+
+                    button.style.cssText = `
+                        position: absolute;
+                        bottom: 20px;
+                        left: calc(50% - 50px);
+                        width: 100px;
+                        padding: 12px 6px;
+                        border: 1px solid #fff;
+                        border-radius: 4px;
+                        background: rgba(0,0,0,0.1);
+                        color: #fff;
+                        font: normal 13px sans-serif;
+                        text-align: center;
+                        opacity: 0.5;
+                        cursor: pointer;
+                        z-index: 999;
+                    `;
                     button.textContent = 'START AR';
-                    button.onclick = () => currentSession ? currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+                    button.onclick = function () {
+                        if (currentSession === null) {
+                            navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+                        } else {
+                            currentSession.end();
+                        }
+                    };
+                    button.onmouseenter = () => button.style.opacity = '1.0';
+                    button.onmouseleave = () => button.style.opacity = '0.5';
                 }
+
                 function showARNotSupported() {
-                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
-                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`;
+                    button.style.cssText = `
+                        position: absolute;
+                        bottom: 20px;
+                        left: calc(50% - 75px);
+                        width: 150px;
+                        padding: 12px 6px;
+                        border: 1px solid #fff;
+                        border-radius: 4px;
+                        background: rgba(0,0,0,0.1);
+                        color: #fff;
+                        font: normal 13px sans-serif;
+                        text-align: center;
+                        opacity: 0.5;
+                        z-index: 999;
+                    `;
                     button.textContent = 'AR NOT SUPPORTED';
                 }
+
                 if ('xr' in navigator) {
-                    navigator.xr.isSessionSupported('immersive-ar').then(supported => supported ? showStartAR() : showARNotSupported()).catch(showARNotSupported);
+                    navigator.xr.isSessionSupported('immersive-ar')
+                        .then(supported => supported ? showStartAR() : showARNotSupported())
+                        .catch(showARNotSupported);
                     return button;
                 } else {
                     const message = document.createElement('a');
                     message.innerHTML = 'WEBXR NOT AVAILABLE';
-                    message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
-                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
-                        text-decoration: none; z-index: 999;`;
+                    message.style.cssText = `
+                        position: absolute;
+                        bottom: 20px;
+                        left: calc(50% - 90px);
+                        width: 180px;
+                        padding: 12px 6px;
+                        border: 1px solid #fff;
+                        border-radius: 4px;
+                        background: rgba(0,0,0,0.1);
+                        color: #fff;
+                        font: normal 13px sans-serif;
+                        text-align: center;
+                        text-decoration: none;
+                        opacity: 0.5;
+                        z-index: 999;
+                    `;
                     return message;
                 }
             }
         }
 
-        // --- Core Three.js Setup ---
-        let camera, scene, renderer, screenGroup;
-        let controller1, controller2, controllerGrip1, controllerGrip2;
+        // --- Main Application Logic ---
+        let camera, scene, renderer;
+        let controller1, controller2;
+        let controllerGrip1, controllerGrip2;
         let controllerModelFactory;
+
+        // --- Controller & Laser Variables ---
+        const pointers = [];
         const tempMatrix = new THREE.Matrix4();
         const raycaster = new THREE.Raycaster();
+        
+        // --- Tetris Grid Variables ---
+        let grid;
+        const GRID_WIDTH = 10;
+        const GRID_HEIGHT = 20;
+        const GRID_DEPTH = 1;
+        const GRID_CELL_SIZE = 0.1;
+
+        // --- Tetris Piece Variables ---
+        let activePiece = null;
+        let nextPieceType = null;
+        let gameStarted = false;
+        let lastDropTime = 0;
+        let dropInterval = 1000;
 
         // --- Game State ---
-        let gameStarted = false;
-        let gameObjectsCreated = false;
-        let paddle, ball, ballVelocity, bricks = [];
-        // --- Adjusted Speeds ---
-        const BALL_SPEED = 0.005; // <<<<< MUCH SLOWER BALL
-        const BRICK_ROWS = 4;
-        const BRICK_COLS = 8;
-        const BRICK_WIDTH = 0.18;
-        const BRICK_HEIGHT = 0.05;
-        const BRICK_DEPTH = 0.02;
-        const BRICK_SPACING = 0.01;
-        const PADDLE_WIDTH = 0.3;
-        const PADDLE_HEIGHT = 0.03;
-        const PADDLE_DEPTH = 0.02;
-        const BALL_RADIUS = 0.02;
+        let placedPieceGroups = [];
+        let gameOver = false;
+        let score = 0;
+        let level = 1;
+        let linesCleared = 0;
+        let gridState = []; // 2D array to track occupied cells
 
-        // --- Dragging State ---
-        let isDragging = false;
-        let dragController = null;
-        let dragOffsetX = 0; // Difference between controller X and paddle X at drag start
+        // --- Object Pool for Performance ---
+        const blockPool = [];
+        const MAX_POOL_SIZE = 100;
 
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
-        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
-        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
-        scene.add(light);
+        // --- Tetromino Definitions ---
+        const TETROMINOES = {
+            I: { shape: [[0, 0, 0, 0], [1, 1, 1, 1], [0, 0, 0, 0], [0, 0, 0, 0]], color: 0x00ffff },
+            O: { shape: [[1, 1], [1, 1]], color: 0xffff00 },
+            T: { shape: [[0, 1, 0], [1, 1, 1], [0, 0, 0]], color: 0x800080 },
+            S: { shape: [[0, 1, 1], [1, 1, 0], [0, 0, 0]], color: 0x00ff00 },
+            Z: { shape: [[1, 1, 0], [0, 1, 1], [0, 0, 0]], color: 0xff0000 },
+            J: { shape: [[1, 0, 0], [1, 1, 1], [0, 0, 0]], color: 0x0000ff },
+            L: { shape: [[0, 0, 1], [1, 1, 1], [0, 0, 0]], color: 0xff7f00 }
+        };
+        const TETROMINO_NAMES = Object.keys(TETROMINOES);
 
-        // --- Controller Setup ---
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene();
+
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.xr.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+            createGrid();
+
+            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+            light.position.set(0.5, 1, 0.25);
+            scene.add(light);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(1, 1, 1).normalize();
+            scene.add(dirLight);
+
+            window.addEventListener('resize', onWindowResize, false);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function createGrid() {
+            const gridWidth = GRID_WIDTH * GRID_CELL_SIZE;
+            const gridHeight = GRID_HEIGHT * GRID_CELL_SIZE;
+            const gridDepth = GRID_DEPTH * GRID_CELL_SIZE;
+
+            const gridGeometry = new THREE.BoxGeometry(gridWidth, gridHeight, gridDepth);
+            const gridMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.5
+            });
+
+            grid = new THREE.Mesh(gridGeometry, gridMaterial);
+            grid.position.set(0, gridHeight / 2 - 0.5, -1.5);
+            scene.add(grid);
+        }
+
+        function resetGame() {
+            // Clear visual piece groups from scene
+            for (let group of placedPieceGroups) {
+                scene.remove(group);
+                // Return blocks to pool
+                group.traverse((child) => {
+                    if (child.isMesh) {
+                        returnBlockToPool(child);
+                    }
+                });
+            }
+            placedPieceGroups.length = 0;
+
+            if (activePiece && activePiece.mesh) {
+                scene.remove(activePiece.mesh);
+                // Return blocks to pool
+                activePiece.mesh.traverse((child) => {
+                    if (child.isMesh) {
+                        returnBlockToPool(child);
+                    }
+                });
+            }
+            
+            // Reset game state
+            activePiece = null;
+            nextPieceType = null;
+            gameOver = false;
+            score = 0;
+            level = 1;
+            linesCleared = 0;
+            dropInterval = 1000;
+            lastDropTime = 0;
+            
+            // Initialize grid state
+            gridState = Array(GRID_HEIGHT).fill().map(() => Array(GRID_WIDTH).fill(0));
+            
+            // Update UI
+            updateUI();
+            
+            console.log("Game reset");
+        }
+
+        function updateUI() {
+            document.getElementById('score').textContent = score;
+            document.getElementById('level').textContent = level;
+            document.getElementById('lines').textContent = linesCleared;
+            document.getElementById('next-piece').textContent = nextPieceType || '-';
+        }
+
+        function gridToWorld(x, y) {
+            const worldX = (x - GRID_WIDTH / 2 + 0.5) * GRID_CELL_SIZE;
+            const worldY = (y + 0.5) * GRID_CELL_SIZE - 0.5;
+            const worldZ = -1.5;
+            return new THREE.Vector3(worldX, worldY, worldZ);
+        }
+
+        // Object pool functions for performance
+        function getBlockFromPool(color) {
+            if (blockPool.length > 0) {
+                const block = blockPool.pop();
+                block.material.color.setHex(color);
+                block.visible = true;
+                return block;
+            } else {
+                const blockSize = GRID_CELL_SIZE;
+                const blockGeometry = new THREE.BoxGeometry(
+                    blockSize * 0.95, 
+                    blockSize * 0.95, 
+                    blockSize * 0.95
+                );
+                const blockMaterial = new THREE.MeshStandardMaterial({ color: color });
+                const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                block.userData = { isPiece: true };
+                return block;
+            }
+        }
+
+        function returnBlockToPool(block) {
+            if (blockPool.length < MAX_POOL_SIZE) {
+                block.visible = false;
+                blockPool.push(block);
+            }
+        }
+
+        function createPiece(type) {
+            const definition = TETROMINOES[type];
+            if (!definition) return null;
+
+            const group = new THREE.Group();
+            const blockSize = GRID_CELL_SIZE;
+
+            const shape = definition.shape;
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const block = getBlockFromPool(definition.color);
+                        block.position.set(
+                            x * blockSize,
+                            -y * blockSize, // Align shape correctly
+                            0
+                        );
+                        group.add(block);
+                    }
+                }
+            }
+
+            const gridTopY = (GRID_HEIGHT * GRID_CELL_SIZE) / 2 - 0.5 + blockSize / 2;
+            const startPosX = Math.floor((GRID_WIDTH - shape[0].length) / 2);
+            const startPosY = GRID_HEIGHT; // Start above the grid
+
+            group.position.copy(gridToWorld(startPosX, startPosY - 1)); // Initial position
+
+            return {
+                mesh: group,
+                type: type,
+                x: startPosX,
+                y: startPosY,
+                shape: shape
+            };
+        }
+
+        function spawnNewPiece() {
+            if (!gameStarted || gameOver) return;
+
+            // If we don't have a next piece, generate one
+            if (!nextPieceType) {
+                nextPieceType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
+            }
+            
+            // Use the next piece and generate a new one
+            const pieceType = nextPieceType;
+            nextPieceType = TETROMINO_NAMES[Math.floor(Math.random() * TETROMINO_NAMES.length)];
+            updateUI(); // Update UI with new next piece
+            
+            activePiece = createPiece(pieceType);
+
+            if (activePiece) {
+                scene.add(activePiece.mesh);
+                if (checkCollision(activePiece, 0, 0)) {
+                    console.log("Game Over!");
+                    gameOver = true;
+                    document.getElementById('info').textContent = "Game Over! Press STOP AR to exit.";
+                }
+            }
+        }
+
+        function checkCollision(piece, offsetX, offsetY) {
+            if (!piece) return true;
+            const shape = piece.shape;
+            const newX = piece.x + offsetX;
+            const newY = piece.y + offsetY;
+
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const checkX = newX + x;
+                        const checkY = newY - y; // Convert piece Y to grid Y
+
+                        // Check boundaries
+                        if (checkX < 0 || checkX >= GRID_WIDTH || checkY < 0) {
+                            return true; // Collision with wall or floor
+                        }
+
+                        // Check against placed pieces using grid state
+                        if (gridState[checkY] && gridState[checkY][checkX]) {
+                            return true; // Collision with placed piece
+                        }
+                    }
+                }
+            }
+            return false; // No collision
+        }
+
+        function movePiece(piece, dx, dy) {
+            if (!piece || !gameStarted || gameOver) return false;
+            if (!checkCollision(piece, dx, dy)) {
+                piece.x += dx;
+                piece.y += dy;
+                piece.mesh.position.x += dx * GRID_CELL_SIZE;
+                piece.mesh.position.y += dy * GRID_CELL_SIZE; // Y+ is up in Three.js
+                return true;
+            }
+            return false;
+        }
+
+        function placePiece(piece) {
+            if (!piece || gameOver) return;
+
+            // Create a new Group to hold the blocks in their current orientation
+            const landedPieceGroup = new THREE.Group();
+            const color = TETROMINOES[piece.type].color;
+
+            // Copy the position and rotation of the active piece's mesh
+            landedPieceGroup.position.copy(piece.mesh.position);
+            landedPieceGroup.quaternion.copy(piece.mesh.quaternion); // Copy rotation
+
+            // Add the individual block meshes as children to this new group
+            const shape = piece.shape;
+            const blockSize = GRID_CELL_SIZE;
+
+            for (let y = 0; y < shape.length; y++) {
+                for (let x = 0; x < shape[y].length; x++) {
+                    if (shape[y][x]) {
+                        const blockMesh = getBlockFromPool(color);
+                        blockMesh.position.set(
+                            x * blockSize,
+                            -y * blockSize,
+                            0
+                        );
+                        landedPieceGroup.add(blockMesh);
+                        
+                        // Update grid state
+                        const gridX = piece.x + x;
+                        const gridY = piece.y - y;
+                        if (gridY >= 0 && gridY < GRID_HEIGHT && gridX >= 0 && gridX < GRID_WIDTH) {
+                            gridState[gridY][gridX] = 1;
+                        }
+                    }
+                }
+            }
+
+            // Add the new group to the scene and our tracking array
+            scene.add(landedPieceGroup);
+            placedPieceGroups.push(landedPieceGroup);
+
+            // Remove the active piece's mesh from the scene
+            scene.remove(piece.mesh);
+            activePiece = null;
+            
+            // Check for completed lines
+            checkLines();
+            
+            console.log(`Piece placed and stacked with orientation.`);
+        }
+
+        function checkLines() {
+            let linesToClear = [];
+            
+            // Check each row from bottom to top
+            for (let y = GRID_HEIGHT - 1; y >= 0; y--) {
+                if (gridState[y].every(cell => cell === 1)) {
+                    linesToClear.push(y);
+                }
+            }
+            
+            if (linesToClear.length > 0) {
+                clearLines(linesToClear);
+                updateScore(linesToClear.length);
+            }
+        }
+
+        function clearLines(linesToClear) {
+            // Remove the visual blocks for cleared lines
+            for (let group of placedPieceGroups) {
+                group.traverse((child) => {
+                    if (child.isMesh) {
+                        const worldPos = new THREE.Vector3();
+                        child.getWorldPosition(worldPos);
+                        
+                        // Convert world position to grid coordinates
+                        const gridX = Math.round((worldPos.x + GRID_WIDTH * GRID_CELL_SIZE / 2) / GRID_CELL_SIZE - 0.5);
+                        const gridY = Math.round((worldPos.y + 0.5) / GRID_CELL_SIZE - 0.5);
+                        
+                        // Check if this block is in a line to clear
+                        if (linesToClear.includes(gridY)) {
+                            returnBlockToPool(child);
+                            group.remove(child);
+                        }
+                    }
+                });
+            }
+            
+            // Remove empty groups
+            placedPieceGroups = placedPieceGroups.filter(group => group.children.length > 0);
+            
+            // Shift blocks above cleared lines down
+            const shiftAmount = linesToClear.length;
+            for (let group of placedPieceGroups) {
+                let hasBlocksInClearedLines = false;
+                
+                group.traverse((child) => {
+                    if (child.isMesh) {
+                        const worldPos = new THREE.Vector3();
+                        child.getWorldPosition(worldPos);
+                        
+                        // Convert world position to grid coordinates
+                        const gridX = Math.round((worldPos.x + GRID_WIDTH * GRID_CELL_SIZE / 2) / GRID_CELL_SIZE - 0.5);
+                        const gridY = Math.round((worldPos.y + 0.5) / GRID_CELL_SIZE - 0.5);
+                        
+                        // Check if this block is above a cleared line
+                        for (let lineY of linesToClear) {
+                            if (gridY > lineY) {
+                                // Move this block down
+                                child.position.y -= shiftAmount * GRID_CELL_SIZE;
+                                break;
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // Update grid state
+            // Remove cleared lines
+            for (let lineY of linesToClear) {
+                gridState.splice(lineY, 1);
+            }
+            
+            // Add empty lines at the top
+            for (let i = 0; i < linesToClear.length; i++) {
+                gridState.unshift(Array(GRID_WIDTH).fill(0));
+            }
+            
+            linesCleared += linesToClear.length;
+            
+            // Level progression every 10 lines
+            if (linesCleared >= level * 10) {
+                level++;
+                dropInterval = Math.max(100, 1000 - (level - 1) * 100); // Increase speed
+            }
+            
+            updateUI();
+        }
+
+        function updateScore(linesCleared) {
+            // Tetris scoring: 40, 100, 300, 1200 for 1,2,3,4 lines * level
+            const linePoints = [0, 40, 100, 300, 1200];
+            score += linePoints[linesCleared] * level;
+            updateUI();
+        }
+
+        // --- Controller & Laser Functions ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
             controller1.addEventListener('selectstart', onSelectStart);
             controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
+
             controller2 = renderer.xr.getController(1);
             controller2.addEventListener('selectstart', onSelectStart);
             controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
+
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
+
             controllerGrip2 = renderer.xr.getControllerGrip(1);
             scene.add(controllerGrip2);
+
             controllerModelFactory = new XRControllerModelFactory();
+
             const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
+
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
+
+            // Setup Laser Pointers
+            setupLaserPointer(controller1, 0);
+            setupLaserPointer(controller2, 1);
+        }
+
+        function setupLaserPointer(controller, index) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute([0, 1, 1, 0, 1, 1], 3)); // Cyan
+            const material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending,
+                depthTest: false,
+                transparent: true
+            });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 5;
+            line.visible = false;
+
+            const hitSphereGeometry = new THREE.SphereGeometry(0.015, 8, 8);
+            const hitSphereMaterial = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); // Green
+            const hitPoint = new THREE.Mesh(hitSphereGeometry, hitSphereMaterial);
+            hitPoint.visible = false;
+
+            controller.add(line);
+            controller.add(hitPoint);
+
+            pointers[index] = {
+                controller: controller,
+                line: line,
+                hitPoint: hitPoint,
+                isSelecting: false
+            };
+
+            controller.addEventListener('connected', function () {
+                 line.visible = true;
+            });
+            controller.addEventListener('disconnected', function () {
+                line.visible = false;
+                hitPoint.visible = false;
+            });
         }
 
         function onSelectStart(event) {
             const controller = event.target;
-            if (!gameStarted && !isDragging) {
-                // --- Start Dragging ---
-                const controllerWorldPos = getControllerScreenIntersection(controller);
-                if (controllerWorldPos && paddle) {
-                    // Check if the laser hits the paddle
-                    const paddleHalfWidth = PADDLE_WIDTH / 2;
-                    if (controllerWorldPos.x > paddle.position.x - paddleHalfWidth &&
-                        controllerWorldPos.x < paddle.position.x + paddleHalfWidth) {
-                        isDragging = true;
-                        dragController = controller;
-                        dragOffsetX = controllerWorldPos.x - paddle.position.x;
-                        document.getElementById('instructions').textContent = "Dragging paddle... Release to launch.";
-                    }
-                }
-            } else if (ball && ballVelocity.length() === 0) {
-                 // If ball is stopped (game over or level clear), restart
-                 resetBall();
-                 launchBall();
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = true;
             }
+            checkAndInteract(controller);
         }
 
         function onSelectEnd(event) {
-            if (isDragging && dragController === event.target) {
-                isDragging = false;
-                dragController = null;
-                dragOffsetX = 0;
-                if (!gameStarted) {
-                    launchBall();
-                }
+            const controller = event.target;
+            const index = controller === controller1 ? 0 : 1;
+            if (pointers[index]) {
+                pointers[index].isSelecting = false;
             }
         }
 
-        // --- Screen & Game Creation Logic ---
-        function createScreen() {
-            if (screenGroup) scene.remove(screenGroup);
-            const width = 1.6, height = 0.9, depth = 0.01;
-            const geometry = new THREE.BoxGeometry(width, height, depth);
-            const material = new THREE.MeshStandardMaterial({ color: 0x000000 }); // Black screen
-            const screen = new THREE.Mesh(geometry, material);
-            screen.position.set(0, 0, -1.5); // Position screen in AR space
+        function checkAndInteract(controller) {
+             tempMatrix.identity().extractRotation(controller.matrixWorld);
+             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            screenGroup = new THREE.Group();
-            screenGroup.add(screen);
+             const intersects = raycaster.intersectObjects(scene.children, true);
 
-            // Create game objects only once
-            if (!gameObjectsCreated) {
-                createGameObjects();
-                gameObjectsCreated = true;
-            }
-
-            scene.add(screenGroup);
-            console.log("AR Screen and Breakout game created");
-        }
-
-        function createGameObjects() {
-            // Paddle
-            const paddleGeometry = new THREE.BoxGeometry(PADDLE_WIDTH, PADDLE_HEIGHT, PADDLE_DEPTH);
-            const paddleMaterial = new THREE.MeshStandardMaterial({ color: 0x00aaff });
-            paddle = new THREE.Mesh(paddleGeometry, paddleMaterial);
-            paddle.position.set(0, -0.35, -1.501); // Just in front of the screen
-            scene.add(paddle);
-
-            // Ball
-            const ballGeometry = new THREE.SphereGeometry(BALL_RADIUS, 16, 16);
-            const ballMaterial = new THREE.MeshStandardMaterial({ color: 0xffaa00 });
-            ball = new THREE.Mesh(ballGeometry, ballMaterial);
-            ball.position.set(0, -0.3, -1.501); // Start on paddle
-            scene.add(ball);
-            ballVelocity = new THREE.Vector3(0, 0, 0); // Start stationary
-
-            // Bricks
-            const brickGeometry = new THREE.BoxGeometry(BRICK_WIDTH, BRICK_HEIGHT, BRICK_DEPTH);
-            const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00]; // Red, Green, Blue, Yellow
-            const startX = -((BRICK_COLS * (BRICK_WIDTH + BRICK_SPACING)) / 2) + BRICK_WIDTH / 2;
-            const startY = 0.3;
-
-            for (let row = 0; row < BRICK_ROWS; row++) {
-                const color = colors[row % colors.length];
-                const brickMaterial = new THREE.MeshStandardMaterial({ color: color });
-                for (let col = 0; col < BRICK_COLS; col++) {
-                    const brick = new THREE.Mesh(brickGeometry, brickMaterial);
-                    brick.position.set(
-                        startX + col * (BRICK_WIDTH + BRICK_SPACING),
-                        startY - row * (BRICK_HEIGHT + BRICK_SPACING),
-                        -1.501
-                    );
-                    scene.add(brick);
-                    bricks.push(brick);
-                }
-            }
-        }
-
-        function resetBall() {
-            ball.position.set(paddle.position.x, -0.3, -1.501);
-            ballVelocity.set(0, 0, 0);
-            gameStarted = false;
-            document.getElementById('instructions').textContent = "Hold trigger and move controller to drag paddle. Release to launch.";
-        }
-
-        function launchBall() {
-             if (ballVelocity.length() === 0) { // Only launch if not moving
-                 ballVelocity.set((Math.random() - 0.5) * 2 * BALL_SPEED, BALL_SPEED, 0);
-                 gameStarted = true;
-                 document.getElementById('instructions').textContent = "Break all the bricks!";
+             for (let i = 0; i < intersects.length; i++) {
+                 const object = intersects[i].object;
+                 if (object.userData && object.userData.isPiece) {
+                     let pieceGroup = object;
+                     while (pieceGroup && !(pieceGroup instanceof THREE.Group)) {
+                         pieceGroup = pieceGroup.parent;
+                     }
+                     if (pieceGroup) {
+                         pieceGroup.rotateZ(Math.PI / 2);
+                         console.log("Piece rotated");
+                     } else {
+                         object.rotateZ(Math.PI / 2);
+                         console.log("Block rotated");
+                     }
+                     break;
+                 }
              }
         }
 
-        function resetGame() {
-             // Remove existing game objects
-             if (paddle) scene.remove(paddle);
-             if (ball) scene.remove(ball);
-             bricks.forEach(brick => scene.remove(brick));
-             bricks.length = 0; // Clear array
+        function updateLasers() {
+            for (let i = 0; i < pointers.length; i++) {
+                const pointer = pointers[i];
+                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
+                tempMatrix.identity().extractRotation(pointer.controller.matrixWorld);
+                raycaster.ray.origin.setFromMatrixPosition(pointer.controller.matrixWorld);
+                raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-             // Reset state
-             paddle = null;
-             ball = null;
-             ballVelocity = null;
-             gameStarted = false;
-             gameObjectsCreated = false;
-             isDragging = false;
-             dragController = null;
-             dragOffsetX = 0;
-             document.getElementById('instructions').textContent = "Hold trigger and move controller to drag paddle. Release to launch.";
-        }
-
-        // --- Helper for Controller Intersection ---
-        function getControllerScreenIntersection(controller) {
-            if (!controller) return null;
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            // Intersect with an invisible plane at the paddle's Z depth
-            const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 1.501); // Normal (0,0,1), distance 1.501
-            const intersection = new THREE.Vector3();
-            if (raycaster.ray.intersectPlane(plane, intersection)) {
-                return intersection;
-            }
-            return null;
-        }
-
-        // --- Game Logic ---
-        function updateGame() {
-            if (!gameStarted || !paddle || !ball || !ballVelocity) return;
-
-            // --- Handle Paddle Dragging ---
-            if (isDragging && dragController) {
-                const controllerWorldPos = getControllerScreenIntersection(dragController);
-                if (controllerWorldPos) {
-                    // Calculate new paddle X based on controller position and offset
-                    let newPaddleX = controllerWorldPos.x - dragOffsetX;
-                    // Clamp paddle to screen bounds
-                    const screenHalfWidth = 1.6 / 2 - PADDLE_WIDTH / 2;
-                    newPaddleX = Math.max(-screenHalfWidth, Math.min(screenHalfWidth, newPaddleX));
-                    paddle.position.x = newPaddleX;
-                    // If dragging before launch, move ball with paddle
-                    if (ballVelocity.length() === 0) {
-                        ball.position.x = newPaddleX;
-                    }
-                }
-            }
-
-            // --- Move Ball ---
-            ball.position.add(ballVelocity);
-
-            // --- Ball Collision with Walls ---
-            const screenHalfWidth = 1.6 / 2 - BALL_RADIUS;
-            const screenHalfHeight = 0.9 / 2 - BALL_RADIUS;
-
-            // Left and Right
-            if (ball.position.x < -screenHalfWidth || ball.position.x > screenHalfWidth) {
-                ballVelocity.x = -ballVelocity.x;
-                ball.position.x = Math.max(-screenHalfWidth, Math.min(screenHalfWidth, ball.position.x)); // Clamp to prevent sticking
-            }
-            // Top
-            if (ball.position.y > screenHalfHeight) {
-                ballVelocity.y = -ballVelocity.y;
-                ball.position.y = screenHalfHeight; // Clamp
-            }
-            // Bottom - Game Over
-            if (ball.position.y < -screenHalfHeight) {
-                 document.getElementById('instructions').textContent = "Game Over! Hold trigger and move to drag paddle, then release to restart.";
-                 ballVelocity.set(0, 0, 0); // Stop the ball
-                 return; // Stop further updates
-            }
-
-            // --- Ball Collision with Paddle ---
-            // Simple AABB check (ball center vs paddle bounds)
-            const paddleHalfWidth = PADDLE_WIDTH / 2;
-            const paddleHalfHeight = PADDLE_HEIGHT / 2;
-            if (ball.position.x > paddle.position.x - paddleHalfWidth &&
-                ball.position.x < paddle.position.x + paddleHalfWidth &&
-                ball.position.y > paddle.position.y - paddleHalfHeight &&
-                ball.position.y < paddle.position.y + paddleHalfHeight &&
-                ballVelocity.y < 0 // Only bounce if ball is moving down
-            ) {
-                ballVelocity.y = -ballVelocity.y;
-                // Add a bit of angle based on where it hit the paddle
-                const hitPos = (ball.position.x - paddle.position.x) / paddleHalfWidth; // -1 to 1
-                ballVelocity.x = hitPos * BALL_SPEED;
-                // Ensure minimum vertical speed
-                if (Math.abs(ballVelocity.y) < BALL_SPEED / 2) {
-                     ballVelocity.y = BALL_SPEED / 2 * (ballVelocity.y >= 0 ? 1 : -1);
-                }
-                // Normalize and re-apply speed
-                ballVelocity.normalize().multiplyScalar(BALL_SPEED);
-            }
-
-            // --- Ball Collision with Bricks ---
-            for (let i = bricks.length - 1; i >= 0; i--) {
-                const brick = bricks[i];
-                const brickHalfWidth = BRICK_WIDTH / 2;
-                const brickHalfHeight = BRICK_HEIGHT / 2;
-
-                if (ball.position.x > brick.position.x - brickHalfWidth &&
-                    ball.position.x < brick.position.x + brickHalfWidth &&
-                    ball.position.y > brick.position.y - brickHalfHeight &&
-                    ball.position.y < brick.position.y + brickHalfHeight
-                ) {
-                    // Determine bounce side (simplified)
-                    const dx1 = Math.abs(ball.position.x - (brick.position.x - brickHalfWidth));
-                    const dx2 = Math.abs(ball.position.x - (brick.position.x + brickHalfWidth));
-                    const dy1 = Math.abs(ball.position.y - (brick.position.y - brickHalfHeight));
-                    const dy2 = Math.abs(ball.position.y - (brick.position.y + brickHalfHeight));
-                    const min = Math.min(dx1, dx2, dy1, dy2);
-
-                    if (min === dx1 || min === dx2) {
-                        ballVelocity.x = -ballVelocity.x;
-                    } else {
-                        ballVelocity.y = -ballVelocity.y;
-                    }
-
-                    scene.remove(brick);
-                    bricks.splice(i, 1);
-
-                    // Check for win
-                    if (bricks.length === 0) {
-                        document.getElementById('instructions').textContent = "You Win! Hold trigger and move to drag paddle, then release to restart.";
-                        ballVelocity.set(0, 0, 0); // Stop the ball
-                        return; // Stop further updates
-                    }
-                    break; // Only hit one brick per frame
-                }
+                pointer.line.scale.z = 5;
+                pointer.hitPoint.visible = false;
             }
         }
 
-        // --- Animation Loop ---
-        renderer.setAnimationLoop(() => {
-            updateGame(); // Pass no positions, dragging is handled internally
+        function animate() {
+            renderer.setAnimationLoop(render);
+        }
+
+        function render() {
+            updateLasers();
+
+            if (gameStarted && !gameOver && activePiece) {
+                const currentTime = performance.now();
+                if (currentTime - lastDropTime > dropInterval) {
+                    const moved = movePiece(activePiece, 0, -1);
+                    if (!moved) {
+                        placePiece(activePiece);
+                        spawnNewPiece();
+                    }
+                    lastDropTime = currentTime;
+                }
+            }
+
             renderer.render(scene, camera);
-        });
-
+        }
     </script>
 </body>
 </html>
-```
