@@ -105,88 +105,95 @@
         // --- Tetris Pieces Definition ---
         const PIECES = {
             I: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 2, y: 0 },
-                    { x: 3, y: 0 }
+                shapes: [
+                    // 0°
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
+                    // 90°
+                    [{ x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }],
+                    // 270°
+                    [{ x: 2, y: -1 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 }]
                 ],
-                color: 0x00ffff, // Cyan
-                width: 4,
-                height: 1,
-                center: { x: 1.5, y: 0.5 }
+                color: 0x00ffff // Cyan
             },
             O: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                    // 90° (same as 0°)
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                    // 180° (same as 0°)
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                    // 270° (same as 0°)
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }]
                 ],
-                color: 0xffff00, // Yellow
-                width: 2,
-                height: 2,
-                center: { x: 0.5, y: 0.5 }
+                color: 0xffff00 // Yellow
             },
             T: {
-                shape: [
-                    { x: 1, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+                    // 90°
+                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
+                    // 270°
+                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
                 ],
-                color: 0x800080, // Purple
-                width: 3,
-                height: 2,
-                center: { x: 1, y: 1 }
+                color: 0x800080 // Purple
             },
             S: {
-                shape: [
-                    { x: 1, y: 0 },
-                    { x: 2, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
+                    // 90°
+                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
+                    // 270°
+                    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
                 ],
-                color: 0x00ff00, // Green
-                width: 3,
-                height: 2,
-                center: { x: 1, y: 1 }
+                color: 0x00ff00 // Green
             },
             Z: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+                    // 90°
+                    [{ x: 2, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
+                    // 270°
+                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 2 }]
                 ],
-                color: 0xff0000, // Red
-                width: 3,
-                height: 2,
-                center: { x: 1, y: 1 }
+                color: 0xff0000 // Red
             },
             J: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+                    // 90°
+                    [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }],
+                    // 270°
+                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 }]
                 ],
-                color: 0x0000ff, // Blue
-                width: 3,
-                height: 2,
-                center: { x: 1, y: 1 }
+                color: 0x0000ff // Blue
             },
             L: {
-                shape: [
-                    { x: 2, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
+                shapes: [
+                    // 0°
+                    [{ x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
+                    // 90°
+                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
+                    // 180°
+                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 }],
+                    // 270°
+                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
                 ],
-                color: 0xffa500, // Orange
-                width: 3,
-                height: 2,
-                center: { x: 1, y: 1 }
+                color: 0xffa500 // Orange
             }
         };
 
@@ -196,8 +203,7 @@
         let isPieceActive = true;
         let boardState = [];
         let currentPieceType = null;
-        let raycaster = new THREE.Raycaster();
-        let tempMatrix = new THREE.Matrix4();
+        let currentRotation = 0; // 0, 1, 2, 3 representing 0°, 90°, 180°, 270°
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -240,6 +246,12 @@
             controller.add(line);
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
+        }
+
+        function onSelectStart(event) {
+            if (isPieceActive) {
+                rotatePiece();
+            }
         }
 
         // --- Game Board Creation ---
@@ -295,13 +307,19 @@
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
+            currentRotation = 0;
             
-            piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
+            // Calculate starting position to center the piece
+            const shape = currentPieceType.shapes[currentRotation];
+            const minX = Math.min(...shape.map(block => block.x));
+            const maxX = Math.max(...shape.map(block => block.x));
+            const pieceWidth = maxX - minX + 1;
+            piecePosition.col = Math.floor((BOARD_WIDTH - pieceWidth) / 2);
             piecePosition.row = 0;
             
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             
-            currentPieceType.shape.forEach(block => {
+            shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 
@@ -324,100 +342,57 @@
             console.log(`New ${randomType}-piece created`);
         }
 
-        // --- Controller Interaction ---
-        function onSelectStart(event) {
-            if (!isPieceActive) return;
-            
-            const controller = event.target;
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            
-            const intersects = raycaster.intersectObject(currentPiece, true);
-            
-            if (intersects.length > 0) {
-                rotatePiece();
-            }
-        }
-
-        // --- Piece Rotation ---
+        // --- Rotation Logic ---
         function rotatePiece() {
-            // Calculate rotated shape
-            const rotatedShape = [];
-            const center = currentPieceType.center;
+            const newRotation = (currentRotation + 1) % 4;
+            const newShape = currentPieceType.shapes[newRotation];
             
-            currentPieceType.shape.forEach(block => {
-                // Translate to origin
-                const x = block.x - center.x;
-                const y = block.y - center.y;
+            if (isValidPosition(newShape, piecePosition.row, piecePosition.col)) {
+                // Remove old blocks
+                while (currentPiece.children.length > 0) {
+                    currentPiece.remove(currentPiece.children[0]);
+                }
                 
-                // Rotate 90 degrees clockwise
-                const newX = y;
-                const newY = -x;
+                // Add new blocks with rotated shape
+                const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
                 
-                // Translate back
-                rotatedShape.push({
-                    x: newX + center.x,
-                    y: newY + center.y
+                newShape.forEach(block => {
+                    const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    const cube = new THREE.Mesh(geometry, material);
+                    
+                    const absX = piecePosition.col + block.x;
+                    const absY = piecePosition.row + block.y;
+                    
+                    cube.position.set(
+                        (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
+                        -absY * CELL_SIZE - CELL_SIZE/2,
+                        0
+                    );
+                    
+                    currentPiece.add(cube);
                 });
-            });
-            
-            // Check if rotation is valid
-            if (isValidRotation(rotatedShape)) {
-                // Update piece shape
-                currentPieceType.shape = rotatedShape;
                 
-                // Update 3D positions
-                updatePieceBlocks();
-                
-                console.log("Piece rotated successfully");
-            } else {
-                console.log("Rotation not valid");
+                currentRotation = newRotation;
+                console.log(`Piece rotated to ${newRotation * 90}°`);
             }
         }
 
-        function isValidRotation(rotatedShape) {
-            for (let block of rotatedShape) {
-                const absRow = piecePosition.row + block.y;
-                const absCol = piecePosition.col + block.x;
+        function isValidPosition(shape, row, col) {
+            for (let block of shape) {
+                const newRow = row + block.y;
+                const newCol = col + block.x;
                 
                 // Check boundaries
-                if (absRow < 0 || absRow >= BOARD_HEIGHT || absCol < 0 || absCol >= BOARD_WIDTH) {
+                if (newRow < 0 || newRow >= BOARD_HEIGHT || newCol < 0 || newCol >= BOARD_WIDTH) {
                     return false;
                 }
                 
                 // Check collision with locked pieces
-                if (boardState[absRow][absCol] === 1) {
+                if (boardState[newRow][newCol] === 1) {
                     return false;
                 }
             }
             return true;
-        }
-
-        function updatePieceBlocks() {
-            // Remove existing blocks
-            while (currentPiece.children.length > 0) {
-                currentPiece.remove(currentPiece.children[0]);
-            }
-            
-            // Add new blocks with updated positions
-            const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-            
-            currentPieceType.shape.forEach(block => {
-                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                const cube = new THREE.Mesh(geometry, material);
-                
-                const absX = piecePosition.col + block.x;
-                const absY = piecePosition.row + block.y;
-                
-                cube.position.set(
-                    (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2,
-                    0
-                );
-                
-                currentPiece.add(cube);
-            });
         }
 
         // --- Game Logic ---
@@ -431,7 +406,9 @@
         }
 
         function movePieceDown() {
-            if (canMoveDown()) {
+            const currentShape = currentPieceType.shapes[currentRotation];
+            
+            if (canMoveDown(currentShape)) {
                 piecePosition.row++;
                 currentPiece.position.y = -piecePosition.row * CELL_SIZE;
             } else {
@@ -439,8 +416,8 @@
             }
         }
 
-        function canMoveDown() {
-            for (let block of currentPieceType.shape) {
+        function canMoveDown(shape) {
+            for (let block of shape) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 
@@ -457,13 +434,15 @@
 
         function lockPiece() {
             isPieceActive = false;
-            console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
+            const currentShape = currentPieceType.shapes[currentRotation];
             
-            for (let block of currentPieceType.shape) {
+            for (let block of currentShape) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
                 boardState[row][col] = 1;
             }
+            
+            console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
             
             setTimeout(() => {
                 createPiece();
