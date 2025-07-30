@@ -105,95 +105,81 @@
         // --- Tetris Pieces Definition ---
         const PIECES = {
             I: {
-                shapes: [
-                    // 0°
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }],
-                    // 90°
-                    [{ x: 1, y: -1 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 3, y: 1 }],
-                    // 270°
-                    [{ x: 2, y: -1 }, { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 }]
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 2, y: 0 },
+                    { x: 3, y: 0 }
                 ],
-                color: 0x00ffff // Cyan
+                color: 0x00ffff, // Cyan
+                width: 4,
+                height: 1
             },
             O: {
-                shapes: [
-                    // 0°
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    // 90° (same as 0°)
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    // 180° (same as 0°)
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    // 270° (same as 0°)
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }]
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 }
                 ],
-                color: 0xffff00 // Yellow
+                color: 0xffff00, // Yellow
+                width: 2,
+                height: 2
             },
             T: {
-                shapes: [
-                    // 0°
-                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
-                    // 90°
-                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
-                    // 270°
-                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
+                shape: [
+                    { x: 1, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
                 ],
-                color: 0x800080 // Purple
+                color: 0x800080, // Purple
+                width: 3,
+                height: 2
             },
             S: {
-                shapes: [
-                    // 0°
-                    [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }],
-                    // 90°
-                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
-                    // 270°
-                    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
+                shape: [
+                    { x: 1, y: 0 },
+                    { x: 2, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 }
                 ],
-                color: 0x00ff00 // Green
+                color: 0x00ff00, // Green
+                width: 3,
+                height: 2
             },
             Z: {
-                shapes: [
-                    // 0°
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
-                    // 90°
-                    [{ x: 2, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
-                    // 270°
-                    [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 2 }]
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 1, y: 0 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
                 ],
-                color: 0xff0000 // Red
+                color: 0xff0000, // Red
+                width: 3,
+                height: 2
             },
             J: {
-                shapes: [
-                    // 0°
-                    [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
-                    // 90°
-                    [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }],
-                    // 270°
-                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 }]
+                shape: [
+                    { x: 0, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
                 ],
-                color: 0x0000ff // Blue
+                color: 0x0000ff, // Blue
+                width: 3,
+                height: 2
             },
             L: {
-                shapes: [
-                    // 0°
-                    [{ x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }],
-                    // 90°
-                    [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }],
-                    // 180°
-                    [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 }],
-                    // 270°
-                    [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }]
+                shape: [
+                    { x: 2, y: 0 },
+                    { x: 0, y: 1 },
+                    { x: 1, y: 1 },
+                    { x: 2, y: 1 }
                 ],
-                color: 0xffa500 // Orange
+                color: 0xffa500, // Orange
+                width: 3,
+                height: 2
             }
         };
 
@@ -203,7 +189,12 @@
         let isPieceActive = true;
         let boardState = [];
         let currentPieceType = null;
-        let currentRotation = 0; // 0, 1, 2, 3 representing 0°, 90°, 180°, 270°
+
+        // --- Raycasting Setup ---
+        const raycaster = new THREE.Raycaster();
+        const tempMatrix = new THREE.Matrix4();
+        const boardPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+        const intersectionPoint = new THREE.Vector3();
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -248,12 +239,6 @@
             controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
-        function onSelectStart(event) {
-            if (isPieceActive) {
-                rotatePiece();
-            }
-        }
-
         // --- Game Board Creation ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
@@ -287,6 +272,7 @@
                 gameBoard.add(line);
             }
             
+            // Position the board so top is at eye level
             gameBoard.position.set(0, 1.6, -2);
             
             scene.add(gameBoard);
@@ -307,19 +293,13 @@
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
-            currentRotation = 0;
             
-            // Calculate starting position to center the piece
-            const shape = currentPieceType.shapes[currentRotation];
-            const minX = Math.min(...shape.map(block => block.x));
-            const maxX = Math.max(...shape.map(block => block.x));
-            const pieceWidth = maxX - minX + 1;
-            piecePosition.col = Math.floor((BOARD_WIDTH - pieceWidth) / 2);
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
             
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             
-            shape.forEach(block => {
+            currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 
@@ -339,60 +319,61 @@
             currentPiece.position.y = 0;
             isPieceActive = true;
             
-            console.log(`New ${randomType}-piece created at row ${piecePosition.row}`);
+            console.log(`New ${randomType}-piece created`);
         }
 
-        // --- Rotation Logic ---
-        function rotatePiece() {
-            const newRotation = (currentRotation + 1) % 4;
-            const newShape = currentPieceType.shapes[newRotation];
+        // --- Controller Interaction ---
+        function onSelectStart(event) {
+            if (!isPieceActive) return;
             
-            if (isValidPosition(newShape, piecePosition.row, piecePosition.col)) {
-                // Remove old blocks
-                while (currentPiece.children.length > 0) {
-                    currentPiece.remove(currentPiece.children[0]);
+            const controller = event.target;
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+            
+            // Calculate intersection with the game board plane
+            if (raycaster.ray.intersectPlane(boardPlane, intersectionPoint)) {
+                // Convert intersection point to board coordinates
+                const boardX = intersectionPoint.x + (BOARD_WIDTH * CELL_SIZE)/2;
+                const targetCol = Math.floor(boardX / CELL_SIZE);
+                
+                // Check if the move is valid
+                if (targetCol >= 0 && targetCol < BOARD_WIDTH && canMoveToColumn(targetCol)) {
+                    // Move the piece to the target column
+                    movePieceToColumn(targetCol);
                 }
-                
-                // Add new blocks with rotated shape
-                const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-                
-                newShape.forEach(block => {
-                    const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                    const cube = new THREE.Mesh(geometry, material);
-                    
-                    const absX = piecePosition.col + block.x;
-                    const absY = piecePosition.row + block.y;
-                    
-                    cube.position.set(
-                        (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                        -absY * CELL_SIZE - CELL_SIZE/2,
-                        0
-                    );
-                    
-                    currentPiece.add(cube);
-                });
-                
-                currentRotation = newRotation;
-                console.log(`Piece rotated to ${newRotation * 90}°`);
             }
         }
 
-        function isValidPosition(shape, row, col) {
-            for (let block of shape) {
-                const newRow = row + block.y;
-                const newCol = col + block.x;
+        function canMoveToColumn(targetCol) {
+            // Check if the piece can move to the target column without collision
+            for (let block of currentPieceType.shape) {
+                const newCol = targetCol + block.x;
+                const row = piecePosition.row + block.y;
                 
-                // Check boundaries
-                if (newRow < 0 || newRow >= BOARD_HEIGHT || newCol < 0 || newCol >= BOARD_WIDTH) {
+                // Check if the block is within bounds
+                if (newCol < 0 || newCol >= BOARD_WIDTH) {
                     return false;
                 }
                 
-                // Check collision with locked pieces
-                if (boardState[newRow][newCol] === 1) {
+                // Check if the block would collide with a locked piece
+                if (boardState[row][newCol] === 1) {
                     return false;
                 }
             }
             return true;
+        }
+
+        function movePieceToColumn(targetCol) {
+            // Calculate the offset
+            const offset = targetCol - piecePosition.col;
+            piecePosition.col = targetCol;
+            
+            // Update the piece position
+            currentPiece.position.x = offset * CELL_SIZE;
+            
+            console.log(`Piece moved to column ${targetCol}`);
         }
 
         // --- Game Logic ---
@@ -406,37 +387,20 @@
         }
 
         function movePieceDown() {
-            const currentShape = currentPieceType.shapes[currentRotation];
-            
-            if (canMoveDown(currentShape)) {
+            if (canMoveDown()) {
                 piecePosition.row++;
                 currentPiece.position.y = -piecePosition.row * CELL_SIZE;
-                console.log(`Piece moved to row ${piecePosition.row}`);
             } else {
                 lockPiece();
             }
         }
 
-        function canMoveDown(shape) {
-            for (let block of shape) {
+        function canMoveDown() {
+            for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 
-                // Check if block is at the bottom
-                if (newRow >= BOARD_HEIGHT) {
-                    console.log(`Cannot move down: block at row ${newRow} (bottom)`);
-                    return false;
-                }
-                
-                // Check if block is out of bounds horizontally
-                if (newCol < 0 || newCol >= BOARD_WIDTH) {
-                    console.log(`Cannot move down: block at col ${newCol} (out of bounds)`);
-                    return false;
-                }
-                
-                // Check if block would collide with a locked piece
-                if (boardState[newRow][newCol] === 1) {
-                    console.log(`Cannot move down: collision at (${newRow}, ${newCol})`);
+                if (newRow >= BOARD_HEIGHT || boardState[newRow][newCol] === 1) {
                     return false;
                 }
             }
@@ -445,25 +409,14 @@
 
         function lockPiece() {
             isPieceActive = false;
-            const currentShape = currentPieceType.shapes[currentRotation];
-            
-            console.log(`Locking piece at row ${piecePosition.row}`);
-            
-            // Update board state with the locked piece
-            for (let block of currentShape) {
-                const row = piecePosition.row + block.y;
-                const col = piecePosition.col + block.x;
-                
-                // Only update if within bounds
-                if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
-                    boardState[row][col] = 1;
-                    console.log(`Locked block at (${row}, ${col})`);
-                }
-            }
-            
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
             
-            // Create a new piece after a short delay
+            for (let block of currentPieceType.shape) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + block.x;
+                boardState[row][col] = 1;
+            }
+            
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
