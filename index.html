@@ -82,13 +82,8 @@
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-        let gameBoard, currentPiece;
-
-        // Game constants
-        const BOARD_WIDTH = 10;
-        const BOARD_HEIGHT = 20;
-        const CELL_SIZE = 0.1;
-        const FALL_SPEED = 1000; // milliseconds
+        let gameBoard;
+        let currentPiece;
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -101,6 +96,17 @@
         // Lighting
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
         scene.add(light);
+
+        // --- Game Constants ---
+        const BOARD_WIDTH = 10;  // 10 columns
+        const BOARD_HEIGHT = 20; // 20 rows
+        const CELL_SIZE = 0.1;   // Each cell is 0.1 units
+        const FALL_SPEED = 1000; // ms per row
+
+        // --- Game State ---
+        let lastFallTime = 0;
+        let piecePosition = { row: 0, col: 3 }; // Starting position (top center)
+        let isPieceActive = true;
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -159,8 +165,9 @@
             // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
+                // Draw from top (y=0) to bottom (y=-BOARD_HEIGHT * CELL_SIZE)
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
-                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, BOARD_HEIGHT * CELL_SIZE, 0));
+                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
@@ -169,89 +176,100 @@
             // Horizontal lines
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
-                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, y * CELL_SIZE, 0));
-                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, y * CELL_SIZE, 0));
+                // Draw from left to right at each row level
+                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
+                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
             
-            // Position the board
-            gameBoard.position.set(0, -1, -2);
+            // Position the board so top is at eye level
+            gameBoard.position.set(0, 1.6, -2); // Top of grid at eye level (1.6m)
             
             scene.add(gameBoard);
-            console.log("AR Tetris board created");
+            console.log("AR Tetris board created (corrected orientation)");
         }
 
-        // --- Game Logic ---
-        let lastFallTime = 0;
-        let piecePosition = { x: 5, y: 0 }; // Start at top center
-
+        // --- Game Initialization ---
         function initGame() {
-            spawnPiece();
-        }
-
-        function spawnPiece() {
-            // Remove previous piece if exists
-            if (currentPiece) {
-                scene.remove(currentPiece);
-            }
-            
-            // Reset position to top center
-            piecePosition = { x: 5, y: 0 };
-            
-            // Create the "I" piece (4 blocks in a vertical line)
-            currentPiece = new THREE.Group();
-            const blockGeometry = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.1);
-            const blockMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff }); // Cyan
-            
-            for (let i = 0; i < 4; i++) {
-                const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                block.position.set(
-                    (piecePosition.x - BOARD_WIDTH/2 + 0.5) * CELL_SIZE,
-                    (piecePosition.y + i) * CELL_SIZE,
-                    0
-                );
-                currentPiece.add(block);
-            }
-            
-            // Position the piece group relative to the board
-            currentPiece.position.copy(gameBoard.position);
-            scene.add(currentPiece);
-            
+            // Create the first piece (I-piece)
+            createPiece();
             lastFallTime = performance.now();
         }
 
-        function movePieceDown() {
-            // Check if piece can move down
-            if (piecePosition.y + 4 < BOARD_HEIGHT) {
-                piecePosition.y++;
-                updatePiecePosition();
-            } else {
-                // Piece has reached the bottom
-                console.log("Piece landed!");
-                setTimeout(() => {
-                    spawnPiece(); // Spawn a new piece
-                }, 500);
-            }
+        // --- Piece Creation ---
+        function createPiece() {
+            if (currentPiece) scene.remove(currentPiece);
+            
+            currentPiece = new THREE.Group();
+            
+            // I-piece shape (straight line)
+            const pieceShape = [
+                { x: 3, y: 0 }, // Left block
+                { x: 4, y: 0 }, // Center-left block
+                { x: 5, y: 0 }, // Center-right block
+                { x: 6, y: 0 }  // Right block
+            ];
+            
+            // Create blocks for the piece
+            const material = new THREE.MeshBasicMaterial({ color: 0x00ffff }); // Cyan color
+            
+            pieceShape.forEach(block => {
+                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                const cube = new THREE.Mesh(geometry, material);
+                
+                // Position the cube relative to the game board
+                // Note: Y is negative because we're drawing downward
+                cube.position.set(
+                    (block.x * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
+                    -block.y * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
+                    0
+                );
+                
+                currentPiece.add(cube);
+            });
+            
+            // Add the piece to the game board
+            gameBoard.add(currentPiece);
+            
+            // Reset piece position
+            piecePosition = { row: 0, col: 3 };
+            isPieceActive = true;
+            
+            // Set initial position (top of grid)
+            currentPiece.position.y = 0;
+            
+            console.log("New I-piece created");
         }
 
-        function updatePiecePosition() {
-            // Update each block in the piece
-            for (let i = 0; i < currentPiece.children.length; i++) {
-                const block = currentPiece.children[i];
-                block.position.y = (piecePosition.y + i) * CELL_SIZE;
-            }
-        }
-
-        // --- Animation Loop ---
-        renderer.setAnimationLoop((timestamp) => {
-            // Move piece down at regular intervals
+        // --- Game Logic ---
+        function updateGame(timestamp) {
+            if (!isPieceActive) return;
+            
+            // Move the piece down at regular intervals
             if (timestamp - lastFallTime > FALL_SPEED) {
                 movePieceDown();
                 lastFallTime = timestamp;
             }
+        }
+
+        function movePieceDown() {
+            // Check if piece is at the bottom
+            if (piecePosition.row >= BOARD_HEIGHT - 1) {
+                isPieceActive = false;
+                console.log("Piece reached the bottom");
+                return;
+            }
             
+            // Move the piece down (negative Y direction)
+            piecePosition.row++;
+            currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+        }
+
+        // --- Animation Loop ---
+        renderer.setAnimationLoop((timestamp) => {
+            updateGame(timestamp);
             renderer.render(scene, camera);
         });
     </script>
