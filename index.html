@@ -36,7 +36,7 @@
                         if (currentSession) {
                             setupControllers();
                             createGameBoard();
-                            initializeGame();
+                            initGame();
                         }
                     }
                     function onSessionEnded() {
@@ -48,7 +48,6 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (lockedPieces) scene.remove(lockedPieces);
                         if (currentPiece) scene.remove(currentPiece);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -83,17 +82,13 @@
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-        let gameBoard, lockedPieces, currentPiece;
+        let gameBoard, currentPiece;
 
-        // Game variables
-        const boardWidth = 10;
-        const boardHeight = 20;
-        const cellSize = 0.1;
-        let lastMoveTime = 0;
-        const fallSpeed = 1000; // milliseconds between moves
-        
-        // Grid representation (2D array)
-        let grid = [];
+        // Game constants
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const CELL_SIZE = 0.1;
+        const FALL_SPEED = 1000; // milliseconds
 
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -162,134 +157,99 @@
             });
             
             // Vertical lines
-            for (let x = 0; x <= boardWidth; x++) {
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
-                points.push(new THREE.Vector3(x * cellSize - (boardWidth * cellSize)/2, 0, 0));
-                points.push(new THREE.Vector3(x * cellSize - (boardWidth * cellSize)/2, -boardHeight * cellSize, 0));
+                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
+                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, BOARD_HEIGHT * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
             
             // Horizontal lines
-            for (let y = 0; y <= boardHeight; y++) {
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
-                points.push(new THREE.Vector3(-(boardWidth * cellSize)/2, -y * cellSize, 0));
-                points.push(new THREE.Vector3((boardWidth * cellSize)/2, -y * cellSize, 0));
+                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, y * CELL_SIZE, 0));
+                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, y * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
             
-            // Position the board in front of the user
-            gameBoard.position.set(0, 0, -2); // Top at eye level, 2 meters away
+            // Position the board
+            gameBoard.position.set(0, -1, -2);
             
             scene.add(gameBoard);
             console.log("AR Tetris board created");
         }
 
         // --- Game Logic ---
-        function initializeGame() {
-            // Initialize grid (2D array representing empty cells)
-            grid = Array(boardHeight).fill().map(() => Array(boardWidth).fill(null));
-            
-            // Create group for locked pieces
-            lockedPieces = new THREE.Group();
-            scene.add(lockedPieces);
-            
-            // Spawn first piece
+        let lastFallTime = 0;
+        let piecePosition = { x: 5, y: 0 }; // Start at top center
+
+        function initGame() {
             spawnPiece();
         }
 
         function spawnPiece() {
-            if (currentPiece) scene.remove(currentPiece);
+            // Remove previous piece if exists
+            if (currentPiece) {
+                scene.remove(currentPiece);
+            }
             
-            // Create O-piece (2x2 square)
+            // Reset position to top center
+            piecePosition = { x: 5, y: 0 };
+            
+            // Create the "I" piece (4 blocks in a vertical line)
             currentPiece = new THREE.Group();
+            const blockGeometry = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.1);
+            const blockMaterial = new THREE.MeshPhongMaterial({ color: 0x00ffff }); // Cyan
             
-            const geometry = new THREE.BoxGeometry(cellSize, cellSize, cellSize);
-            const material = new THREE.MeshBasicMaterial({ color: 0xffff00 }); // Yellow
-            
-            // Create 4 blocks for the O-piece
-            const positions = [
-                { x: 0, y: 0 },      // Top-left
-                { x: cellSize, y: 0 }, // Top-right
-                { x: 0, y: -cellSize }, // Bottom-left
-                { x: cellSize, y: -cellSize }  // Bottom-right
-            ];
-            
-            positions.forEach(pos => {
-                const block = new THREE.Mesh(geometry, material);
-                block.position.set(pos.x, pos.y, 0);
+            for (let i = 0; i < 4; i++) {
+                const block = new THREE.Mesh(blockGeometry, blockMaterial);
+                block.position.set(
+                    (piecePosition.x - BOARD_WIDTH/2 + 0.5) * CELL_SIZE,
+                    (piecePosition.y + i) * CELL_SIZE,
+                    0
+                );
                 currentPiece.add(block);
-            });
+            }
             
-            // Position at top center of board (grid aligned)
-            currentPiece.position.set(
-                0, // Center horizontally
-                0, // Top of board (row 0)
-                0  // Same depth as board
-            );
-            
+            // Position the piece group relative to the board
+            currentPiece.position.copy(gameBoard.position);
             scene.add(currentPiece);
-            lastMoveTime = performance.now();
+            
+            lastFallTime = performance.now();
         }
 
         function movePieceDown() {
-            if (!currentPiece) return;
-            
-            // Calculate next grid position
-            const currentY = currentPiece.position.y;
-            const nextY = currentY - cellSize;
-            
-            // Check if piece would go below board
-            if (nextY < -boardHeight * cellSize) {
-                // Lock piece at bottom
-                lockPiece();
+            // Check if piece can move down
+            if (piecePosition.y + 4 < BOARD_HEIGHT) {
+                piecePosition.y++;
+                updatePiecePosition();
             } else {
-                // Move piece down (grid aligned)
-                currentPiece.position.y = nextY;
+                // Piece has reached the bottom
+                console.log("Piece landed!");
+                setTimeout(() => {
+                    spawnPiece(); // Spawn a new piece
+                }, 500);
             }
         }
 
-        function lockPiece() {
-            // Convert piece position to grid coordinates
-            const gridX = Math.round((currentPiece.position.x + (boardWidth * cellSize)/2) / cellSize);
-            const gridY = Math.round(-currentPiece.position.y / cellSize);
-            
-            // Update grid with piece blocks
-            const blockPositions = [
-                { x: gridX, y: gridY },
-                { x: gridX + 1, y: gridY },
-                { x: gridX, y: gridY + 1 },
-                { x: gridX + 1, y: gridY + 1 }
-            ];
-            
-            blockPositions.forEach(pos => {
-                if (pos.x >= 0 && pos.x < boardWidth && pos.y >= 0 && pos.y < boardHeight) {
-                    grid[pos.y][pos.x] = 0xffff00; // Yellow color
-                }
-            });
-            
-            // Move piece to locked group
-            scene.remove(currentPiece);
-            lockedPieces.add(currentPiece);
-            currentPiece = null;
-            
-            // Spawn new piece after a short delay
-            setTimeout(() => {
-                spawnPiece();
-            }, 500);
+        function updatePiecePosition() {
+            // Update each block in the piece
+            for (let i = 0; i < currentPiece.children.length; i++) {
+                const block = currentPiece.children[i];
+                block.position.y = (piecePosition.y + i) * CELL_SIZE;
+            }
         }
 
         // --- Animation Loop ---
-        renderer.setAnimationLoop(() => {
-            const currentTime = performance.now();
-            
+        renderer.setAnimationLoop((timestamp) => {
             // Move piece down at regular intervals
-            if (currentPiece && currentTime - lastMoveTime > fallSpeed) {
+            if (timestamp - lastFallTime > FALL_SPEED) {
                 movePieceDown();
-                lastMoveTime = currentTime;
+                lastFallTime = timestamp;
             }
             
             renderer.render(scene, camera);
