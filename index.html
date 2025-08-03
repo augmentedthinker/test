@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (with Rotation)</title>
+    <title>AR Tetris - Step 5 with Laser Flash</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -80,7 +80,7 @@
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
         let gameBoard;
-        let currentPiece; // The THREE.Group containing the visual cubes
+        let currentPiece;
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -97,8 +97,7 @@
         const CELL_SIZE = 0.1;   // Each cell is 0.1 units
         const FALL_SPEED = 1000; // ms per row
         // --- Tetris Pieces Definition ---
-        // Original shapes for reference and resetting rotation state
-        const PIECES_ORIGINAL = {
+        const PIECES = {
             I: {
                 shape: [
                     { x: 0, y: 0 },
@@ -177,37 +176,18 @@
                 height: 2
             }
         };
-        // We will copy and modify this during the game to track rotation
-        const PIECES = JSON.parse(JSON.stringify(PIECES_ORIGINAL));
-
         // --- Game State ---
         let lastFallTime = 0;
         let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
         let isPieceActive = true;
         let boardState = []; // 2D array to track occupied cells
-        let currentPieceTypeKey = null; // Current piece type key (I, O, T, etc.)
-        let currentPieceRotation = 0; // 0, 1, 2, 3 (0, 90, 180, 270 degrees)
-
+        let currentPieceType = null; // Current piece type (I, O, T, etc.)
         // --- Controller Setup ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
             scene.add(controller1);
             controller2 = renderer.xr.getController(1);
             scene.add(controller2);
-
-            // --- Add Rotation Event Listener ---
-            controller1.addEventListener('select', () => {
-                if (isPieceActive) {
-                    rotatePiece();
-                }
-            });
-            controller2.addEventListener('select', () => {
-                if (isPieceActive) {
-                    rotatePiece();
-                }
-            });
-            // --- End Rotation Event Listener ---
-
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
             controllerGrip2 = renderer.xr.getControllerGrip(1);
@@ -219,7 +199,70 @@
             controllerGrip2.add(controllerModel2);
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
+
+            // --- Add event listeners for controller selection (squeeze trigger) ---
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectstart', onSelectStart);
         }
+
+        // --- Function to handle controller "click" (squeeze trigger) ---
+        function onSelectStart(event) {
+            const controller = event.target;
+            // Create a Raycaster to check what the controller is pointing at
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.extractRotation(controller.matrixWorld);
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            // Check if the ray hits the game board
+            const intersects = raycaster.intersectObject(gameBoard, true); // true for recursive check
+
+            if (intersects.length > 0) {
+                // Get the point of intersection
+                const point = intersects[0].point;
+
+                // Create a temporary flash effect at the hit point
+                createFlashEffect(point);
+            }
+        }
+
+        // --- Function to create the visual flash effect ---
+        function createFlashEffect(position) {
+            // Create a small square geometry for the flash
+            const flashSize = CELL_SIZE * 0.8; // Slightly smaller than a grid cell
+            const flashGeometry = new THREE.PlaneGeometry(flashSize, flashSize);
+
+            // Create a bright green material that is semi-transparent
+            const flashMaterial = new THREE.MeshBasicMaterial({
+                color: 0x00ff00, // Bright green
+                transparent: true,
+                opacity: 0.8
+            });
+
+            // Combine geometry and material into a mesh
+            const flash = new THREE.Mesh(flashGeometry, flashMaterial);
+
+            // Position the flash on the game board surface (slightly offset in Z to be visible)
+            flash.position.copy(position);
+            flash.position.z += 0.001; // Lift it slightly off the board/grid lines
+
+            // Make the flash face the camera (always visible)
+            flash.lookAt(camera.position);
+
+            // Add the flash to the game board so it moves with it
+            gameBoard.add(flash);
+
+            // Remove the flash after a short delay (e.g., 200 milliseconds)
+            setTimeout(() => {
+                 if (flash && flash.parent) {
+                     flash.parent.remove(flash);
+                 }
+            }, 200);
+        }
+
+
         function setupLaserPointer(controller) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
@@ -243,8 +286,9 @@
             // Create grid lines
             const gridMaterial = new THREE.LineBasicMaterial({ 
                 color: 0x00ff00, 
-                transparent: true, 
-                opacity: 0.5 
+                transparent: true,
+                // --- Make grid lines slightly less opaque for better flash visibility ---
+                opacity: 0.3 
             });
             // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
@@ -279,153 +323,20 @@
             createPiece();
             lastFallTime = performance.now();
         }
-
-        // --- Piece Rotation Logic ---
-        function rotatePiece() {
-            if (!isPieceActive || !currentPieceTypeKey) return;
-
-            const originalShape = PIECES_ORIGINAL[currentPieceTypeKey].shape;
-            const originalWidth = PIECES_ORIGINAL[currentPieceTypeKey].width;
-            const originalHeight = PIECES_ORIGINAL[currentPieceTypeKey].height;
-
-            // Calculate new rotation index (0, 1, 2, 3)
-            const newRotation = (currentPieceRotation + 1) % 4;
-
-            // Rotate the shape coordinates
-            let rotatedShape;
-            if (newRotation === 0) {
-                rotatedShape = originalShape; // 0 degrees
-            } else if (newRotation === 1) {
-                // 90 degrees clockwise: (x,y) -> (y, -x)
-                rotatedShape = originalShape.map(block => ({
-                    x: block.y,
-                    y: -block.x
-                }));
-            } else if (newRotation === 2) {
-                // 180 degrees: (x,y) -> (-x, -y)
-                 rotatedShape = originalShape.map(block => ({
-                    x: -block.x,
-                    y: -block.y
-                }));
-            } else { // newRotation === 3
-                // 270 degrees clockwise (or -90): (x,y) -> (-y, x)
-                 rotatedShape = originalShape.map(block => ({
-                    x: -block.y,
-                    y: block.x
-                }));
-            }
-
-            // Calculate new bounding box for the rotated piece
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            rotatedShape.forEach(block => {
-                minX = Math.min(minX, block.x);
-                maxX = Math.max(maxX, block.x);
-                minY = Math.min(minY, block.y);
-                maxY = Math.max(maxY, block.y);
-            });
-            const newWidth = maxX - minX + 1;
-            const newHeight = maxY - minY + 1;
-
-            // Adjust rotated shape to be relative to its top-left corner (minX, minY)
-            const adjustedRotatedShape = rotatedShape.map(block => ({
-                x: block.x - minX,
-                y: block.y - minY
-            }));
-
-            // --- Wall Kick Check ---
-            // Simple wall kick: if rotation causes overlap, try shifting left/right
-            let kickOffset = 0;
-            let canRotate = false;
-            const kickOffsets = [0, -1, 1, -2, 2]; // Try no shift, left, right, further left, further right
-
-            for (const offset of kickOffsets) {
-                let isValid = true;
-                for (const block of adjustedRotatedShape) {
-                    const newRow = piecePosition.row + block.y;
-                    const newCol = piecePosition.col + block.x + offset; // Apply kick offset
-
-                    // Check boundaries
-                    if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) {
-                        isValid = false;
-                        break;
-                    }
-                    // Check collision with locked pieces
-                    if (newRow >= 0 && boardState[newRow][newCol] === 1) {
-                        isValid = false;
-                        break;
-                    }
-                }
-                if (isValid) {
-                    kickOffset = offset;
-                    canRotate = true;
-                    break;
-                }
-            }
-
-            if (canRotate) {
-                // Update the piece's state with the new rotation and kick
-                PIECES[currentPieceTypeKey].shape = adjustedRotatedShape;
-                PIECES[currentPieceTypeKey].width = newWidth;
-                PIECES[currentPieceTypeKey].height = newHeight;
-                piecePosition.col += kickOffset; // Apply the successful kick
-                currentPieceRotation = newRotation;
-
-                // --- Visually Update the Piece ---
-                // Remove old cubes
-                while(currentPiece.children.length > 0) {
-                    currentPiece.remove(currentPiece.children[0]);
-                }
-
-                // Add new cubes based on the rotated shape
-                const material = new THREE.MeshBasicMaterial({ color: PIECES[currentPieceTypeKey].color });
-                PIECES[currentPieceTypeKey].shape.forEach(block => {
-                    const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                    const cube = new THREE.Mesh(geometry, material);
-                    // Position the cube relative to the game board
-                    const absX = piecePosition.col + block.x;
-                    const absY = piecePosition.row + block.y;
-                    cube.position.set(
-                        (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                        -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
-                        0
-                    );
-                    currentPiece.add(cube);
-                });
-
-                // Update the piece's overall position in the game board (including kick)
-                currentPiece.position.x = (piecePosition.col * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE) / 2;
-                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
-
-                console.log(`Piece rotated to ${newRotation * 90} degrees with kick ${kickOffset}`);
-            } else {
-                console.log("Cannot rotate piece - blocked");
-            }
-        }
-
-
         // --- Piece Creation ---
         function createPiece() {
             // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
-            
-            // Reset rotation state for the new piece
-            currentPieceRotation = 0;
-            
             // Randomly select a piece type
-            const pieceTypes = Object.keys(PIECES_ORIGINAL); // Use original for selection
-            const randomTypeKey = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
-            currentPieceTypeKey = randomTypeKey;
-            
-            // Reset the piece definition in PIECES to its original state
-            PIECES[currentPieceTypeKey] = JSON.parse(JSON.stringify(PIECES_ORIGINAL[currentPieceTypeKey]));
-            
+            const pieceTypes = Object.keys(PIECES);
+            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+            currentPieceType = PIECES[randomType];
             // Calculate starting position to center the piece
-            piecePosition.col = Math.floor((BOARD_WIDTH - PIECES[currentPieceTypeKey].width) / 2);
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
-            
-            // Create blocks for the piece using the (potentially reset) shape
-            const material = new THREE.MeshBasicMaterial({ color: PIECES[currentPieceTypeKey].color });
-            PIECES[currentPieceTypeKey].shape.forEach(block => {
+            // Create blocks for the piece
+            const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
+            currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 // Position the cube relative to the game board
@@ -442,9 +353,8 @@
             gameBoard.add(currentPiece);
             // Set initial position (top of grid)
             currentPiece.position.y = 0;
-            currentPiece.position.x = (piecePosition.col * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE) / 2; // Also set X
             isPieceActive = true;
-            console.log(`New ${randomTypeKey}-piece created`);
+            console.log(`New ${randomType}-piece created`);
         }
         // --- Game Logic ---
         function updateGame(timestamp) {
@@ -456,7 +366,7 @@
             }
         }
         function movePieceDown() {
-            // Check if piece can move down using the current (potentially rotated) shape
+            // Check if piece can move down
             if (canMoveDown()) {
                 // Move the piece down (negative Y direction)
                 piecePosition.row++;
@@ -467,11 +377,8 @@
             }
         }
         function canMoveDown() {
-            // Check each block of the current piece using its current shape
-            const shapeToCheck = PIECES[currentPieceTypeKey]?.shape;
-            if (!shapeToCheck) return false; // Safety check
-
-            for (let block of shapeToCheck) {
+            // Check each block of the current piece
+            for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 // Check if block is at the bottom
@@ -488,21 +395,13 @@
         function lockPiece() {
             // Mark the piece as inactive
             isPieceActive = false;
-            console.log(`${currentPieceTypeKey}-piece locked in place`);
-            
-            // Update board state with the locked piece using its final shape and position
-            const shapeToLock = PIECES[currentPieceTypeKey]?.shape;
-            if (shapeToLock) {
-                 for (let block of shapeToLock) {
-                    const row = piecePosition.row + block.y;
-                    const col = piecePosition.col + block.x;
-                    // Ensure we don't write outside the board array
-                    if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
-                        boardState[row][col] = 1;
-                    }
-                }
+            console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
+            // Update board state with the locked piece
+            for (let block of currentPieceType.shape) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + block.x;
+                boardState[row][col] = 1;
             }
-            
             // Create a new piece after a short delay
             setTimeout(() => {
                 createPiece();
