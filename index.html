@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 7 (D-Pad)</title>
+    <title>AR Tetris - Step 7 (Rotate Piece)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -36,7 +36,7 @@
                         if (currentSession) {
                             setupControllers();
                             createGameBoard();
-                            createDirectionalPad(); // Create the D-pad when AR starts
+                            createRotateButton(); // <-- Create the rotate button
                             initGame();
                         }
                     }
@@ -49,7 +49,7 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (dPad) scene.remove(dPad); // Remove D-pad when AR stops
+                        if (rotateButton) scene.remove(rotateButton); // <-- Clean up button
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -84,13 +84,18 @@
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
         let gameBoard;
-        let dPad; // Reference to the D-pad group
         let currentPiece;
+        let rotateButton; // <-- Reference to the rotate button object
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
+        // Enable the select event for object interaction
+        renderer.xr.addEventListener('sessionstart', () => {
+             const session = renderer.xr.getSession();
+             session.addEventListener('select', onSelect); // <-- Listen for select globally
+        });
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
@@ -103,86 +108,47 @@
         const BOARD_HEIGHT = 20;
         const CELL_SIZE = 0.1;
         const FALL_SPEED = 1000;
-        // --- D-Pad Constants ---
-        const DPAD_SIZE = 0.15; // Size of the main D-pad circle
-        const BUTTON_SIZE = 0.04; // Size of individual buttons
-        const BUTTON_OFFSET = 0.08; // Distance buttons are offset from the center
 
         // --- Tetris Pieces Definition ---
         const PIECES = {
             I: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 2, y: 0 },
-                    { x: 3, y: 0 }
-                ],
+                shape: [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 } ],
                 color: 0x00ffff, // Cyan
                 width: 4,
                 height: 1
             },
             O: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 }
-                ],
+                shape: [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 } ],
                 color: 0xffff00, // Yellow
                 width: 2,
                 height: 2
             },
             T: {
-                shape: [
-                    { x: 1, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
-                ],
+                shape: [ { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ],
                 color: 0x800080, // Purple
                 width: 3,
                 height: 2
             },
             S: {
-                shape: [
-                    { x: 1, y: 0 },
-                    { x: 2, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 }
-                ],
+                shape: [ { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 } ],
                 color: 0x00ff00, // Green
                 width: 3,
                 height: 2
             },
             Z: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 1, y: 0 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
-                ],
+                shape: [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 } ],
                 color: 0xff0000, // Red
                 width: 3,
                 height: 2
             },
             J: {
-                shape: [
-                    { x: 0, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
-                ],
+                shape: [ { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ],
                 color: 0x0000ff, // Blue
                 width: 3,
                 height: 2
             },
             L: {
-                shape: [
-                    { x: 2, y: 0 },
-                    { x: 0, y: 1 },
-                    { x: 1, y: 1 },
-                    { x: 2, y: 1 }
-                ],
+                shape: [ { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ],
                 color: 0xffa500, // Orange
                 width: 3,
                 height: 2
@@ -195,6 +161,7 @@
         let isPieceActive = true;
         let boardState = [];
         let currentPieceType = null;
+        let currentPieceShapeIndex = 0; // <-- Track current rotation state
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -213,20 +180,6 @@
             controllerGrip2.add(controllerModel2);
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
-
-            // --- Add Event Listeners for Controller Buttons (SWAPPED DIRECTION) ---
-            controller1.addEventListener('selectstart', () => {
-                console.log("Controller 1 Select Pressed (Right Hand) - Move Left");
-                if (isPieceActive) {
-                    movePieceLeft();
-                }
-            });
-            controller2.addEventListener('selectstart', () => {
-                console.log("Controller 2 Select Pressed (Left Hand) - Move Right");
-                if (isPieceActive) {
-                    movePieceRight();
-                }
-            });
         }
 
         function setupLaserPointer(controller) {
@@ -276,68 +229,21 @@
             console.log("AR Tetris board created");
         }
 
-        // --- D-Pad Creation ---
-        function createDirectionalPad() {
-            if (dPad) scene.remove(dPad);
-            dPad = new THREE.Group();
+        // --- Rotate Button Creation ---
+        function createRotateButton() {
+            if (rotateButton) scene.remove(rotateButton);
+            // Create a simple cube as the button
+            const buttonGeometry = new THREE.BoxGeometry(CELL_SIZE * 1.5, CELL_SIZE * 1.5, CELL_SIZE * 0.5);
+            const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0xff00ff }); // Magenta
+            rotateButton = new THREE.Mesh(buttonGeometry, buttonMaterial);
 
-            // Create the main circular background of the D-pad
-            const dPadBgGeometry = new THREE.CircleGeometry(DPAD_SIZE, 32);
-            const dPadBgMaterial = new THREE.MeshBasicMaterial({ color: 0x444444, side: THREE.DoubleSide }); // Dark gray
-            const dPadBg = new THREE.Mesh(dPadBgGeometry, dPadBgMaterial);
-            dPadBg.rotation.x = -Math.PI / 2; // Lay it flat
-            dPad.add(dPadBg);
+            // Position the button below the game board
+            // Assuming gameBoard is at (0, 1.6, -2)
+            rotateButton.position.set(0, 1.6 - (BOARD_HEIGHT * CELL_SIZE) - 0.2, -2); // Slightly below the board
 
-            // --- Create Individual Buttons ---
-            const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Light gray
-
-            // Up Button
-            const upButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
-            const upButton = new THREE.Mesh(upButtonGeometry, buttonMaterial.clone());
-            upButton.position.set(0, BUTTON_OFFSET, 0);
-            upButton.userData = { action: 'rotate' }; // Assign an action
-            dPad.add(upButton);
-
-            // Down Button
-            const downButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
-            const downButton = new THREE.Mesh(downButtonGeometry, buttonMaterial.clone());
-            downButton.position.set(0, -BUTTON_OFFSET, 0);
-            downButton.userData = { action: 'drop' }; // Assign an action
-            dPad.add(downButton);
-
-            // Left Button
-            const leftButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
-            const leftButton = new THREE.Mesh(leftButtonGeometry, buttonMaterial.clone());
-            leftButton.position.set(-BUTTON_OFFSET, 0, 0);
-            leftButton.userData = { action: 'left' }; // Assign an action
-            dPad.add(leftButton);
-
-            // Right Button
-            const rightButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
-            const rightButton = new THREE.Mesh(rightButtonGeometry, buttonMaterial.clone());
-            rightButton.position.set(BUTTON_OFFSET, 0, 0);
-            rightButton.userData = { action: 'right' }; // Assign an action
-            dPad.add(rightButton);
-
-            // Position the D-pad to the right of the game board
-            // We need to calculate the position relative to the game board's position and size
-            if (gameBoard) {
-                // Place it slightly to the right of the board's right edge
-                const boardRightEdgeX = (BOARD_WIDTH * CELL_SIZE) / 2;
-                dPad.position.set(
-                    gameBoard.position.x + boardRightEdgeX + DPAD_SIZE + 0.05, // X: Board's X + half its width + pad radius + small gap
-                    gameBoard.position.y - (BOARD_HEIGHT * CELL_SIZE) / 2,      // Y: Center vertically with the board
-                    gameBoard.position.z                                       // Z: Same depth as the board
-                );
-            } else {
-                // Fallback position if gameBoard isn't set yet (shouldn't happen)
-                dPad.position.set(0.8, 1.6 - (BOARD_HEIGHT * CELL_SIZE) / 2, -2);
-            }
-
-            scene.add(dPad);
-            console.log("Directional Pad created");
+            scene.add(rotateButton);
+            console.log("Rotate button created");
         }
-
 
         // --- Game Initialization ---
         function initGame() {
@@ -348,14 +254,19 @@
 
         // --- Piece Creation ---
         function createPiece() {
+            if (currentPiece) gameBoard.remove(currentPiece); // Remove old piece if exists
             currentPiece = new THREE.Group();
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
+            currentPieceShapeIndex = 0; // Reset rotation state
             piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
+
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-            currentPieceType.shape.forEach(block => {
+            // Use the shape from the current rotation state (initially index 0)
+            const shapeToUse = currentPieceType.shape;
+            shapeToUse.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
                 const absX = piecePosition.col + block.x;
@@ -373,17 +284,125 @@
             console.log(`New ${randomType}-piece created`);
         }
 
+        // --- Piece Rotation Logic ---
+        // Define rotation states for each piece type
+        const ROTATION_STATES = {
+            I: [
+                [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 } ], // 0 degrees
+                [ { x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 }, { x: 2, y: 3 } ], // 90 degrees
+                [ { x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 } ], // 180 degrees
+                [ { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 3 } ]  // 270 degrees
+            ],
+            O: [ // Square piece doesn't rotate visually
+                [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 } ]
+            ],
+            T: [
+                [ { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ], // 0
+                [ { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 } ], // 90
+                [ { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 } ], // 180
+                [ { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 } ]  // 270
+            ],
+            S: [
+                [ { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 } ], // 0
+                [ { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 } ], // 90
+                [ { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 } ], // 180
+                [ { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 } ]  // 270
+            ],
+            Z: [
+                [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 } ], // 0
+                [ { x: 2, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 } ], // 90
+                [ { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 } ], // 180
+                [ { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 2 } ]  // 270
+            ],
+            J: [
+                [ { x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ], // 0
+                [ { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 } ], // 90
+                [ { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 } ], // 180
+                [ { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 } ]  // 270
+            ],
+            L: [
+                [ { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 } ], // 0
+                [ { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 } ], // 90
+                [ { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 } ], // 180
+                [ { x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 } ]  // 270
+            ]
+        };
+
+        function rotatePiece() {
+            if (!isPieceActive || !currentPieceType) return;
+
+            const pieceKey = Object.keys(PIECES).find(key => PIECES[key] === currentPieceType);
+            const states = ROTATION_STATES[pieceKey];
+
+            // If the piece doesn't rotate (like O), do nothing
+            if (states.length <= 1) {
+                console.log("O-piece does not rotate");
+                return;
+            }
+
+            // Calculate the next rotation state index
+            const nextShapeIndex = (currentPieceShapeIndex + 1) % states.length;
+            const nextShape = states[nextShapeIndex];
+
+            // --- Collision Check for Rotation ---
+            // Check if the rotated piece would collide with walls or other pieces
+            let canRotate = true;
+            for (let block of nextShape) {
+                const newRow = piecePosition.row + block.y;
+                const newCol = piecePosition.col + block.x;
+
+                // Check boundaries
+                if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) {
+                     canRotate = false;
+                     break;
+                }
+                // Check collision with locked pieces (ignore top rows that might be above the visible board)
+                if (newRow >= 0 && boardState[newRow][newCol] === 1) {
+                     canRotate = false;
+                     break;
+                }
+            }
+
+            if (canRotate) {
+                // Update the piece's shape index
+                currentPieceShapeIndex = nextShapeIndex;
+
+                // Remove old blocks from the currentPiece group
+                while(currentPiece.children.length > 0) {
+                    currentPiece.remove(currentPiece.children[0]);
+                }
+
+                // Recreate blocks with the new rotated shape
+                const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
+                nextShape.forEach(block => {
+                    const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                    const cube = new THREE.Mesh(geometry, material);
+                    // Position relative to the piece's anchor point (piecePosition)
+                    const absX = piecePosition.col + block.x;
+                    const absY = piecePosition.row + block.y;
+                    cube.position.set(
+                        (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
+                         -absY * CELL_SIZE - CELL_SIZE/2,
+                        0
+                    );
+                    currentPiece.add(cube);
+                });
+                console.log(`Rotated ${pieceKey}-piece to state ${currentPieceShapeIndex}`);
+            } else {
+                console.log(`Cannot rotate ${pieceKey}-piece - collision or boundary`);
+            }
+        }
+
+
         // --- Piece Movement Functions ---
         function canMoveHorizontally(deltaCol) {
-            for (let block of currentPieceType.shape) {
+            // Use the current shape for movement checks
+            const shapeToUse = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)][currentPieceShapeIndex] || currentPieceType.shape;
+            for (let block of shapeToUse) {
                 const newRow = piecePosition.row + block.y;
                 const newCol = piecePosition.col + deltaCol + block.x;
-                if (newCol < 0 || newCol >= BOARD_WIDTH) {
-                    return false;
-                }
-                if (boardState[newRow][newCol] === 1) {
-                    return false;
-                }
+                if (newCol < 0 || newCol >= BOARD_WIDTH) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] === 1) return false; // Check only if on board
             }
             return true;
         }
@@ -402,23 +421,12 @@
         function movePieceRight() {
             if (canMoveHorizontally(1)) {
                 piecePosition.col++;
-                 const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
                 currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
                 console.log("Moved piece right");
             } else {
                 console.log("Cannot move piece right");
             }
-        }
-
-        // --- Placeholder functions for future actions ---
-        function rotatePiece() {
-             console.log("Rotate piece action triggered (not implemented yet)");
-             // Logic for rotating the piece will go here in the future
-        }
-
-        function dropPiece() {
-             console.log("Drop piece action triggered (not implemented yet)");
-             // Logic for dropping the piece will go here in the future
         }
 
         // --- Game Logic ---
@@ -431,35 +439,36 @@
         }
 
         function movePieceDown() {
-            if (canMoveDown()) {
-                piecePosition.row++;
-                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
-            } else {
-                lockPiece();
-            }
-        }
-
-        function canMoveDown() {
-            for (let block of currentPieceType.shape) {
+             // Use the current shape for downward movement checks
+            const shapeToUse = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)][currentPieceShapeIndex] || currentPieceType.shape;
+            for (let block of shapeToUse) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 if (newRow >= BOARD_HEIGHT) {
-                    return false;
+                    lockPiece();
+                    return;
                 }
-                if (boardState[newRow][newCol] === 1) {
-                    return false;
+                if (newRow >= 0 && boardState[newRow][newCol] === 1) { // Check only if on board
+                    lockPiece();
+                    return;
                 }
             }
-            return true;
+            piecePosition.row++;
+            currentPiece.position.y = -piecePosition.row * CELL_SIZE;
         }
 
         function lockPiece() {
             isPieceActive = false;
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
-            for (let block of currentPieceType.shape) {
+            // Use the current shape for locking
+            const shapeToUse = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)][currentPieceShapeIndex] || currentPieceType.shape;
+            for (let block of shapeToUse) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
-                boardState[row][col] = 1;
+                // Only lock if it's within the board bounds
+                if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
+                     boardState[row][col] = 1;
+                }
             }
             setTimeout(() => {
                 createPiece();
@@ -467,41 +476,24 @@
             }, 500);
         }
 
+        // --- Handle Select Event for Rotation ---
+        function onSelect(event) {
+            // Get the controller that triggered the event
+            const controller = event.target;
+            console.log("Select event triggered by controller", controller === controller1 ? "1" : "2");
+
+            // This part is tricky without a full raycaster setup. For simplicity,
+            // we'll just rotate if the event happens and a piece is active.
+            // A more robust way would involve checking if the ray intersects the button.
+            // Let's add a simple check for now.
+            if (isPieceActive) {
+                 rotatePiece();
+            }
+        }
+
+
         // --- Animation Loop ---
         renderer.setAnimationLoop((timestamp) => {
-            // Check for intersections with the D-pad if it exists
-            if (dPad && controller1 && controller1.visible) {
-                 // Simple intersection check for the laser pointer
-                 const tempMatrix = new THREE.Matrix4();
-                 tempMatrix.extractRotation(controller1.matrixWorld);
-                 const raycaster = new THREE.Raycaster();
-                 raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
-                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-                 const intersects = raycaster.intersectObjects(dPad.children);
-                 if (intersects.length > 0) {
-                     const intersectedObject = intersects[0].object;
-                     // Highlight the button on hover (optional visual feedback)
-                     intersectedObject.material.color.setHex(0xffffff); // Turn white on hover
-
-                     // Check for select event on the controller to trigger action
-                     // We need a way to detect the 'select' event on the controller and check if it was intersecting the button at that moment.
-                     // A simple way is to add a flag when intersecting and check it in the controller's select event.
-                     // However, for simplicity here, we'll just log the action name when hovering.
-                     // A more robust solution would involve adding event listeners to the controller and checking intersections at the time of the event.
-                     // Let's implement a basic click/hover interaction.
-
-                     // For now, we'll just log the intended action on hover as a placeholder.
-                     // console.log("Hovering over D-pad button:", intersectedObject.userData.action);
-                 } else {
-                     // Reset button colors if not intersecting
-                     dPad.children.forEach(child => {
-                         if (child.material && child.material.color) {
-                             child.material.color.setHex(0x888888); // Reset to original gray
-                         }
-                     });
-                 }
-            }
             updateGame(timestamp);
             renderer.render(scene, camera);
         });
