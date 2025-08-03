@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (Move Piece)</title>
+    <title>AR Tetris - Step 6 (Move Piece - Swapped)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -200,20 +200,22 @@
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
 
-            // --- Add Event Listeners for Controller Buttons ---
+            // --- Add Event Listeners for Controller Buttons (SWAPPED DIRECTION) ---
             // Listen for the 'select' event (usually the trigger button) on controller 1 (right hand)
+            // This will now move the piece LEFT
             controller1.addEventListener('selectstart', () => {
-                console.log("Controller 1 Select Pressed (Right Hand)");
+                console.log("Controller 1 Select Pressed (Right Hand) - Move Left");
                 if (isPieceActive) {
-                    movePieceRight();
+                    movePieceLeft(); // <-- Changed to move left
                 }
             });
 
             // Listen for the 'select' event (usually the trigger button) on controller 2 (left hand)
+            // This will now move the piece RIGHT
             controller2.addEventListener('selectstart', () => {
-                console.log("Controller 2 Select Pressed (Left Hand)");
+                console.log("Controller 2 Select Pressed (Left Hand) - Move Right");
                 if (isPieceActive) {
-                    movePieceLeft();
+                    movePieceRight(); // <-- Changed to move right
                 }
             });
         }
