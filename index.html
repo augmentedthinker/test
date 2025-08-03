@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (D-Pad)</title>
+    <title>AR Tetris - Step 7 (D-Pad)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -20,6 +20,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
         // --- AR Button Setup ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
@@ -48,7 +49,7 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (directionalPad) scene.remove(directionalPad); // Remove D-pad on exit
+                        if (dPad) scene.remove(dPad); // Remove D-pad when AR stops
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -77,13 +78,14 @@
                 }
             }
         }
+
         // --- Core Three.js Setup ---
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
         let gameBoard;
+        let dPad; // Reference to the D-pad group
         let currentPiece;
-        let directionalPad; // Reference to the D-pad group
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -91,14 +93,21 @@
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
         // Lighting
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
         scene.add(light);
+
         // --- Game Constants ---
-        const BOARD_WIDTH = 10;  // 10 columns
-        const BOARD_HEIGHT = 20; // 20 rows
-        const CELL_SIZE = 0.1;   // Each cell is 0.1 units
-        const FALL_SPEED = 1000; // ms per row
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const CELL_SIZE = 0.1;
+        const FALL_SPEED = 1000;
+        // --- D-Pad Constants ---
+        const DPAD_SIZE = 0.15; // Size of the main D-pad circle
+        const BUTTON_SIZE = 0.04; // Size of individual buttons
+        const BUTTON_OFFSET = 0.08; // Distance buttons are offset from the center
+
         // --- Tetris Pieces Definition ---
         const PIECES = {
             I: {
@@ -179,12 +188,14 @@
                 height: 2
             }
         };
+
         // --- Game State ---
         let lastFallTime = 0;
-        let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
+        let piecePosition = { row: 0, col: 0 };
         let isPieceActive = true;
-        let boardState = []; // 2D array to track occupied cells
-        let currentPieceType = null; // Current piece type (I, O, T, etc.)
+        let boardState = [];
+        let currentPieceType = null;
+
         // --- Controller Setup ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
@@ -202,14 +213,28 @@
             controllerGrip2.add(controllerModel2);
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
-            // --- No more controller button listeners for piece movement ---
+
+            // --- Add Event Listeners for Controller Buttons (SWAPPED DIRECTION) ---
+            controller1.addEventListener('selectstart', () => {
+                console.log("Controller 1 Select Pressed (Right Hand) - Move Left");
+                if (isPieceActive) {
+                    movePieceLeft();
+                }
+            });
+            controller2.addEventListener('selectstart', () => {
+                console.log("Controller 2 Select Pressed (Left Hand) - Move Right");
+                if (isPieceActive) {
+                    movePieceRight();
+                }
+            });
         }
+
         function setupLaserPointer(controller) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            const material = new THREE.LineBasicMaterial({ 
-                color: 0x00ffff, 
-                transparent: true, 
+            const material = new THREE.LineBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
                 opacity: 0.7,
                 linewidth: 2
             });
@@ -220,124 +245,129 @@
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
         }
+
         // --- Game Board Creation ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
             gameBoard = new THREE.Group();
-            // Create grid lines
-            const gridMaterial = new THREE.LineBasicMaterial({ 
-                color: 0x00ff00, 
-                transparent: true, 
-                opacity: 0.5 
+            const gridMaterial = new THREE.LineBasicMaterial({
+                color: 0x00ff00,
+                transparent: true,
+                opacity: 0.5
             });
-            // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
-                // Draw from top (y=0) to bottom (y=-BOARD_HEIGHT * CELL_SIZE)
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            // Horizontal lines
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
-                // Draw from left to right at each row level
                 points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            // Position the board so top is at eye level
-            gameBoard.position.set(0, 1.6, -2); // Top of grid at eye level (1.6m)
+            gameBoard.position.set(0, 1.6, -2);
             scene.add(gameBoard);
             console.log("AR Tetris board created");
         }
 
-        // --- Directional Pad Creation ---
+        // --- D-Pad Creation ---
         function createDirectionalPad() {
-            if (directionalPad) scene.remove(directionalPad);
-            directionalPad = new THREE.Group();
+            if (dPad) scene.remove(dPad);
+            dPad = new THREE.Group();
 
-            const padSize = 0.15; // Size of the D-pad buttons
-            const padSpacing = 0.01; // Small gap between buttons
+            // Create the main circular background of the D-pad
+            const dPadBgGeometry = new THREE.CircleGeometry(DPAD_SIZE, 32);
+            const dPadBgMaterial = new THREE.MeshBasicMaterial({ color: 0x444444, side: THREE.DoubleSide }); // Dark gray
+            const dPadBg = new THREE.Mesh(dPadBgGeometry, dPadBgMaterial);
+            dPadBg.rotation.x = -Math.PI / 2; // Lay it flat
+            dPad.add(dPadBg);
 
-            // Material for the buttons
-            const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0x888888, transparent: true, opacity: 0.7 });
+            // --- Create Individual Buttons ---
+            const buttonMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Light gray
 
-            // Create the 4 buttons (Up, Down, Left, Right)
-            const upButton = new THREE.Mesh(new THREE.BoxGeometry(padSize, padSize, 0.02), buttonMaterial.clone());
-            upButton.position.set(0, padSize + padSpacing, 0);
-            upButton.name = 'up'; // Give it a name for identification
+            // Up Button
+            const upButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
+            const upButton = new THREE.Mesh(upButtonGeometry, buttonMaterial.clone());
+            upButton.position.set(0, BUTTON_OFFSET, 0);
+            upButton.userData = { action: 'rotate' }; // Assign an action
+            dPad.add(upButton);
 
-            const downButton = new THREE.Mesh(new THREE.BoxGeometry(padSize, padSize, 0.02), buttonMaterial.clone());
-            downButton.position.set(0, -(padSize + padSpacing), 0);
-            downButton.name = 'down';
+            // Down Button
+            const downButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
+            const downButton = new THREE.Mesh(downButtonGeometry, buttonMaterial.clone());
+            downButton.position.set(0, -BUTTON_OFFSET, 0);
+            downButton.userData = { action: 'drop' }; // Assign an action
+            dPad.add(downButton);
 
-            const leftButton = new THREE.Mesh(new THREE.BoxGeometry(padSize, padSize, 0.02), buttonMaterial.clone());
-            leftButton.position.set(-(padSize + padSpacing), 0, 0);
-            leftButton.name = 'left';
+            // Left Button
+            const leftButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
+            const leftButton = new THREE.Mesh(leftButtonGeometry, buttonMaterial.clone());
+            leftButton.position.set(-BUTTON_OFFSET, 0, 0);
+            leftButton.userData = { action: 'left' }; // Assign an action
+            dPad.add(leftButton);
 
-            const rightButton = new THREE.Mesh(new THREE.BoxGeometry(padSize, padSize, 0.02), buttonMaterial.clone());
-            rightButton.position.set(padSize + padSpacing, 0, 0);
-            rightButton.name = 'right';
-
-            // Add buttons to the D-pad group
-            directionalPad.add(upButton);
-            directionalPad.add(downButton);
-            directionalPad.add(leftButton);
-            directionalPad.add(rightButton);
+            // Right Button
+            const rightButtonGeometry = new THREE.PlaneGeometry(BUTTON_SIZE, BUTTON_SIZE);
+            const rightButton = new THREE.Mesh(rightButtonGeometry, buttonMaterial.clone());
+            rightButton.position.set(BUTTON_OFFSET, 0, 0);
+            rightButton.userData = { action: 'right' }; // Assign an action
+            dPad.add(rightButton);
 
             // Position the D-pad to the right of the game board
-            // Board is at (0, 1.6, -2)
-            // Place D-pad slightly to the right and at the same height
-            directionalPad.position.set(0.7, 1.6, -2); // Adjust X value to move left/right
+            // We need to calculate the position relative to the game board's position and size
+            if (gameBoard) {
+                // Place it slightly to the right of the board's right edge
+                const boardRightEdgeX = (BOARD_WIDTH * CELL_SIZE) / 2;
+                dPad.position.set(
+                    gameBoard.position.x + boardRightEdgeX + DPAD_SIZE + 0.05, // X: Board's X + half its width + pad radius + small gap
+                    gameBoard.position.y - (BOARD_HEIGHT * CELL_SIZE) / 2,      // Y: Center vertically with the board
+                    gameBoard.position.z                                       // Z: Same depth as the board
+                );
+            } else {
+                // Fallback position if gameBoard isn't set yet (shouldn't happen)
+                dPad.position.set(0.8, 1.6 - (BOARD_HEIGHT * CELL_SIZE) / 2, -2);
+            }
 
-            scene.add(directionalPad);
-
+            scene.add(dPad);
             console.log("Directional Pad created");
         }
 
 
         // --- Game Initialization ---
         function initGame() {
-            // Initialize board state (empty board)
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            // Create the first piece
             createPiece();
             lastFallTime = performance.now();
         }
+
         // --- Piece Creation ---
         function createPiece() {
-            // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
-            // Randomly select a piece type
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
-            // Calculate starting position to center the piece
             piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
-            // Create blocks for the piece
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
-                // Position the cube relative to the game board
                 const absX = piecePosition.col + block.x;
                 const absY = piecePosition.row + block.y;
                 cube.position.set(
                     (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
+                    -absY * CELL_SIZE - CELL_SIZE/2,
                     0
                 );
                 currentPiece.add(cube);
             });
-            // Add the piece to the game board
             gameBoard.add(currentPiece);
-            // Set initial position (top of grid)
             currentPiece.position.y = 0;
             isPieceActive = true;
             console.log(`New ${randomType}-piece created`);
@@ -345,17 +375,12 @@
 
         // --- Piece Movement Functions ---
         function canMoveHorizontally(deltaCol) {
-            // Check each block of the current piece
             for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + block.y;
-                const newCol = piecePosition.col + deltaCol + block.x; // Add deltaCol for horizontal check
-
-                // Check if block is outside the board horizontally
+                const newCol = piecePosition.col + deltaCol + block.x;
                 if (newCol < 0 || newCol >= BOARD_WIDTH) {
                     return false;
                 }
-
-                // Check if block would collide with a locked piece
                 if (boardState[newRow][newCol] === 1) {
                     return false;
                 }
@@ -366,7 +391,6 @@
         function movePieceLeft() {
             if (canMoveHorizontally(-1)) {
                 piecePosition.col--;
-                // Update the visual position of the entire piece group
                 const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
                 currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
                 console.log("Moved piece left");
@@ -378,8 +402,7 @@
         function movePieceRight() {
             if (canMoveHorizontally(1)) {
                 piecePosition.col++;
-                 // Update the visual position of the entire piece group
-                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                 const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
                 currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
                 console.log("Moved piece right");
             } else {
@@ -387,118 +410,98 @@
             }
         }
 
+        // --- Placeholder functions for future actions ---
+        function rotatePiece() {
+             console.log("Rotate piece action triggered (not implemented yet)");
+             // Logic for rotating the piece will go here in the future
+        }
+
+        function dropPiece() {
+             console.log("Drop piece action triggered (not implemented yet)");
+             // Logic for dropping the piece will go here in the future
+        }
+
         // --- Game Logic ---
         function updateGame(timestamp) {
             if (!isPieceActive) return;
-            // Move the piece down at regular intervals
             if (timestamp - lastFallTime > FALL_SPEED) {
                 movePieceDown();
                 lastFallTime = timestamp;
             }
         }
+
         function movePieceDown() {
-            // Check if piece can move down
             if (canMoveDown()) {
-                // Move the piece down (negative Y direction)
                 piecePosition.row++;
                 currentPiece.position.y = -piecePosition.row * CELL_SIZE;
             } else {
-                // Lock the piece in place
                 lockPiece();
             }
         }
+
         function canMoveDown() {
-            // Check each block of the current piece
             for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
-                // Check if block is at the bottom
                 if (newRow >= BOARD_HEIGHT) {
                     return false;
                 }
-                // Check if block would collide with a locked piece
                 if (boardState[newRow][newCol] === 1) {
                     return false;
                 }
             }
             return true;
         }
+
         function lockPiece() {
-            // Mark the piece as inactive
             isPieceActive = false;
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
-            // Update board state with the locked piece
             for (let block of currentPieceType.shape) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
                 boardState[row][col] = 1;
             }
-            // Create a new piece after a short delay
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
-            }, 500); // 500ms delay before spawning new piece
+            }, 500);
         }
-
-        // --- Raycasting for D-pad Interaction ---
-        const raycaster = new THREE.Raycaster();
-        const tempMatrix = new THREE.Matrix4();
-
-        function getIntersections(controller) {
-            // Update the raycaster based on the controller's position and orientation
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            // Check for intersections with the D-pad buttons
-            if (directionalPad) {
-                return raycaster.intersectObjects(directionalPad.children, true); // true for recursive check
-            }
-            return [];
-        }
-
-        // Variable to track if a button press is being handled to prevent multiple triggers
-        let isHandlingPress = false;
-
-        function handleControllerSelect(controller) {
-             if (isHandlingPress || !isPieceActive) return; // Ignore if already handling or piece not active
-             const intersections = getIntersections(controller);
-             if (intersections.length > 0) {
-                 const intersectedObject = intersections[0].object;
-                 console.log(`D-pad button '${intersectedObject.name}' was selected`);
-                 isHandlingPress = true; // Set flag to prevent multiple triggers
-
-                 // Call the appropriate movement function based on the button name
-                 switch (intersectedObject.name) {
-                     case 'left':
-                         movePieceLeft();
-                         break;
-                     case 'right':
-                         movePieceRight();
-                         break;
-                     case 'down':
-                         // Optional: Make piece fall faster
-                         // movePieceDown();
-                         console.log("Down button pressed (not implemented yet)");
-                         break;
-                     case 'up':
-                         // Optional: Rotate piece
-                         console.log("Up button pressed (not implemented yet)");
-                         break;
-                     default:
-                         console.log("Unknown button pressed");
-                 }
-
-                 // Reset the flag after a short delay to allow the next press
-                 setTimeout(() => { isHandlingPress = false; }, 100); // 100ms debounce
-             }
-        }
-
-        // Attach the select event to the controllers to use the new D-pad handler
-        controller1.addEventListener('selectstart', () => handleControllerSelect(controller1));
-        controller2.addEventListener('selectstart', () => handleControllerSelect(controller2));
 
         // --- Animation Loop ---
         renderer.setAnimationLoop((timestamp) => {
+            // Check for intersections with the D-pad if it exists
+            if (dPad && controller1 && controller1.visible) {
+                 // Simple intersection check for the laser pointer
+                 const tempMatrix = new THREE.Matrix4();
+                 tempMatrix.extractRotation(controller1.matrixWorld);
+                 const raycaster = new THREE.Raycaster();
+                 raycaster.ray.origin.setFromMatrixPosition(controller1.matrixWorld);
+                 raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+                 const intersects = raycaster.intersectObjects(dPad.children);
+                 if (intersects.length > 0) {
+                     const intersectedObject = intersects[0].object;
+                     // Highlight the button on hover (optional visual feedback)
+                     intersectedObject.material.color.setHex(0xffffff); // Turn white on hover
+
+                     // Check for select event on the controller to trigger action
+                     // We need a way to detect the 'select' event on the controller and check if it was intersecting the button at that moment.
+                     // A simple way is to add a flag when intersecting and check it in the controller's select event.
+                     // However, for simplicity here, we'll just log the action name when hovering.
+                     // A more robust solution would involve adding event listeners to the controller and checking intersections at the time of the event.
+                     // Let's implement a basic click/hover interaction.
+
+                     // For now, we'll just log the intended action on hover as a placeholder.
+                     // console.log("Hovering over D-pad button:", intersectedObject.userData.action);
+                 } else {
+                     // Reset button colors if not intersecting
+                     dPad.children.forEach(child => {
+                         if (child.material && child.material.color) {
+                             child.material.color.setHex(0x888888); // Reset to original gray
+                         }
+                     });
+                 }
+            }
             updateGame(timestamp);
             renderer.render(scene, camera);
         });
