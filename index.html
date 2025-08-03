@@ -122,7 +122,7 @@
         let isPieceActive = true;
         let boardState = [];
         let currentPieceType = null;
-        let pieceRotation = 0; // Track current rotation state (0, 1, 2, 3)
+        let currentPieceRotation = 0; // Track current rotation state (0, 1, 2, 3)
 
         // --- Gamepad Elements ---
         let dpadUp, dpadDown, dpadLeft, dpadRight;
@@ -302,11 +302,10 @@
                     } else if (object === dpadRight) {
                         console.log("Moving piece right");
                         movePieceHorizontally(1);  // Move right
-                    } else if (object === dpadUp) {
-                        console.log("Rotating piece");
-                        rotatePiece(); // Rotate the piece
-                    }
-                    // Note: D-Pad Down could be added for soft drop if desired
+                    } else if (object === buttonA) {
+                         console.log("Rotating piece");
+                         rotatePiece(); // Rotate the piece
+                     }
                 }
             }
         }
@@ -334,135 +333,102 @@
             if (canMoveTo(newPosition)) {
                 piecePosition.col = newPosition.col;
                 // Update the piece's horizontal position
-                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-                // Note: The piece's position is relative to the gameBoard group.
-                // We need to update the X position of the entire currentPiece group.
-                currentPiece.position.x = piecePosition.col * CELL_SIZE + boardOffsetX;
+                // The piece's position is relative to the gameBoard group's center
+                // We need to adjust for the board's offset
+                currentPiece.position.x = piecePosition.col * CELL_SIZE;
                 console.log(`Piece moved to column ${piecePosition.col}`);
             } else {
                 console.log("Cannot move piece, collision or boundary");
             }
         }
 
-         function canMoveTo(newPosition) {
-             for (let block of currentPieceType.shape) {
-                 const newRow = newPosition.row + block.y;
-                 const newCol = newPosition.col + block.x;
+         // --- Piece Rotation Logic ---
+         function rotatePiece() {
+             if (!isPieceActive) return; // Don't rotate if piece is locked
 
-                 // Check horizontal boundaries
-                 if (newCol < 0 || newCol >= BOARD_WIDTH) {
-                     return false;
-                 }
+             // Calculate the next rotation state (0 -> 1 -> 2 -> 3 -> 0)
+             const nextRotation = (currentPieceRotation + 1) % 4;
 
-                 // Check vertical boundaries (shouldn't be needed for horizontal move, but good to have)
-                 if (newRow >= BOARD_HEIGHT) {
-                     return false;
-                 }
+             // Get the potential new shape after rotation
+             const rotatedShape = getRotatedShape(currentPieceType.shape, nextRotation);
 
-                 // Check collision with locked pieces
-                 if (boardState[newRow][newCol] === 1) {
-                     return false;
-                 }
+             // Calculate the bounding box of the rotated shape to check for valid placement
+             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+             for (let block of rotatedShape) {
+                 minX = Math.min(minX, block.x);
+                 maxX = Math.max(maxX, block.x);
+                 minY = Math.min(minY, block.y);
+                 maxY = Math.max(maxY, block.y);
              }
-             return true;
+             const rotatedWidth = maxX - minX + 1;
+             const rotatedHeight = maxY - minY + 1;
+
+             // Create a temporary position for the rotated piece, centered
+             // We adjust the column position based on the change in width/offset
+             const tempPosition = {
+                 row: piecePosition.row,
+                 col: piecePosition.col // Start with current col
+             };
+
+             // Check if the rotated piece fits in its current position
+             if (canMoveTo(tempPosition, rotatedShape)) {
+                 // It fits, apply the rotation
+                 currentPieceRotation = nextRotation;
+                 updatePieceVisuals(rotatedShape);
+                 console.log(`Piece rotated to state ${currentPieceRotation}`);
+             } else {
+                 console.log("Cannot rotate piece, collision or boundary");
+             }
          }
 
-        // --- Piece Rotation Logic ---
-        function rotatePiece() {
-            if (!isPieceActive || !currentPieceType) return;
+         // Helper to calculate the shape after rotation
+         function getRotatedShape(originalShape, rotationState) {
+             // Rotation states: 0 (original), 1 (90 CW), 2 (180), 3 (270 CW)
+             let rotatedShape = [];
+             switch (rotationState) {
+                 case 0: // 0 degrees
+                     rotatedShape = originalShape.map(block => ({ x: block.x, y: block.y }));
+                     break;
+                 case 1: // 90 degrees clockwise
+                     rotatedShape = originalShape.map(block => ({ x: -block.y, y: block.x }));
+                     break;
+                 case 2: // 180 degrees
+                     rotatedShape = originalShape.map(block => ({ x: -block.x, y: -block.y }));
+                     break;
+                 case 3: // 270 degrees clockwise (or 90 CCW)
+                     rotatedShape = originalShape.map(block => ({ x: block.y, y: -block.x }));
+                     break;
+             }
+             return rotatedShape;
+         }
 
-            // Define rotation matrices for 90-degree clockwise rotation
-            // (x, y) -> (-y, x)
-            function rotateBlock(block) {
-                return { x: -block.y, y: block.x };
-            }
+         // Helper to update the visual blocks of the piece
+         function updatePieceVisuals(newShape) {
+             // Remove old blocks
+             while(currentPiece.children.length > 0) {
+                 currentPiece.remove(currentPiece.children[0]);
+             }
 
-            // Get the current rotation state (0, 1, 2, 3)
-            const nextRotation = (pieceRotation + 1) % 4;
-            
-            // Get the current piece definition to apply rotation
-            const pieceTypes = Object.keys(PIECES);
-            const currentTypeName = pieceTypes.find(key => PIECES[key] === currentPieceType);
-            
-            if (!currentTypeName) {
-                console.error("Could not find current piece type name for rotation");
-                return;
-            }
+             // Add new blocks based on the rotated shape
+             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
+             newShape.forEach(block => {
+                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                 const cube = new THREE.Mesh(geometry, material);
+                 // Position relative to the piece's origin (which is managed by piecePosition)
+                 cube.position.set(
+                     block.x * CELL_SIZE,
+                     -block.y * CELL_SIZE,
+                     0
+                 );
+                 currentPiece.add(cube);
+             });
+         }
 
-            // Get the base shape for the piece (rotation 0)
-            const baseShape = PIECES[currentTypeName].shape;
 
-            // Apply rotation to the base shape to get the new shape
-            let newShape;
-            switch (nextRotation) {
-                case 0: // 0 degrees
-                    newShape = baseShape;
-                    break;
-                case 1: // 90 degrees clockwise
-                    newShape = baseShape.map(rotateBlock);
-                    break;
-                case 2: // 180 degrees
-                    newShape = baseShape.map(rotateBlock).map(rotateBlock);
-                    break;
-                case 3: // 270 degrees clockwise (or 90 counter-clockwise)
-                    newShape = baseShape.map(rotateBlock).map(rotateBlock).map(rotateBlock);
-                    break;
-            }
-
-            // Calculate the bounding box of the new shape to check for wall kicks
-            let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-            for (let block of newShape) {
-                minX = Math.min(minX, block.x);
-                maxX = Math.max(maxX, block.x);
-                minY = Math.min(minY, block.y);
-                maxY = Math.max(maxY, block.y);
-            }
-            const newWidth = maxX - minX + 1;
-            const newHeight = maxY - minY + 1;
-
-            // Create a temporary piece position for validation
-            // We might need to adjust the column if the piece rotates near a wall
-            let testPosition = { ...piecePosition };
-
-            // Simple wall kick: if rotating would go out of bounds on the left, shift right
-            if (testPosition.col + minX < 0) {
-                testPosition.col -= (testPosition.col + minX); // Shift right enough to fit
-            }
-            // If rotating would go out of bounds on the right, shift left
-            if (testPosition.col + maxX >= BOARD_WIDTH) {
-                testPosition.col -= (testPosition.col + maxX - BOARD_WIDTH + 1); // Shift left enough to fit
-            }
-
-            // Create a temporary piece type object for collision checking
-            const tempPieceType = {
-                ...currentPieceType,
-                shape: newShape,
-                width: newWidth,
-                height: newHeight
-            };
-
-            // Check if the rotated piece fits in the new position
-            if (canMoveToRotated(testPosition, tempPieceType)) {
-                // Update the actual piece position if it was adjusted by wall kick
-                piecePosition.col = testPosition.col;
-                
-                // Update the rotation state
-                pieceRotation = nextRotation;
-
-                // Update the current piece's shape and visuals
-                updatePieceShape(newShape);
-                
-                console.log(`Piece rotated to state ${pieceRotation}`);
-            } else {
-                console.log("Cannot rotate piece, collision or boundary");
-            }
-        }
-
-        // Helper to check if a rotated piece fits
-        function canMoveToRotated(position, pieceType) {
-             for (let block of pieceType.shape) {
-                 const newRow = position.row + block.y;
-                 const newCol = position.col + block.x;
+        function canMoveTo(newPosition, shapeToCheck = currentPieceType.shape) {
+             for (let block of shapeToCheck) {
+                 const newRow = newPosition.row + block.y;
+                 const newCol = newPosition.col + block.x;
 
                  // Check horizontal boundaries
                  if (newCol < 0 || newCol >= BOARD_WIDTH) {
@@ -480,41 +446,12 @@
                  }
              }
              return true;
-        }
-
-        // Helper to update the visual shape of the current piece
-        function updatePieceShape(newShape) {
-            // Remove all existing blocks from the current piece group
-            while(currentPiece.children.length > 0) {
-                currentPiece.remove(currentPiece.children[0]);
-            }
-
-            // Add new blocks based on the rotated shape
-            const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-            newShape.forEach(block => {
-                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                const cube = new THREE.Mesh(geometry, material);
-                // Position the cube relative to the game board and the piece's current position
-                const absX = piecePosition.col + block.x;
-                const absY = piecePosition.row + block.y;
-                cube.position.set(
-                    (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
-                    0
-                );
-                currentPiece.add(cube);
-            });
-            
-            // Update the piece's group position to reflect any wall kick
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            currentPiece.position.x = piecePosition.col * CELL_SIZE + boardOffsetX;
-        }
-
+         }
 
         // --- Game Initialization ---
         function initGame() {
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            pieceRotation = 0; // Reset rotation state
+            currentPieceRotation = 0; // Reset rotation state
             createPiece();
             lastFallTime = performance.now();
         }
@@ -527,24 +464,29 @@
             currentPieceType = PIECES[randomType];
             piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
-            pieceRotation = 0; // Reset rotation for new piece
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
-                const absX = piecePosition.col + block.x;
-                const absY = piecePosition.row + block.y;
+                // Position relative to the piece's group origin
                 cube.position.set(
-                    (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2,
+                    block.x * CELL_SIZE,
+                    -block.y * CELL_SIZE,
                     0
                 );
                 currentPiece.add(cube);
             });
             gameBoard.add(currentPiece);
-            // Reset piece's local position within the gameBoard group
-            currentPiece.position.set(0, 0, 0);
+            // Set initial position of the piece group within the board
+            // This simplifies movement and rotation logic
+            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+            currentPiece.position.set(
+                boardOffsetX + piecePosition.col * CELL_SIZE,
+                0, // Vertical position managed by piecePosition.row
+                0
+            );
             isPieceActive = true;
+            currentPieceRotation = 0; // Reset rotation for new piece
             console.log(`New ${randomType}-piece created`);
         }
 
@@ -577,4 +519,24 @@
         }
 
         function lockPiece() {
-            isPiece
+            isPieceActive = false;
+            console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
+            for (let block of currentPieceType.shape) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + block.x;
+                boardState[row][col] = 1;
+            }
+            setTimeout(() => {
+                createPiece();
+                lastFallTime = performance.now();
+            }, 500);
+        }
+
+        // --- Animation Loop ---
+        renderer.setAnimationLoop((timestamp) => {
+            updateGame(timestamp);
+            renderer.render(scene, camera);
+        });
+    </script>
+</body>
+</html>
