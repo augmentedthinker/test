@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (Gamepad Below)</title>
+    <title>AR Tetris - Step 7 (Gamepad Move)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -201,7 +201,6 @@
              if (gamepadGroup) scene.remove(gamepadGroup);
              gamepadGroup = new THREE.Group();
 
-             // --- Scale and Positioning ---
              const SCALE_FACTOR = 2.0; // Make it twice as large
              const gamepadZOffset = 0.05; // Slight offset forward to avoid z-fighting
 
@@ -234,7 +233,7 @@
              gamepadElements.push(dpadDown);
 
              // Left (rotated)
-             const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR); // Re-create for clarity
+             const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
              dpadLeft.rotation.z = Math.PI / 2;
              dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
@@ -242,7 +241,7 @@
              gamepadElements.push(dpadLeft);
 
              // Right (rotated)
-             const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR); // Re-create for clarity
+             const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
              dpadRight.rotation.z = Math.PI / 2;
              dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
@@ -263,14 +262,7 @@
              gamepadGroup.add(buttonB);
              gamepadElements.push(buttonB);
 
-             // --- Position the gamepad directly below the board ---
-             // Board height is BOARD_HEIGHT * CELL_SIZE = 20 * 0.1 = 2 units
-             // Gamepad height is 0.2 * SCALE_FACTOR = 0.4 units
-             // We want the top of the gamepad to be just below the bottom of the board
-             // Board bottom Y = -2 (relative to its center at 0,0)
-             // Gamepad top Y (relative to its center) = 0.4 / 2 = 0.2
-             // So, gamepad center Y = Board bottom Y - Gamepad top Y = -2 - 0.2 = -2.2
-             // Board is at scene Y = 1.6, so gamepad Y = 1.6 - 2.2 = -0.6
+             // Position the gamepad directly below the board
              gamepadGroup.position.set(0, 1.6 - 2.2, -2); // X=0 (center), Y=-0.6, Z=-2 (same as board)
              scene.add(gamepadGroup);
              console.log("Larger retro gamepad created below the board");
@@ -300,8 +292,17 @@
                     object.material.color.set(0x6666ff); // Lighter Blue
                 }
                 console.log("Gamepad button pressed:", object);
-                // You can add specific actions here based on which button was pressed
-                // For example, move the Tetris piece
+
+                // --- Handle Gamepad Actions ---
+                if (isPieceActive) { // Only allow movement if a piece is falling
+                    if (object === dpadLeft) {
+                        console.log("Moving piece left");
+                        movePieceHorizontally(-1); // Move left
+                    } else if (object === dpadRight) {
+                        console.log("Moving piece right");
+                        movePieceHorizontally(1);  // Move right
+                    }
+                }
             }
         }
 
@@ -314,6 +315,50 @@
             buttonA.material.color.set(0xff0000);
             buttonB.material.color.set(0x0000ff);
         }
+
+        // --- Piece Movement Logic ---
+        function movePieceHorizontally(deltaCol) {
+            if (!isPieceActive) return; // Don't move if piece is locked
+
+            const newPosition = {
+                row: piecePosition.row,
+                col: piecePosition.col + deltaCol
+            };
+
+            // Check if the new position is valid
+            if (canMoveTo(newPosition)) {
+                piecePosition.col = newPosition.col;
+                // Update the piece's horizontal position
+                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
+                console.log(`Piece moved to column ${piecePosition.col}`);
+            } else {
+                console.log("Cannot move piece, collision or boundary");
+            }
+        }
+
+        function canMoveTo(newPosition) {
+             for (let block of currentPieceType.shape) {
+                 const newRow = newPosition.row + block.y;
+                 const newCol = newPosition.col + block.x;
+
+                 // Check horizontal boundaries
+                 if (newCol < 0 || newCol >= BOARD_WIDTH) {
+                     return false;
+                 }
+
+                 // Check vertical boundaries (shouldn't be needed for horizontal move, but good to have)
+                 if (newRow >= BOARD_HEIGHT) {
+                     return false;
+                 }
+
+                 // Check collision with locked pieces
+                 if (boardState[newRow][newCol] === 1) {
+                     return false;
+                 }
+             }
+             return true;
+         }
 
         // --- Game Initialization ---
         function initGame() {
@@ -344,7 +389,8 @@
                 currentPiece.add(cube);
             });
             gameBoard.add(currentPiece);
-            currentPiece.position.y = 0;
+            // Reset piece's local position within the gameBoard group
+            currentPiece.position.set(0, 0, 0);
             isPieceActive = true;
             console.log(`New ${randomType}-piece created`);
         }
