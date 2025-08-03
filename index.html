@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 8 (Gamepad Rotate)</title>
+    <title>AR Tetris - Fixed Rotation</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -36,7 +36,7 @@
                         if (currentSession) {
                             setupControllers();
                             createGameBoard();
-                            createGamepad(); // Create the gamepad when AR starts
+                            createGamepad();
                             initGame();
                         }
                     }
@@ -49,7 +49,7 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (gamepadGroup) scene.remove(gamepadGroup); // Remove gamepad on exit
+                        if (gamepadGroup) scene.remove(gamepadGroup);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -84,7 +84,7 @@
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
         let gameBoard;
-        let gamepadGroup; // Group to hold the gamepad elements
+        let gamepadGroup;
         let currentPiece;
 
         scene = new THREE.Scene();
@@ -107,13 +107,13 @@
 
         // --- Tetris Pieces Definition ---
         const PIECES = {
-            I: { shape: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }], color: 0x00ffff, width: 4, height: 1 },
-            O: { shape: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], color: 0xffff00, width: 2, height: 2 },
-            T: { shape: [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: 0x800080, width: 3, height: 2 },
-            S: { shape: [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], color: 0x00ff00, width: 3, height: 2 },
-            Z: { shape: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: 0xff0000, width: 3, height: 2 },
-            J: { shape: [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: 0x0000ff, width: 3, height: 2 },
-            L: { shape: [{ x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], color: 0xffa500, width: 3, height: 2 }
+            I: { shape: [[1,1,1,1]], color: 0x00ffff },
+            O: { shape: [[1,1],[1,1]], color: 0xffff00 },
+            T: { shape: [[0,1,0],[1,1,1]], color: 0x800080 },
+            S: { shape: [[0,1,1],[1,1,0]], color: 0x00ff00 },
+            Z: { shape: [[1,1,0],[0,1,1]], color: 0xff0000 },
+            J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff },
+            L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500 }
         };
 
         // --- Game State ---
@@ -122,12 +122,13 @@
         let isPieceActive = true;
         let boardState = [];
         let currentPieceType = null;
-        let currentPieceRotation = 0; // Track current rotation state (0, 1, 2, 3)
+        let currentPieceRotation = 0;
+        let currentShape = [];
 
         // --- Gamepad Elements ---
         let dpadUp, dpadDown, dpadLeft, dpadRight;
         let buttonA, buttonB;
-        let gamepadElements = []; // Array to hold all interactive gamepad elements
+        let gamepadElements = [];
 
         // --- Controller Setup ---
         function setupControllers() {
@@ -147,7 +148,6 @@
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
 
-            // Add select event listeners for controllers to interact with gamepad
             controller1.addEventListener('selectstart', onControllerSelectStart);
             controller2.addEventListener('selectstart', onControllerSelectStart);
             controller1.addEventListener('selectend', onControllerSelectEnd);
@@ -202,18 +202,18 @@
              if (gamepadGroup) scene.remove(gamepadGroup);
              gamepadGroup = new THREE.Group();
 
-             const SCALE_FACTOR = 2.0; // Make it twice as large
-             const gamepadZOffset = 0.05; // Slight offset forward to avoid z-fighting
+             const SCALE_FACTOR = 2.0;
+             const gamepadZOffset = 0.05;
 
              // Base plate
-             const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 }); // Dark gray base
+             const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
              const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
              const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
              gamepadBase.position.set(0, 0, 0);
              gamepadGroup.add(gamepadBase);
 
-             // D-Pad (Cross shape)
-             const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Lighter gray
+             // D-Pad
+             const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
              const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
              dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
@@ -233,7 +233,7 @@
              gamepadGroup.add(dpadDown);
              gamepadElements.push(dpadDown);
 
-             // Left (rotated)
+             // Left
              const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
              dpadLeft.rotation.z = Math.PI / 2;
@@ -241,7 +241,7 @@
              gamepadGroup.add(dpadLeft);
              gamepadElements.push(dpadLeft);
 
-             // Right (rotated)
+             // Right
              const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
              dpadRight.rotation.z = Math.PI / 2;
@@ -251,22 +251,21 @@
 
              // Buttons A and B
              const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
-             const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
+             const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
              buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
              buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(buttonA);
              gamepadElements.push(buttonA);
 
-             const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // Blue
+             const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
              buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
              buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(buttonB);
              gamepadElements.push(buttonB);
 
-             // Position the gamepad directly below the board
-             gamepadGroup.position.set(0, 1.6 - 2.2, -2); // X=0 (center), Y=-0.6, Z=-2 (same as board)
+             gamepadGroup.position.set(0, 1.6 - 2.2, -2);
              scene.add(gamepadGroup);
-             console.log("Larger retro gamepad created below the board");
+             console.log("Gamepad created below the board");
         }
 
         // --- Controller Interaction ---
@@ -279,39 +278,37 @@
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            // Check for intersections with gamepad elements
             const intersects = raycaster.intersectObjects(gamepadElements);
 
             if (intersects.length > 0) {
                 const object = intersects[0].object;
-                // Change color to indicate press
                 if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
-                    object.material.color.set(0xffffff); // White for D-Pad press
+                    object.material.color.set(0xffffff);
                 } else if (object === buttonA) {
-                    object.material.color.set(0xff6666); // Lighter Red
+                    object.material.color.set(0xff6666);
                 } else if (object === buttonB) {
-                    object.material.color.set(0x6666ff); // Lighter Blue
+                    object.material.color.set(0x6666ff);
                 }
-                console.log("Gamepad button pressed:", object);
 
-                // --- Handle Gamepad Actions ---
-                if (isPieceActive) { // Only allow actions if a piece is falling
+                if (isPieceActive) {
                     if (object === dpadLeft) {
                         console.log("Moving piece left");
-                        movePieceHorizontally(-1); // Move left
+                        movePieceHorizontally(-1);
                     } else if (object === dpadRight) {
                         console.log("Moving piece right");
-                        movePieceHorizontally(1);  // Move right
+                        movePieceHorizontally(1);
                     } else if (object === buttonA) {
                          console.log("Rotating piece");
-                         rotatePiece(); // Rotate the piece
-                     }
+                         rotatePiece();
+                    } else if (object === dpadDown) {
+                        console.log("Fast drop");
+                        fastDrop();
+                    }
                 }
             }
         }
 
         function onControllerSelectEnd(event) {
-            // Reset all gamepad element colors to their original state
             dpadUp.material.color.set(0x888888);
             dpadDown.material.color.set(0x888888);
             dpadLeft.material.color.set(0x888888);
@@ -320,155 +317,129 @@
             buttonB.material.color.set(0x0000ff);
         }
 
+        // --- Helper Functions ---
+        function rotateMatrix(matrix) {
+            const rows = matrix.length;
+            const cols = matrix[0].length;
+            const rotated = [];
+            for (let i = 0; i < cols; i++) {
+                rotated[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    rotated[i][j] = matrix[rows - 1 - j][i];
+                }
+            }
+            return rotated;
+        }
+
+        function getShapeBlocks(shape) {
+            const blocks = [];
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col] === 1) {
+                        blocks.push({ x: col, y: row });
+                    }
+                }
+            }
+            return blocks;
+        }
+
         // --- Piece Movement Logic ---
         function movePieceHorizontally(deltaCol) {
-            if (!isPieceActive) return; // Don't move if piece is locked
+            if (!isPieceActive) return;
 
             const newPosition = {
                 row: piecePosition.row,
                 col: piecePosition.col + deltaCol
             };
 
-            // Check if the new position is valid
-            if (canMoveTo(newPosition)) {
+            if (canMoveTo(newPosition, currentShape)) {
                 piecePosition.col = newPosition.col;
-                // Update the piece's horizontal position
-                // The piece's position is relative to the gameBoard group's center
-                // We need to adjust for the board's offset
-                currentPiece.position.x = piecePosition.col * CELL_SIZE;
+                updatePiecePosition();
                 console.log(`Piece moved to column ${piecePosition.col}`);
             } else {
                 console.log("Cannot move piece, collision or boundary");
             }
         }
 
-         // --- Piece Rotation Logic ---
-         function rotatePiece() {
-             if (!isPieceActive) return; // Don't rotate if piece is locked
+        function rotatePiece() {
+            if (!isPieceActive) return;
 
-             // Calculate the next rotation state (0 -> 1 -> 2 -> 3 -> 0)
-             const nextRotation = (currentPieceRotation + 1) % 4;
-
-             // Get the potential new shape after rotation
-             const rotatedShape = getRotatedShape(currentPieceType.shape, nextRotation);
-
-             // Calculate the bounding box of the rotated shape to check for valid placement
-             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-             for (let block of rotatedShape) {
-                 minX = Math.min(minX, block.x);
-                 maxX = Math.max(maxX, block.x);
-                 minY = Math.min(minY, block.y);
-                 maxY = Math.max(maxY, block.y);
-             }
-             const rotatedWidth = maxX - minX + 1;
-             const rotatedHeight = maxY - minY + 1;
-
-             // Create a temporary position for the rotated piece, centered
-             // We adjust the column position based on the change in width/offset
-             const tempPosition = {
-                 row: piecePosition.row,
-                 col: piecePosition.col // Start with current col
-             };
-
-             // Check if the rotated piece fits in its current position
-             if (canMoveTo(tempPosition, rotatedShape)) {
-                 // It fits, apply the rotation
-                 currentPieceRotation = nextRotation;
-                 updatePieceVisuals(rotatedShape);
-                 console.log(`Piece rotated to state ${currentPieceRotation}`);
-             } else {
-                 console.log("Cannot rotate piece, collision or boundary");
-             }
-         }
-
-         // Helper to calculate the shape after rotation
-         function getRotatedShape(originalShape, rotationState) {
-             // Rotation states: 0 (original), 1 (90 CW), 2 (180), 3 (270 CW)
-             let rotatedShape = [];
-             switch (rotationState) {
-                 case 0: // 0 degrees
-                     rotatedShape = originalShape.map(block => ({ x: block.x, y: block.y }));
-                     break;
-                 case 1: // 90 degrees clockwise
-                     rotatedShape = originalShape.map(block => ({ x: -block.y, y: block.x }));
-                     break;
-                 case 2: // 180 degrees
-                     rotatedShape = originalShape.map(block => ({ x: -block.x, y: -block.y }));
-                     break;
-                 case 3: // 270 degrees clockwise (or 90 CCW)
-                     rotatedShape = originalShape.map(block => ({ x: block.y, y: -block.x }));
-                     break;
-             }
-             return rotatedShape;
-         }
-
-         // Helper to update the visual blocks of the piece
-         function updatePieceVisuals(newShape) {
-             // Remove old blocks
-             while(currentPiece.children.length > 0) {
-                 currentPiece.remove(currentPiece.children[0]);
-             }
-
-             // Add new blocks based on the rotated shape
-             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-             newShape.forEach(block => {
-                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                 const cube = new THREE.Mesh(geometry, material);
-                 // Position relative to the piece's origin (which is managed by piecePosition)
-                 cube.position.set(
-                     block.x * CELL_SIZE,
-                     -block.y * CELL_SIZE,
-                     0
-                 );
-                 currentPiece.add(cube);
-             });
-         }
-
-
-        function canMoveTo(newPosition, shapeToCheck = currentPieceType.shape) {
-             for (let block of shapeToCheck) {
-                 const newRow = newPosition.row + block.y;
-                 const newCol = newPosition.col + block.x;
-
-                 // Check horizontal boundaries
-                 if (newCol < 0 || newCol >= BOARD_WIDTH) {
-                     return false;
-                 }
-
-                 // Check vertical boundaries
-                 if (newRow >= BOARD_HEIGHT) {
-                     return false;
-                 }
-
-                 // Check collision with locked pieces
-                 if (boardState[newRow][newCol] === 1) {
-                     return false;
-                 }
-             }
-             return true;
-         }
-
-        // --- Game Initialization ---
-        function initGame() {
-            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            currentPieceRotation = 0; // Reset rotation state
-            createPiece();
-            lastFallTime = performance.now();
+            const rotatedShape = rotateMatrix(currentShape);
+            
+            if (canMoveTo(piecePosition, rotatedShape)) {
+                currentShape = rotatedShape;
+                currentPieceRotation = (currentPieceRotation + 1) % 4;
+                updatePieceVisuals();
+                console.log(`Piece rotated to state ${currentPieceRotation}`);
+            } else {
+                // Try wall kicks (slight position adjustments to make rotation work)
+                const wallKicks = [-1, 1, -2, 2]; // Try moving left/right
+                for (let kick of wallKicks) {
+                    const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick };
+                    if (canMoveTo(kickPosition, rotatedShape)) {
+                        piecePosition.col = kickPosition.col;
+                        currentShape = rotatedShape;
+                        currentPieceRotation = (currentPieceRotation + 1) % 4;
+                        updatePieceVisuals();
+                        updatePiecePosition();
+                        console.log(`Piece rotated with wall kick ${kick}`);
+                        return;
+                    }
+                }
+                console.log("Cannot rotate piece, no valid position");
+            }
         }
 
-        // --- Piece Creation ---
-        function createPiece() {
-            currentPiece = new THREE.Group();
-            const pieceTypes = Object.keys(PIECES);
-            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
-            currentPieceType = PIECES[randomType];
-            piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
-            piecePosition.row = 0;
+        function fastDrop() {
+            if (!isPieceActive) return;
+            
+            while (canMoveDown()) {
+                piecePosition.row++;
+            }
+            updatePiecePosition();
+            lockPiece();
+        }
+
+        function canMoveTo(position, shape) {
+            const blocks = getShapeBlocks(shape);
+            for (let block of blocks) {
+                const newRow = position.row + block.y;
+                const newCol = position.col + block.x;
+
+                if (newCol < 0 || newCol >= BOARD_WIDTH) {
+                    return false;
+                }
+
+                if (newRow >= BOARD_HEIGHT) {
+                    return false;
+                }
+
+                if (newRow >= 0 && boardState[newRow][newCol] === 1) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function updatePiecePosition() {
+            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+            currentPiece.position.set(
+                boardOffsetX + piecePosition.col * CELL_SIZE,
+                -piecePosition.row * CELL_SIZE,
+                0
+            );
+        }
+
+        function updatePieceVisuals() {
+            while(currentPiece.children.length > 0) {
+                currentPiece.remove(currentPiece.children[0]);
+            }
+
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-            currentPieceType.shape.forEach(block => {
+            const blocks = getShapeBlocks(currentShape);
+            blocks.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
-                // Position relative to the piece's group origin
                 cube.position.set(
                     block.x * CELL_SIZE,
                     -block.y * CELL_SIZE,
@@ -476,17 +447,34 @@
                 );
                 currentPiece.add(cube);
             });
+        }
+
+        // --- Game Initialization ---
+        function initGame() {
+            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            currentPieceRotation = 0;
+            createPiece();
+            lastFallTime = performance.now();
+        }
+
+        // --- Piece Creation ---
+        function createPiece() {
+            const pieceTypes = Object.keys(PIECES);
+            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+            currentPieceType = PIECES[randomType];
+            currentShape = currentPieceType.shape;
+            
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
+            piecePosition.row = 0;
+            currentPieceRotation = 0;
+
+            currentPiece = new THREE.Group();
             gameBoard.add(currentPiece);
-            // Set initial position of the piece group within the board
-            // This simplifies movement and rotation logic
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            currentPiece.position.set(
-                boardOffsetX + piecePosition.col * CELL_SIZE,
-                0, // Vertical position managed by piecePosition.row
-                0
-            );
+            
+            updatePieceVisuals();
+            updatePiecePosition();
+            
             isPieceActive = true;
-            currentPieceRotation = 0; // Reset rotation for new piece
             console.log(`New ${randomType}-piece created`);
         }
 
@@ -502,34 +490,53 @@
         function movePieceDown() {
             if (canMoveDown()) {
                 piecePosition.row++;
-                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+                updatePiecePosition();
             } else {
                 lockPiece();
             }
         }
 
         function canMoveDown() {
-            for (let block of currentPieceType.shape) {
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
                 const newRow = piecePosition.row + 1 + block.y;
                 const newCol = piecePosition.col + block.x;
                 if (newRow >= BOARD_HEIGHT) return false;
-                if (boardState[newRow][newCol] === 1) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] === 1) return false;
             }
             return true;
         }
 
         function lockPiece() {
             isPieceActive = false;
-            console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
-            for (let block of currentPieceType.shape) {
+            console.log(`Piece locked in place`);
+            
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
-                boardState[row][col] = 1;
+                if (row >= 0) {
+                    boardState[row][col] = 1;
+                }
             }
+            
+            checkLines();
+            
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
             }, 500);
+        }
+
+        function checkLines() {
+            for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
+                if (boardState[row].every(cell => cell === 1)) {
+                    console.log(`Line cleared at row ${row}`);
+                    boardState.splice(row, 1);
+                    boardState.unshift(Array(BOARD_WIDTH).fill(0));
+                    row++; // Check the same row again
+                }
+            }
         }
 
         // --- Animation Loop ---
