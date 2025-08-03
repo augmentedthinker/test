@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (Gamepad Lower)</title>
+    <title>AR Tetris - Step 6 (Gamepad Below)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -201,71 +201,79 @@
              if (gamepadGroup) scene.remove(gamepadGroup);
              gamepadGroup = new THREE.Group();
 
-             // Scale factor for making the gamepad 2x larger
-             const SCALE = 2.0;
+             // --- Scale and Positioning ---
+             const SCALE_FACTOR = 2.0; // Make it twice as large
+             const gamepadZOffset = 0.05; // Slight offset forward to avoid z-fighting
 
+             // Base plate
              const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 }); // Dark gray base
-             const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE, 0.2 * SCALE, 0.02 * SCALE); // Base plate
+             const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
              const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
              gamepadBase.position.set(0, 0, 0);
              gamepadGroup.add(gamepadBase);
 
              // D-Pad (Cross shape)
              const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 }); // Lighter gray
-             const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE, 0.03 * SCALE, 0.01 * SCALE);
+             const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
              const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
-             dpadCenter.position.set(-0.08 * SCALE, 0, 0.01 * SCALE);
+             dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(dpadCenter);
 
-             const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE, 0.08 * SCALE, 0.01 * SCALE);
+             const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
 
              // Up
              dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-             dpadUp.position.set(-0.08 * SCALE, 0.055 * SCALE, 0.01 * SCALE);
+             dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(dpadUp);
              gamepadElements.push(dpadUp);
 
              // Down
              dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-             dpadDown.position.set(-0.08 * SCALE, -0.055 * SCALE, 0.01 * SCALE);
+             dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(dpadDown);
              gamepadElements.push(dpadDown);
 
-             // Left
-             dpadLeft = new THREE.Mesh(dpadArmGeometry.clone(), dpadMaterial.clone());
+             // Left (rotated)
+             const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR); // Re-create for clarity
+             dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
              dpadLeft.rotation.z = Math.PI / 2;
-             dpadLeft.position.set(-0.135 * SCALE, 0, 0.01 * SCALE);
+             dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(dpadLeft);
              gamepadElements.push(dpadLeft);
 
-             // Right
-             dpadRight = new THREE.Mesh(dpadArmGeometry.clone(), dpadMaterial.clone());
+             // Right (rotated)
+             const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR); // Re-create for clarity
+             dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
              dpadRight.rotation.z = Math.PI / 2;
-             dpadRight.position.set(-0.025 * SCALE, 0, 0.01 * SCALE);
+             dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(dpadRight);
              gamepadElements.push(dpadRight);
 
              // Buttons A and B
-             const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE, 16, 16);
+             const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
              const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 }); // Red
              buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
-             buttonA.position.set(0.08 * SCALE, 0.02 * SCALE, 0.01 * SCALE);
+             buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(buttonA);
              gamepadElements.push(buttonA);
 
              const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff }); // Blue
              buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
-             buttonB.position.set(0.13 * SCALE, -0.02 * SCALE, 0.01 * SCALE);
+             buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
              gamepadGroup.add(buttonB);
              gamepadElements.push(buttonB);
 
-             // Position the gamepad next to the board, lower down
-             // Original board position: (0, 1.6, -2)
-             // Move it down by about 1/3 of the board height (BOARD_HEIGHT * CELL_SIZE = 2.0)
-             // 1/3 of 2.0 is roughly 0.67. Let's move it down 0.7 units.
-             gamepadGroup.position.set(0.7 * SCALE, 1.6 - 0.7, -2); // Adjust X to move it right, Y to move it down
+             // --- Position the gamepad directly below the board ---
+             // Board height is BOARD_HEIGHT * CELL_SIZE = 20 * 0.1 = 2 units
+             // Gamepad height is 0.2 * SCALE_FACTOR = 0.4 units
+             // We want the top of the gamepad to be just below the bottom of the board
+             // Board bottom Y = -2 (relative to its center at 0,0)
+             // Gamepad top Y (relative to its center) = 0.4 / 2 = 0.2
+             // So, gamepad center Y = Board bottom Y - Gamepad top Y = -2 - 0.2 = -2.2
+             // Board is at scene Y = 1.6, so gamepad Y = 1.6 - 2.2 = -0.6
+             gamepadGroup.position.set(0, 1.6 - 2.2, -2); // X=0 (center), Y=-0.6, Z=-2 (same as board)
              scene.add(gamepadGroup);
-             console.log("Retro gamepad created");
+             console.log("Larger retro gamepad created below the board");
         }
 
         // --- Controller Interaction ---
