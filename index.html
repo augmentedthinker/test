@@ -3,12 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Step 6 (Rotate on Laser Hit)</title>
+    <title>AR Tetris - Step 7 (On-Screen Gamepad)</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
+        /* --- Gamepad Styles --- */
+        #gamepad {
+            position: fixed;
+            right: 20px; /* Position from the right edge */
+            bottom: 20px; /* Position from the bottom edge */
+            width: 150px;
+            height: 150px;
+            z-index: 1000; /* Make sure it's on top */
+            pointer-events: auto; /* Allow clicks */
+        }
+        .gamepad-button {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+            color: white;
+            user-select: none; /* Prevent text selection */
+            cursor: pointer;
+        }
+        .gamepad-button:active {
+             background-color: rgba(200, 200, 200, 0.8); /* Visual feedback on press */
+        }
+        #up { top: 0; left: 50px; }
+        #left { top: 50px; left: 0; }
+        #right { top: 50px; left: 100px; }
+        #down { top: 100px; left: 50px; }
+        #rotate { top: 50px; left: 50px; background-color: rgba(100, 100, 255, 0.5); }
     </style>
 </head>
 <body>
+    <!-- The Gamepad UI -->
+    <div id="gamepad">
+        <div class="gamepad-button" id="up">↑</div>
+        <div class="gamepad-button" id="left">←</div>
+        <div class="gamepad-button" id="right">→</div>
+        <div class="gamepad-button" id="down">↓</div>
+        <div class="gamepad-button" id="rotate">A</div>
+    </div>
+
     <script type="importmap">
         {
             "imports": {
@@ -20,6 +62,7 @@
     <script type="module">
         import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+
         // --- AR Button Setup ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
@@ -36,6 +79,8 @@
                             setupControllers();
                             createGameBoard();
                             initGame();
+                            // Show the gamepad when AR starts
+                            document.getElementById('gamepad').style.display = 'block';
                         }
                     }
                     function onSessionEnded() {
@@ -47,8 +92,8 @@
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
-                        if (raycaster1) raycaster1 = null;
-                        if (raycaster2) raycaster2 = null;
+                        // Hide the gamepad when AR ends
+                        document.getElementById('gamepad').style.display = 'none';
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -77,6 +122,7 @@
                 }
             }
         }
+
         // --- Core Three.js Setup ---
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
@@ -90,14 +136,22 @@
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+        // Initially hide the gamepad until AR starts
+        document.getElementById('gamepad').style.display = 'none';
+
         // Lighting
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
         scene.add(light);
+
         // --- Game Constants ---
-        const BOARD_WIDTH = 10;  // 10 columns
-        const BOARD_HEIGHT = 20; // 20 rows
-        const CELL_SIZE = 0.1;   // Each cell is 0.1 units
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const CELL_SIZE = 0.1;
         const FALL_SPEED = 1000; // ms per row
+        const MOVE_SPEED = 150; // ms per manual move (prevent too fast input)
+        const ROTATE_SPEED = 200; // ms per rotate
+
         // --- Tetris Pieces Definition ---
         const PIECES = {
             I: {
@@ -178,15 +232,17 @@
                 height: 2
             }
         };
+
         // --- Game State ---
         let lastFallTime = 0;
-        let piecePosition = { row: 0, col: 0 }; // Starting position (will be calculated)
+        let lastMoveTime = 0; // For horizontal movement cooldown
+        let lastRotateTime = 0; // For rotation cooldown
+        let piecePosition = { row: 0, col: 0 };
         let isPieceActive = true;
-        let boardState = []; // 2D array to track occupied cells
-        let currentPieceType = null; // Current piece type (I, O, T, etc.)
-        let currentPieceShapeIndex = 0; // Index for the current rotation state (0, 1, 2, 3)
+        let boardState = [];
+        let currentPieceType = null;
+
         // --- Controller Setup ---
-        let raycaster1, raycaster2; // For detecting laser hits
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
             scene.add(controller1);
@@ -201,29 +257,21 @@
             controllerGrip1.add(controllerModel1);
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-
-            // --- Setup Laser Pointers ---
             setupLaserPointer(controller1);
             setupLaserPointer(controller2);
 
-            // --- Setup Raycasters for Hit Detection ---
-            raycaster1 = new THREE.Raycaster();
-            raycaster2 = new THREE.Raycaster();
-
-            // --- Add Event Listeners for Controller Buttons (for Rotation) ---
-            // Listen for the 'select' event (usually the trigger button) on controller 1 (right hand)
+            // --- Add Event Listeners for Controller Buttons (SWAPPED DIRECTION) ---
             controller1.addEventListener('selectstart', () => {
-                console.log("Controller 1 Select Pressed (Right Hand)");
+                console.log("Controller 1 Select Pressed (Right Hand) - Move Left");
                 if (isPieceActive) {
-                    attemptRotatePiece(controller1, raycaster1);
+                    movePieceLeft();
                 }
             });
 
-            // Listen for the 'select' event (usually the trigger button) on controller 2 (left hand)
             controller2.addEventListener('selectstart', () => {
-                console.log("Controller 2 Select Pressed (Left Hand)");
+                console.log("Controller 2 Select Pressed (Left Hand) - Move Right");
                 if (isPieceActive) {
-                    attemptRotatePiece(controller2, raycaster2);
+                    movePieceRight();
                 }
             });
         }
@@ -239,7 +287,7 @@
             });
             const line = new THREE.Line(geometry, material);
             line.scale.z = 5;
-            line.visible = true; // Make sure it's visible by default
+            line.visible = false;
             controller.add(line);
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
@@ -249,282 +297,260 @@
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
             gameBoard = new THREE.Group();
-            // Create grid lines
             const gridMaterial = new THREE.LineBasicMaterial({
                 color: 0x00ff00,
                 transparent: true,
                 opacity: 0.5
             });
-            // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
-                // Draw from top (y=0) to bottom (y=-BOARD_HEIGHT * CELL_SIZE)
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
                 points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            // Horizontal lines
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
-                // Draw from left to right at each row level
                 points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
                 const geometry = new THREE.BufferGeometry().setFromPoints(points);
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            // Position the board so top is at eye level
-            gameBoard.position.set(0, 1.6, -2); // Top of grid at eye level (1.6m)
+            gameBoard.position.set(0, 1.6, -2);
             scene.add(gameBoard);
             console.log("AR Tetris board created");
         }
+
         // --- Game Initialization ---
         function initGame() {
-            // Initialize board state (empty board)
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            // Create the first piece
             createPiece();
             lastFallTime = performance.now();
+            lastMoveTime = performance.now(); // Initialize move timer
+            lastRotateTime = performance.now(); // Initialize rotate timer
         }
 
         // --- Piece Creation ---
         function createPiece() {
-            // Don't remove the current piece - it stays locked in place
             currentPiece = new THREE.Group();
-            // Randomly select a piece type
             const pieceTypes = Object.keys(PIECES);
             const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
-            currentPieceShapeIndex = 0; // Start with the default rotation
-
-            // Calculate starting position to center the piece
             piecePosition.col = Math.floor((BOARD_WIDTH - currentPieceType.width) / 2);
             piecePosition.row = 0;
-
-            // Create blocks for the piece (using the initial shape)
             const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
             currentPieceType.shape.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 const cube = new THREE.Mesh(geometry, material);
-                // Position the cube relative to the game board (initial shape)
                 const absX = piecePosition.col + block.x;
                 const absY = piecePosition.row + block.y;
                 cube.position.set(
                     (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                    -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
+                    -absY * CELL_SIZE - CELL_SIZE/2,
                     0
                 );
-                // Give the cube a name so we can identify it during raycasting
-                cube.userData = { isTetrisBlock: true };
                 currentPiece.add(cube);
             });
-
-            // Add the piece to the game board
             gameBoard.add(currentPiece);
-            // Set initial position (top of grid)
             currentPiece.position.y = 0;
             isPieceActive = true;
             console.log(`New ${randomType}-piece created`);
         }
 
-        // --- Rotation Logic ---
-        // Define rotation states for each piece type
-        const ROTATION_STATES = {
-            I: [
-                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 2, y: 0 }, { x: 3, y: 0 }], // 0 degrees
-                [{ x: 2, y: 0 }, { x: 2, y: 1 }, { x: 2, y: 2 }, { x: 2, y: 3 }], // 90 degrees
-                [{ x: 0, y: 2 }, { x: 1, y: 2 }, { x: 2, y: 2 }, { x: 3, y: 2 }], // 180 degrees
-                [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 1, y: 3 }]  // 270 degrees
-            ],
-            O: [
-                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }] // Square doesn't rotate visually
-            ],
-            T: [
-                [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], // 0 degrees
-                [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }], // 90 degrees
-                [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }], // 180 degrees
-                [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]  // 270 degrees
-            ],
-            S: [
-                [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }], // 0 degrees
-                [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }], // 90 degrees
-                [{ x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 }], // 180 degrees
-                [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }]  // 270 degrees
-            ],
-            Z: [
-                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }], // 0 degrees
-                [{ x: 2, y: 0 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 1, y: 2 }], // 90 degrees
-                [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }], // 180 degrees
-                [{ x: 1, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 0, y: 2 }]  // 270 degrees
-            ],
-            J: [
-                [{ x: 0, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], // 0 degrees
-                [{ x: 1, y: 0 }, { x: 2, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }], // 90 degrees
-                [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 2, y: 2 }], // 180 degrees
-                [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 0, y: 2 }, { x: 1, y: 2 }]  // 270 degrees
-            ],
-            L: [
-                [{ x: 2, y: 0 }, { x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }], // 0 degrees
-                [{ x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }, { x: 2, y: 2 }], // 90 degrees
-                [{ x: 0, y: 1 }, { x: 1, y: 1 }, { x: 2, y: 1 }, { x: 0, y: 2 }], // 180 degrees
-                [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }, { x: 1, y: 2 }]  // 270 degrees
-            ]
-        };
-
-        function attemptRotatePiece(controller, raycaster) {
-            // Get the controller's "grip" object which holds the model and represents its pose better
-            const grip = controller === controller1 ? controllerGrip1 : controllerGrip2;
-
-            // Update the raycaster's origin and direction based on the controller's grip
-            raycaster.setFromXRController(grip);
-
-            // Check if the ray intersects with any part of the currentPiece
-            const intersects = raycaster.intersectObject(currentPiece, true); // true for recursive check
-
-            // If it hits, rotate the piece
-            if (intersects.length > 0) {
-                console.log("Laser hit the piece! Rotating...");
-                rotatePiece();
-            } else {
-                console.log("Laser did not hit the piece.");
-                // If you want to add movement back, you can do it here
-                // e.g., movePieceLeft() or movePieceRight() based on controller
-            }
-        }
-
-
-        function rotatePiece() {
-            // Get the rotation states for the current piece type
-            const states = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)];
-
-            // If the piece doesn't rotate (like O), do nothing
-            if (states.length <= 1) {
-                 console.log("Piece cannot rotate.");
-                 return;
-            }
-
-            // Calculate the next rotation index
-            const nextIndex = (currentPieceShapeIndex + 1) % states.length;
-            const nextShape = states[nextIndex];
-
-            // --- Wall Kick / Collision Check (Simplified) ---
-            // We'll try the rotation. If it causes a collision, we'll revert.
-            let canRotate = true;
-            const tempPositions = [];
-
-            // Calculate new block positions based on the rotated shape
-            for (let i = 0; i < nextShape.length; i++) {
-                const block = nextShape[i];
+        // --- Piece Movement Functions ---
+        function canMoveHorizontally(deltaCol) {
+            for (let block of currentPieceType.shape) {
                 const newRow = piecePosition.row + block.y;
-                const newCol = piecePosition.col + block.x;
-
-                // Check boundaries
-                if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) {
-                     console.log("Rotation would hit wall or floor.");
-                     canRotate = false;
-                     break;
-                }
-
-                // Check for collision with locked pieces
-                if (boardState[newRow][newCol] === 1) {
-                     console.log("Rotation would hit another piece.");
-                     canRotate = false;
-                     break;
-                }
-
-                tempPositions.push({ row: newRow, col: newCol });
-            }
-
-            // If rotation is valid, apply it
-            if (canRotate) {
-                currentPieceShapeIndex = nextIndex;
-
-                // Remove old cubes
-                while(currentPiece.children.length > 0) {
-                    currentPiece.remove(currentPiece.children[0]);
-                }
-
-                // Add new cubes based on the rotated shape
-                const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
-                nextShape.forEach(block => {
-                    const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-                    const cube = new THREE.Mesh(geometry, material);
-                    // Position the cube relative to the game board (rotated shape)
-                    const absX = piecePosition.col + block.x;
-                    const absY = piecePosition.row + block.y;
-                    cube.position.set(
-                        (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
-                        -absY * CELL_SIZE - CELL_SIZE/2, // Negative Y for downward direction
-                        0
-                    );
-                    // Give the cube a name so we can identify it during raycasting
-                    cube.userData = { isTetrisBlock: true };
-                    currentPiece.add(cube);
-                });
-
-                console.log("Piece rotated successfully.");
-            } else {
-                 console.log("Rotation blocked.");
-            }
-        }
-
-
-        // --- Game Logic ---
-        function updateGame(timestamp) {
-            if (!isPieceActive) return;
-            // Move the piece down at regular intervals
-            if (timestamp - lastFallTime > FALL_SPEED) {
-                movePieceDown();
-                lastFallTime = timestamp;
-            }
-        }
-        function movePieceDown() {
-            // Check if piece can move down
-            if (canMoveDown()) {
-                // Move the piece down (negative Y direction)
-                piecePosition.row++;
-                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
-            } else {
-                // Lock the piece in place
-                lockPiece();
-            }
-        }
-        function canMoveDown() {
-            // Check each block of the current piece (using the current shape/rotation)
-             const currentShape = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)][currentPieceShapeIndex];
-            for (let block of currentShape) {
-                const newRow = piecePosition.row + 1 + block.y;
-                const newCol = piecePosition.col + block.x;
-                // Check if block is at the bottom
-                if (newRow >= BOARD_HEIGHT) {
+                const newCol = piecePosition.col + deltaCol + block.x;
+                if (newCol < 0 || newCol >= BOARD_WIDTH) {
                     return false;
                 }
-                // Check if block would collide with a locked piece
-                if (boardState[newRow][newCol] === 1) {
+                if (boardState[newRow] && boardState[newRow][newCol] === 1) { // Safety check for row existence
                     return false;
                 }
             }
             return true;
         }
+
+        function movePieceLeft() {
+            if (canMoveHorizontally(-1)) {
+                piecePosition.col--;
+                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
+                console.log("Moved piece left");
+            } else {
+                console.log("Cannot move piece left");
+            }
+        }
+
+        function movePieceRight() {
+            if (canMoveHorizontally(1)) {
+                piecePosition.col++;
+                const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                currentPiece.position.x = (piecePosition.col * CELL_SIZE) + boardOffsetX;
+                console.log("Moved piece right");
+            } else {
+                console.log("Cannot move piece right");
+            }
+        }
+
+        // --- Piece Rotation (Basic) ---
+        function rotatePiece() {
+             // This is a simplified rotation logic. It might need refinement for edge cases.
+             // It rotates the shape 90 degrees counter-clockwise around the origin (0,0) of the piece's shape.
+             const newShape = currentPieceType.shape.map(block => {
+                 // 90-degree counter-clockwise rotation: (x, y) -> (-y, x)
+                 return { x: -block.y, y: block.x };
+             });
+
+             // Calculate new width and height based on rotated shape
+             let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+             newShape.forEach(block => {
+                 minX = Math.min(minX, block.x);
+                 maxX = Math.max(maxX, block.x);
+                 minY = Math.min(minY, block.y);
+                 maxY = Math.max(maxY, block.y);
+             });
+             const newWidth = maxX - minX + 1;
+             const newHeight = maxY - minY + 1;
+
+             // Check if the rotated piece fits in its current position
+             let canRotate = true;
+             for (let block of newShape) {
+                 const newRow = piecePosition.row + block.y;
+                 const newCol = piecePosition.col + block.x;
+
+                 // Check bounds
+                 if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) {
+                     canRotate = false;
+                     break;
+                 }
+                 // Check collision with locked pieces
+                 if (boardState[newRow] && boardState[newRow][newCol] === 1) {
+                     canRotate = false;
+                     break;
+                 }
+             }
+
+             if (canRotate) {
+                 // Update the piece's shape
+                 currentPieceType.shape = newShape;
+                 currentPieceType.width = newWidth;
+                 currentPieceType.height = newHeight;
+
+                 // Clear old cubes
+                 while(currentPiece.children.length > 0) {
+                     currentPiece.remove(currentPiece.children[0]);
+                 }
+
+                 // Recreate cubes with the new shape
+                 const material = new THREE.MeshBasicMaterial({ color: currentPieceType.color });
+                 currentPieceType.shape.forEach(block => {
+                     const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                     const cube = new THREE.Mesh(geometry, material);
+                     const absX = piecePosition.col + block.x;
+                     const absY = piecePosition.row + block.y;
+                     cube.position.set(
+                         (absX * CELL_SIZE) - (BOARD_WIDTH * CELL_SIZE)/2 + CELL_SIZE/2,
+                         -absY * CELL_SIZE - CELL_SIZE/2,
+                         0
+                     );
+                     currentPiece.add(cube);
+                 });
+                 console.log("Rotated piece");
+             } else {
+                 console.log("Cannot rotate piece");
+             }
+        }
+
+        // --- Game Logic ---
+        function updateGame(timestamp) {
+            if (!isPieceActive) return;
+
+            // Automatic falling
+            if (timestamp - lastFallTime > FALL_SPEED) {
+                movePieceDown();
+                lastFallTime = timestamp;
+            }
+        }
+
+        function movePieceDown() {
+            if (canMoveDown()) {
+                piecePosition.row++;
+                currentPiece.position.y = -piecePosition.row * CELL_SIZE;
+            } else {
+                lockPiece();
+            }
+        }
+
+        function canMoveDown() {
+            for (let block of currentPieceType.shape) {
+                const newRow = piecePosition.row + 1 + block.y;
+                const newCol = piecePosition.col + block.x;
+                if (newRow >= BOARD_HEIGHT) {
+                    return false;
+                }
+                if (boardState[newRow] && boardState[newRow][newCol] === 1) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         function lockPiece() {
-            // Mark the piece as inactive
             isPieceActive = false;
             console.log(`${Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)}-piece locked in place`);
-            // Update board state with the locked piece (using the current shape/rotation)
-             const currentShape = ROTATION_STATES[Object.keys(PIECES).find(key => PIECES[key] === currentPieceType)][currentPieceShapeIndex];
-            for (let block of currentShape) {
+            for (let block of currentPieceType.shape) {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
-                boardState[row][col] = 1;
+                // Safety check to prevent errors if piece goes above board
+                if (row >= 0 && row < BOARD_HEIGHT && col >= 0 && col < BOARD_WIDTH) {
+                    boardState[row][col] = 1;
+                }
             }
-            // Create a new piece after a short delay
             setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
-            }, 500); // 500ms delay before spawning new piece
+                lastMoveTime = performance.now(); // Reset move timer for new piece
+                lastRotateTime = performance.now(); // Reset rotate timer for new piece
+            }, 500);
         }
+
+        // --- On-Screen Gamepad Event Listeners ---
+        document.getElementById('left').addEventListener('click', () => {
+             const now = performance.now();
+             if (isPieceActive && now - lastMoveTime > MOVE_SPEED) {
+                 movePieceLeft();
+                 lastMoveTime = now; // Update last move time
+             }
+        });
+
+        document.getElementById('right').addEventListener('click', () => {
+             const now = performance.now();
+             if (isPieceActive && now - lastMoveTime > MOVE_SPEED) {
+                 movePieceRight();
+                 lastMoveTime = now;
+             }
+        });
+
+        document.getElementById('down').addEventListener('click', () => {
+             const now = performance.now();
+             if (isPieceActive && now - lastFallTime > MOVE_SPEED) { // Use fall speed for soft drop
+                 movePieceDown(); // Move down immediately
+                 lastFallTime = now; // Reset fall timer so it doesn't fall again immediately
+             }
+        });
+
+        document.getElementById('rotate').addEventListener('click', () => {
+             const now = performance.now();
+             if (isPieceActive && now - lastRotateTime > ROTATE_SPEED) {
+                 rotatePiece();
+                 lastRotateTime = now; // Update last rotate time
+             }
+        });
+
         // --- Animation Loop ---
         renderer.setAnimationLoop((timestamp) => {
             updateGame(timestamp);
