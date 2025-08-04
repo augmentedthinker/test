@@ -453,6 +453,17 @@
         function initGame() {
             boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
             currentPieceRotation = 0;
+            lockedPieces = []; // Reset locked pieces array
+            
+            // Clear any existing locked pieces from the board
+            const cubesToRemove = [];
+            gameBoard.children.forEach(child => {
+                if (child.userData && child.userData.row !== undefined) {
+                    cubesToRemove.push(child);
+                }
+            });
+            cubesToRemove.forEach(cube => gameBoard.remove(cube));
+            
             createPiece();
             lastFallTime = performance.now();
         }
@@ -507,18 +518,44 @@
             return true;
         }
 
+        // Store locked pieces visually
+        let lockedPieces = []; // Array to store all locked piece cubes
+
         function lockPiece() {
             isPieceActive = false;
             console.log(`Piece locked in place`);
             
+            // Move current piece cubes to locked pieces array
             const blocks = getShapeBlocks(currentShape);
-            for (let block of blocks) {
+            blocks.forEach(block => {
                 const row = piecePosition.row + block.y;
                 const col = piecePosition.col + block.x;
                 if (row >= 0) {
                     boardState[row][col] = 1;
+                    
+                    // Find the corresponding visual cube and store it with position info
+                    const cube = currentPiece.children.find(child => 
+                        Math.abs(child.position.x - block.x * CELL_SIZE) < 0.01 &&
+                        Math.abs(child.position.y + block.y * CELL_SIZE) < 0.01
+                    );
+                    
+                    if (cube) {
+                        // Convert local position to world position
+                        const worldPos = new THREE.Vector3();
+                        cube.getWorldPosition(worldPos);
+                        
+                        // Create a new cube at the world position
+                        const lockedCube = cube.clone();
+                        lockedCube.position.copy(worldPos);
+                        lockedCube.userData = { row: row, col: col }; // Store grid position
+                        gameBoard.add(lockedCube);
+                        lockedPieces.push(lockedCube);
+                    }
                 }
-            }
+            });
+            
+            // Remove the current piece group
+            gameBoard.remove(currentPiece);
             
             checkLines();
             
@@ -529,13 +566,39 @@
         }
 
         function checkLines() {
+            let linesCleared = 0;
+            
             for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
                 if (boardState[row].every(cell => cell === 1)) {
                     console.log(`Line cleared at row ${row}`);
+                    linesCleared++;
+                    
+                    // Remove visual cubes from this row
+                    lockedPieces = lockedPieces.filter(cube => {
+                        if (cube.userData.row === row) {
+                            gameBoard.remove(cube);
+                            return false; // Remove from array
+                        }
+                        return true; // Keep in array
+                    });
+                    
+                    // Update row numbers for cubes above the cleared line
+                    lockedPieces.forEach(cube => {
+                        if (cube.userData.row < row) {
+                            cube.userData.row++;
+                            cube.position.y -= CELL_SIZE; // Move down visually
+                        }
+                    });
+                    
+                    // Clear the line from board state
                     boardState.splice(row, 1);
                     boardState.unshift(Array(BOARD_WIDTH).fill(0));
                     row++; // Check the same row again
                 }
+            }
+            
+            if (linesCleared > 0) {
+                console.log(`${linesCleared} lines cleared!`);
             }
         }
 
