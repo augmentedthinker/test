@@ -49,7 +49,6 @@
         • Green (X): Hold piece<br>
         • Yellow (Y): Pause
     </div>
-    
     <script type="importmap">
         {
             "imports": {
@@ -61,7 +60,6 @@
     <script type="module">
         import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-        
         // --- AR Button Setup ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
@@ -122,7 +120,6 @@
                 }
             }
         }
-        
         // --- Core Three.js Setup ---
         let camera, scene, renderer;
         let controller1, controller2, controllerGrip1, controllerGrip2;
@@ -133,7 +130,6 @@
         let nextPiecePreview;
         let heldPiecePreview;
         let pauseMenu;
-        
         scene = new THREE.Scene();
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -141,14 +137,12 @@
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
-        
         // Enhanced lighting
         const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
         directionalLight.position.set(5, 10, 5);
         scene.add(directionalLight);
-        
         // --- Game Constants ---
         const BOARD_WIDTH = 10;
         const BOARD_HEIGHT = 20;
@@ -157,7 +151,6 @@
         const MIN_FALL_SPEED = 100; // ms
         const SPEED_DECREMENT = 50; // ms per level
         const LINES_PER_LEVEL = 10;
-        
         // --- Fixed Tetris Pieces Definition ---
         const PIECES = {
             I: { shape: [[1],[1],[1],[1]], color: 0x00ffff, name: 'I' },
@@ -168,7 +161,6 @@
             J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff, name: 'J' },
             L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500, name: 'L' }
         };
-        
         // --- Game State ---
         let lastFallTime = 0;
         let piecePosition = { row: 0, col: 0 };
@@ -186,12 +178,10 @@
         let linesCleared = 0;
         let fallSpeed = BASE_FALL_SPEED;
         let lockedBlocks = []; // For visual locked pieces
-        
         // --- Gamepad Elements ---
         let dpadUp, dpadDown, dpadLeft, dpadRight;
         let buttonA, buttonB, buttonX, buttonY;
         let gamepadElements = [];
-        
         // --- Controller Setup ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
@@ -214,7 +204,6 @@
             controller1.addEventListener('selectend', onControllerSelectEnd);
             controller2.addEventListener('selectend', onControllerSelectEnd);
         }
-        
         function setupLaserPointer(controller) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
@@ -231,19 +220,16 @@
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
         }
-        
         // --- Game Board Creation ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
             gameBoard = new THREE.Group();
-            
             // Create glowing grid
             const gridMaterial = new THREE.LineBasicMaterial({ 
                 color: 0x00ff00, 
                 transparent: true, 
                 opacity: 0.6 
             });
-            
             // Vertical lines
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [];
@@ -253,7 +239,6 @@
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            
             // Horizontal lines
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [];
@@ -263,7 +248,6 @@
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            
             // Stylish border frame
             const frameGeometry = new THREE.BoxGeometry(
                 BOARD_WIDTH * CELL_SIZE + 0.02, 
@@ -279,12 +263,10 @@
             const frame = new THREE.Mesh(frameGeometry, frameMaterial);
             frame.position.set(0, -BOARD_HEIGHT * CELL_SIZE / 2, -0.01);
             gameBoard.add(frame);
-            
             gameBoard.position.set(0, 1.6, -1.5);
             scene.add(gameBoard);
             console.log("Enhanced AR Tetris board created");
         }
-        
         // --- Enhanced Gamepad Creation ---
         function createGamepad() {
             if (gamepadGroup) scene.remove(gamepadGroup);
@@ -292,7 +274,6 @@
             gamepadElements = [];
             const SCALE_FACTOR = 1.8;
             const gamepadZOffset = 0.03;
-            
             // Sleeker base plate with rounded corners effect
             const gamepadMaterial = new THREE.MeshBasicMaterial({ 
                 color: 0x222222,
@@ -303,7 +284,6 @@
             const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
             gamepadBase.position.set(0, 0, 0);
             gamepadGroup.add(gamepadBase);
-            
             // Enhanced D-Pad with better materials
             const dpadMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0x666666,
@@ -313,39 +293,32 @@
             const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
             dpadCenter.position.set(-0.1 * SCALE_FACTOR, 0, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(dpadCenter);
-            
             // D-pad arms with rounded geometry
             const dpadArmGeometry = new THREE.BoxGeometry(0.04 * SCALE_FACTOR, 0.1 * SCALE_FACTOR, 0.015 * SCALE_FACTOR);
-            
             // Up
             dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
             dpadUp.position.set(-0.1 * SCALE_FACTOR, 0.07 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(dpadUp);
             gamepadElements.push(dpadUp);
-            
             // Down
             dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
             dpadDown.position.set(-0.1 * SCALE_FACTOR, -0.07 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(dpadDown);
             gamepadElements.push(dpadDown);
-            
             // Left
             dpadLeft = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
             dpadLeft.rotation.z = Math.PI / 2;
             dpadLeft.position.set(-0.17 * SCALE_FACTOR, 0, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(dpadLeft);
             gamepadElements.push(dpadLeft);
-            
             // Right
             dpadRight = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
             dpadRight.rotation.z = Math.PI / 2;
             dpadRight.position.set(-0.03 * SCALE_FACTOR, 0, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(dpadRight);
             gamepadElements.push(dpadRight);
-            
             // Enhanced buttons with better materials
             const buttonGeometry = new THREE.SphereGeometry(0.03 * SCALE_FACTOR, 16, 16);
-            
             // Button A (Red) - Rotate Clockwise
             const buttonAMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0xff3333,
@@ -357,7 +330,6 @@
             buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(buttonA);
             gamepadElements.push(buttonA);
-            
             // Button B (Blue) - Rotate Counter-clockwise
             const buttonBMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0x3333ff,
@@ -369,7 +341,6 @@
             buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(buttonB);
             gamepadElements.push(buttonB);
-            
             // Button X (Green) - Hold piece
             const buttonXMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0x33ff33,
@@ -381,7 +352,6 @@
             buttonX.position.set(0.08 * SCALE_FACTOR, -0.05 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
             gamepadGroup.add(buttonX);
             gamepadElements.push(buttonX);
-            
             // Button Y (Yellow) - Pause
             const buttonYMaterial = new THREE.MeshPhongMaterial({ 
                 color: 0xffff33,
@@ -394,16 +364,24 @@
             gamepadGroup.add(buttonY);
             gamepadElements.push(buttonY);
             
-            gamepadGroup.position.set(0, 0.8, -1.5);
+            // Position the gamepad directly under the game board
+            const boardWorldPosition = new THREE.Vector3();
+            gameBoard.getWorldPosition(boardWorldPosition);
+            
+            // Place the gamepad slightly below the board
+            gamepadGroup.position.set(
+                boardWorldPosition.x, // Align X with the board
+                boardWorldPosition.y - (BOARD_HEIGHT * CELL_SIZE) / 2 - 0.2, // Position below the board
+                boardWorldPosition.z  // Align Z with the board
+            );
+            
             scene.add(gamepadGroup);
-            console.log("Enhanced gamepad created");
+            console.log("Enhanced gamepad created and positioned under the game board");
         }
-        
         // --- Preview Pieces with better styling ---
         function createNextPiecePreview() {
             if (nextPiecePreview) scene.remove(nextPiecePreview);
             nextPiecePreview = new THREE.Group();
-            
             // Stylish frame
             const frameGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.02);
             const frameMaterial = new THREE.MeshBasicMaterial({ 
@@ -414,20 +392,16 @@
             });
             const frame = new THREE.Mesh(frameGeometry, frameMaterial);
             nextPiecePreview.add(frame);
-            
             nextPiecePreview.position.set(0.5, 1.8, -1.5);
             scene.add(nextPiecePreview);
             updateNextPiecePreview();
         }
-        
         function updateNextPiecePreview() {
             if (!nextPiecePreview || !nextPieceType) return;
-            
             // Clear previous preview (keep frame)
             while(nextPiecePreview.children.length > 1) {
                 nextPiecePreview.remove(nextPiecePreview.children[1]);
             }
-            
             const previewMaterial = new THREE.MeshPhongMaterial({ 
                 color: nextPieceType.color,
                 shininess: 100,
@@ -435,7 +409,6 @@
                 opacity: 0.8
             });
             const previewGeometry = new THREE.BoxGeometry(0.025, 0.025, 0.025);
-            
             const shape = nextPieceType.shape;
             for (let row = 0; row < shape.length; row++) {
                 for (let col = 0; col < shape[row].length; col++) {
@@ -451,11 +424,9 @@
                 }
             }
         }
-        
         function createHeldPiecePreview() {
             if (heldPiecePreview) scene.remove(heldPiecePreview);
             heldPiecePreview = new THREE.Group();
-            
             // Stylish frame
             const frameGeometry = new THREE.BoxGeometry(0.15, 0.15, 0.02);
             const frameMaterial = new THREE.MeshBasicMaterial({ 
@@ -466,20 +437,16 @@
             });
             const frame = new THREE.Mesh(frameGeometry, frameMaterial);
             heldPiecePreview.add(frame);
-            
             heldPiecePreview.position.set(-0.5, 1.8, -1.5);
             scene.add(heldPiecePreview);
             updateHeldPiecePreview();
         }
-        
         function updateHeldPiecePreview() {
             if (!heldPiecePreview) return;
-            
             // Clear previous preview (keep frame)
             while(heldPiecePreview.children.length > 1) {
                 heldPiecePreview.remove(heldPiecePreview.children[1]);
             }
-            
             if (heldPieceType) {
                 const previewMaterial = new THREE.MeshPhongMaterial({ 
                     color: heldPieceType.color,
@@ -488,7 +455,6 @@
                     opacity: 0.8
                 });
                 const previewGeometry = new THREE.BoxGeometry(0.025, 0.025, 0.025);
-                
                 const shape = heldPieceType.shape;
                 for (let row = 0; row < shape.length; row++) {
                     for (let col = 0; col < shape[row].length; col++) {
@@ -505,12 +471,10 @@
                 }
             }
         }
-        
         // --- Enhanced Pause Menu ---
         function createPauseMenu() {
             if (pauseMenu) scene.remove(pauseMenu);
             pauseMenu = new THREE.Group();
-            
             // Semi-transparent background
             const bgGeometry = new THREE.PlaneGeometry(1.2, 0.8);
             const bgMaterial = new THREE.MeshBasicMaterial({ 
@@ -520,7 +484,6 @@
             });
             const background = new THREE.Mesh(bgGeometry, bgMaterial);
             pauseMenu.add(background);
-            
             // Pause indicator (glowing border)
             const borderGeometry = new THREE.PlaneGeometry(1.3, 0.9);
             const borderMaterial = new THREE.MeshBasicMaterial({ 
@@ -532,12 +495,10 @@
             const border = new THREE.Mesh(borderGeometry, borderMaterial);
             border.position.set(0, 0, 0.01);
             pauseMenu.add(border);
-            
             pauseMenu.position.set(0, 1.6, -1.0);
             scene.add(pauseMenu);
             pauseMenu.visible = false;
         }
-        
         function togglePause() {
             isPaused = !isPaused;
             if (pauseMenu) {
@@ -545,11 +506,9 @@
             }
             console.log(isPaused ? "Game paused" : "Game resumed");
         }
-        
         // --- Controller Interaction ---
         function onControllerSelectStart(event) {
             if (isPaused) return;
-            
             const controller = event.target;
             const tempMatrix = new THREE.Matrix4();
             tempMatrix.extractRotation(controller.matrixWorld);
@@ -557,14 +516,11 @@
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
             const intersects = raycaster.intersectObjects(gamepadElements);
-            
             if (intersects.length > 0) {
                 const object = intersects[0].object;
-                
                 // Enhanced visual feedback
                 const originalColor = object.material.color.getHex();
                 object.material.color.setHex(0xffffff);
-                
                 // Restore color after a short delay
                 setTimeout(() => {
                     if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
@@ -579,7 +535,6 @@
                         object.material.color.setHex(0xffff33);
                     }
                 }, 200);
-                
                 if (isPieceActive) {
                     if (object === dpadLeft) {
                         console.log("Moving piece left");
@@ -601,18 +556,15 @@
                         holdPiece();
                     }
                 }
-                
                 if (object === buttonY) {
                     console.log("Toggle pause");
                     togglePause();
                 }
             }
         }
-        
         function onControllerSelectEnd(event) {
             // Color restoration is now handled in onControllerSelectStart with setTimeout
         }
-        
         // --- Helper Functions ---
         function rotateMatrix(matrix) {
             const rows = matrix.length;
@@ -626,7 +578,6 @@
             }
             return rotated;
         }
-        
         function getShapeBlocks(shape) {
             const blocks = [];
             for (let row = 0; row < shape.length; row++) {
@@ -638,7 +589,6 @@
             }
             return blocks;
         }
-        
         // --- Piece Movement Logic ---
         function movePieceHorizontally(deltaCol) {
             if (!isPieceActive || isPaused) return;
@@ -654,7 +604,6 @@
                 console.log("Cannot move piece, collision or boundary");
             }
         }
-        
         function rotatePieceClockwise() {
             if (!isPieceActive || isPaused) return;
             const rotatedShape = rotateMatrix(currentShape);
@@ -681,7 +630,6 @@
                 console.log("Cannot rotate piece clockwise, no valid position");
             }
         }
-        
         function rotatePieceCounterClockwise() {
             if (!isPieceActive || isPaused) return;
             let temp = currentShape;
@@ -712,7 +660,6 @@
                 console.log("Cannot rotate piece counter-clockwise, no valid position");
             }
         }
-        
         function fastDrop() {
             if (!isPieceActive || isPaused) return;
             while (canMoveDown()) {
@@ -721,10 +668,8 @@
             updatePiecePosition();
             lockPiece();
         }
-        
         function holdPiece() {
             if (!isPieceActive || isPaused || !canHold) return;
-            
             if (heldPieceType === null) {
                 // First hold - swap current piece with empty hold
                 heldPieceType = currentPieceType;
@@ -739,7 +684,6 @@
                 currentPieceRotation = 0;
                 piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
                 piecePosition.row = 0;
-                
                 // Remove old piece and create new one
                 gameBoard.remove(currentPiece);
                 currentPiece = new THREE.Group();
@@ -747,12 +691,10 @@
                 updatePieceVisuals();
                 updatePiecePosition();
             }
-            
             canHold = false;
             updateHeldPiecePreview();
             console.log("Piece held");
         }
-        
         function canMoveTo(position, shape) {
             const blocks = getShapeBlocks(shape);
             for (let block of blocks) {
@@ -770,7 +712,6 @@
             }
             return true;
         }
-        
         function updatePiecePosition() {
             const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
             currentPiece.position.set(
@@ -779,13 +720,11 @@
                 0
             );
         }
-        
         function updatePieceVisuals() {
             // Clear existing blocks
             while(currentPiece.children.length > 0) {
                 currentPiece.remove(currentPiece.children[0]);
             }
-            
             const material = new THREE.MeshPhongMaterial({ 
                 color: currentPieceType.color,
                 shininess: 100,
@@ -793,7 +732,6 @@
                 opacity: 0.9
             });
             const blocks = getShapeBlocks(currentShape);
-            
             blocks.forEach(block => {
                 const geometry = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9);
                 const cube = new THREE.Mesh(geometry, material);
@@ -805,7 +743,6 @@
                 currentPiece.add(cube);
             });
         }
-        
         // --- Enhanced Locked Blocks Display ---
         function createLockedBlock(row, col, color) {
             const material = new THREE.MeshPhongMaterial({ 
@@ -816,23 +753,19 @@
             });
             const geometry = new THREE.BoxGeometry(CELL_SIZE * 0.85, CELL_SIZE * 0.85, CELL_SIZE * 0.85);
             const cube = new THREE.Mesh(geometry, material);
-            
             const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
             cube.position.set(
                 boardOffsetX + col * CELL_SIZE,
                 -row * CELL_SIZE,
                 0
             );
-            
             gameBoard.add(cube);
             return cube;
         }
-        
         function updateLockedBlocks() {
             // Remove all existing locked blocks
             lockedBlocks.forEach(block => gameBoard.remove(block));
             lockedBlocks = [];
-            
             // Create new locked blocks based on board state
             for (let row = 0; row < BOARD_HEIGHT; row++) {
                 for (let col = 0; col < BOARD_WIDTH; col++) {
@@ -844,7 +777,6 @@
                 }
             }
         }
-        
         // --- Game Initialization ---
         function initGame() {
             // Reset game state
@@ -857,28 +789,22 @@
             canHold = true;
             isPaused = false;
             heldPieceType = null;
-            
             // Clear locked blocks
             lockedBlocks.forEach(block => gameBoard.remove(block));
             lockedBlocks = [];
-            
             // Update score display
             updateScoreDisplay();
-            
             // Create preview elements
             createNextPiecePreview();
             createHeldPiecePreview();
             createPauseMenu();
-            
             // Select first piece
             const pieceTypes = Object.keys(PIECES);
             nextPieceType = PIECES[pieceTypes[Math.floor(Math.random() * pieceTypes.length)]];
             createPiece();
             lastFallTime = performance.now();
-            
             console.log("Game initialized!");
         }
-        
         // --- Piece Creation ---
         function createPiece() {
             currentPieceType = nextPieceType;
@@ -886,39 +812,32 @@
             piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
             piecePosition.row = 0;
             currentPieceRotation = 0;
-            
             // Check if game over (new piece overlaps with existing blocks)
             if (!canMoveTo(piecePosition, currentShape)) {
                 gameOver();
                 return;
             }
-            
             currentPiece = new THREE.Group();
             gameBoard.add(currentPiece);
             updatePieceVisuals();
             updatePiecePosition();
             isPieceActive = true;
             canHold = true;
-            
             // Select next piece
             const pieceTypes = Object.keys(PIECES);
             nextPieceType = PIECES[pieceTypes[Math.floor(Math.random() * pieceTypes.length)]];
             updateNextPiecePreview();
-            
             console.log(`New ${currentPieceType.name}-piece created`);
         }
-        
         // --- Game Logic ---
         function updateGame(timestamp) {
             if (isPaused) return;
-            
             if (!isPieceActive) return;
             if (timestamp - lastFallTime > fallSpeed) {
                 movePieceDown();
                 lastFallTime = timestamp;
             }
         }
-        
         function movePieceDown() {
             if (canMoveDown()) {
                 piecePosition.row++;
@@ -927,7 +846,6 @@
                 lockPiece();
             }
         }
-        
         function canMoveDown() {
             const blocks = getShapeBlocks(currentShape);
             for (let block of blocks) {
@@ -938,11 +856,9 @@
             }
             return true;
         }
-        
         function lockPiece() {
             isPieceActive = false;
             console.log(`${currentPieceType.name}-piece locked in place`);
-            
             const blocks = getShapeBlocks(currentShape);
             for (let block of blocks) {
                 const row = piecePosition.row + block.y;
@@ -951,28 +867,24 @@
                     boardState[row][col] = 1;
                 }
             }
-            
-            // Don't update visual blocks yet - do it after line clearing
+            // Update visual locked blocks
+            updateLockedBlocks();
             checkLines();
-            
             // Delay before creating next piece to allow for line clear animation
             setTimeout(() => {
                 if (!isPaused) {
                     createPiece();
                     lastFallTime = performance.now();
                 }
-            }, 500);
+            }, 300);
         }
-        
         function checkLines() {
             let linesClearedNow = 0;
-            
             for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
                 if (boardState[row].every(cell => cell === 1)) {
                     console.log(`Line cleared at row ${row}`);
                     // Create line clear effect
                     createLineClearEffect(row);
-                    
                     boardState.splice(row, 1);
                     boardState.unshift(Array(BOARD_WIDTH).fill(0));
                     linesClearedNow++;
@@ -980,12 +892,10 @@
                     row++; // Check the same row again
                 }
             }
-            
             if (linesClearedNow > 0) {
                 // Update score based on lines cleared
                 const linePoints = [0, 100, 300, 500, 800]; // Points for 0,1,2,3,4 lines
                 score += linePoints[linesClearedNow] * level;
-                
                 // Update level
                 const newLevel = Math.floor(linesCleared / LINES_PER_LEVEL) + 1;
                 if (newLevel > level) {
@@ -994,15 +904,13 @@
                     fallSpeed = Math.max(MIN_FALL_SPEED, BASE_FALL_SPEED - (level - 1) * SPEED_DECREMENT);
                     console.log(`Level up! Now level ${level}, speed: ${fallSpeed}ms`);
                 }
-                
                 updateScoreDisplay();
-                console.log(`${linesClearedNow} lines cleared! New score: ${score}`);
+                // Update locked blocks after line clearing
+                setTimeout(() => {
+                    updateLockedBlocks();
+                }, 200);
             }
-            
-            // Always update visual blocks after checking lines (whether cleared or not)
-            updateLockedBlocks();
         }
-        
         function createLineClearEffect(row) {
             // Create a brief flash effect for cleared lines
             const flashGeometry = new THREE.PlaneGeometry(BOARD_WIDTH * CELL_SIZE, CELL_SIZE);
@@ -1014,7 +922,6 @@
             const flash = new THREE.Mesh(flashGeometry, flashMaterial);
             flash.position.set(0, -row * CELL_SIZE, 0.01);
             gameBoard.add(flash);
-            
             // Animate the flash
             let opacity = 0.8;
             const fadeOut = setInterval(() => {
@@ -1026,18 +933,15 @@
                 }
             }, 50);
         }
-        
         function updateScoreDisplay() {
             const scoreDisplay = document.getElementById('scoreDisplay');
             if (scoreDisplay) {
                 scoreDisplay.textContent = `Score: ${score} | Level: ${level} | Lines: ${linesCleared}`;
             }
         }
-        
         function gameOver() {
             console.log("Game Over! Final Score:", score);
             isPieceActive = false;
-            
             // Create game over effect
             const gameOverGeometry = new THREE.PlaneGeometry(BOARD_WIDTH * CELL_SIZE, BOARD_HEIGHT * CELL_SIZE);
             const gameOverMaterial = new THREE.MeshBasicMaterial({ 
@@ -1048,20 +952,17 @@
             const gameOverOverlay = new THREE.Mesh(gameOverGeometry, gameOverMaterial);
             gameOverOverlay.position.set(0, -BOARD_HEIGHT * CELL_SIZE / 2, 0.02);
             gameBoard.add(gameOverOverlay);
-            
             // Reset game after delay
             setTimeout(() => {
                 gameBoard.remove(gameOverOverlay);
                 initGame();
             }, 3000);
         }
-        
         // --- Animation Loop ---
         renderer.setAnimationLoop((timestamp) => {
             updateGame(timestamp);
             renderer.render(scene, camera);
         });
-        
         // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
