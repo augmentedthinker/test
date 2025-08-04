@@ -2,17 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>3D Tetris - Vibe Coder Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Tetris VR</title>
     <style>
-        body {
-            margin: 0;
-            overflow: hidden;
+        body { 
+            margin: 0; 
+            overflow: hidden; 
             font-family: Arial, sans-serif;
             background: #111;
-        }
-        canvas {
-            display: block;
         }
         #info {
             position: absolute;
@@ -22,18 +19,6 @@
             color: white;
             font-size: 24px;
             pointer-events: none;
-            text-shadow: 1px 1px 1px black;
-            z-index: 100;
-        }
-        #score {
-            position: absolute;
-            top: 50px;
-            width: 100%;
-            text-align: center;
-            color: #ffcc00;
-            font-size: 20px;
-            pointer-events: none;
-            text-shadow: 1px 1px 1px black;
             z-index: 100;
         }
         #instructions {
@@ -44,649 +29,70 @@
             color: #aaa;
             font-size: 16px;
             pointer-events: none;
-            text-shadow: 1px 1px 1px black;
             z-index: 100;
-        }
-        #gameOver {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            font-size: 36px;
-            z-index: 200;
-            display: none;
-        }
-        #restartButton {
-            margin-top: 20px;
-            padding: 10px 20px;
-            font-size: 20px;
-            background: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
-        #restartButton:hover {
-            background: #45a049;
         }
     </style>
 </head>
 <body>
-    <div id="info">3D TETRIS</div>
-    <div id="score">Score: 0</div>
-    <div id="instructions">
-        Arrow Keys: Move | Q/E: Rotate 3D | Space: Hard Drop | Click for VR
-    </div>
-    <div id="gameOver">
-        GAME OVER
-        <button id="restartButton">PLAY AGAIN</button>
-    </div>
+    <div id="info">3D TETRIS VR</div>
+    <div id="instructions">Arrow Keys: Move | Q/E: Rotate | Space: Drop | ENTER VR BUTTON BELOW</div>
 
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/webxr/VRButton.js"></script>
 
     <script>
-        // Initialize Three.js components
+        // Initialize Three.js
         const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
+        scene.background = new THREE.Color(0x222222);
         
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 5, 15);
+        camera.position.set(0, 5, 10);
         
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.xr.enabled = true;
+        renderer.xr.enabled = true; // Enable WebXR
         document.body.appendChild(renderer.domElement);
         
-        // Add VR button
+        // Add VR button (this is the key part for VR)
         document.body.appendChild(VRButton.createButton(renderer));
         
-        // Add orbit controls for desktop viewing
+        // Add orbit controls for desktop
         const controls = new THREE.OrbitControls(camera, renderer.domElement);
         controls.enableDamping = true;
-        controls.dampingFactor = 0.05;
         
         // Lighting
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         scene.add(ambientLight);
         
         const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
+        directionalLight.position.set(5, 10, 7);
         scene.add(directionalLight);
         
-        // Game constants
-        const GRID_SIZE = 10;
-        const GRID_HEIGHT = 20;
-        const BLOCK_SIZE = 1;
-        
-        // Create game board boundaries
-        const boardGeometry = new THREE.BoxGeometry(
-            GRID_SIZE + 0.2, 
-            GRID_HEIGHT + 0.2, 
-            GRID_SIZE + 0.2
-        );
-        const boardMaterial = new THREE.MeshBasicMaterial({ 
-            color: 0x333333, 
-            transparent: true, 
-            opacity: 0.2,
-            side: THREE.DoubleSide
-        });
-        const board = new THREE.Mesh(boardGeometry, boardMaterial);
-        scene.add(board);
-        
-        // Create grid lines
-        const gridHelper = new THREE.GridHelper(GRID_SIZE, GRID_SIZE, 0x888888, 0x444444);
+        // Create a simple 3D grid for visualization
+        const gridSize = 10;
+        const gridHelper = new THREE.GridHelper(gridSize, gridSize);
         gridHelper.position.y = -0.5;
         scene.add(gridHelper);
         
-        // Game state
-        let gameGrid = create3DGrid();
-        let score = 0;
-        let gameOver = false;
-        let currentPiece = null;
-        let pieceObject = null;
-        let dropCounter = 0;
-        let dropInterval = 1000; // ms
-        let lastTime = 0;
+        // Add some 3D blocks to represent tetrominoes
+        const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
         
-        // Tetromino definitions with 3D shapes
-        const TETROMINOES = [
-            { // I
-                shape: [
-                    [[1]][[1]][[1]][[1]],
-                    [[0]][[0]][[0]][[0]],
-                    [[0]][[0]][[0]][[0]]
-                ],
-                color: 0x00FFFF
-            },
-            { // O
-                shape: [
-                    [[1,1],[1,1]],
-                    [[1,1],[1,1]]
-                ],
-                color: 0xFFFF00
-            },
-            { // T
-                shape: [
-                    [[0,1,0],[1,1,1],[0,0,0]],
-                    [[0,1,0],[0,1,0],[0,1,0]]
-                ],
-                color: 0x800080
-            },
-            { // L
-                shape: [
-                    [[1,0],[1,0],[1,1]],
-                    [[0,0],[1,1],[1,1]]
-                ],
-                color: 0xFF7F00
-            },
-            { // J
-                shape: [
-                    [[0,1],[0,1],[1,1]],
-                    [[0,0],[1,1],[1,1]]
-                ],
-                color: 0x0000FF
-            },
-            { // S
-                shape: [
-                    [[0,1,1],[1,1,0],[0,0,0]],
-                    [[1,1,0],[0,1,1],[0,0,0]]
-                ],
-                color: 0x00FF00
-            },
-            { // Z
-                shape: [
-                    [[1,1,0],[0,1,1],[0,0,0]],
-                    [[0,1,1],[1,1,0],[0,0,0]]
-                ],
-                color: 0xFF0000
-            }
-        ];
-        
-        // Create 3D grid array
-        function create3DGrid() {
-            return Array(GRID_SIZE).fill().map(() => 
-                Array(GRID_HEIGHT).fill().map(() => 
-                    Array(GRID_SIZE).fill(null)
-                )
+        // Create several colored blocks
+        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
+        for (let i = 0; i < 5; i++) {
+            const blockMaterial = new THREE.MeshPhongMaterial({ color: colors[i] });
+            const block = new THREE.Mesh(blockGeometry, blockMaterial);
+            block.position.set(
+                (i - 2) * 1.5,  // Spread horizontally
+                1,              // Above the grid
+                0               // Center depth
             );
+            scene.add(block);
         }
         
-        // Create a random tetromino
-        function createRandomPiece() {
-            const randIndex = Math.floor(Math.random() * TETROMINOES.length);
-            const piece = {...TETROMINOES[randIndex]};
-            
-            const pieceGroup = new THREE.Group();
-            
-            // Create blocks for the piece
-            for (let z = 0; z < piece.shape.length; z++) {
-                for (let y = 0; y < piece.shape[z].length; y++) {
-                    for (let x = 0; x < piece.shape[z][y].length; x++) {
-                        if (piece.shape[z][y][x] === 1) {
-                            const blockGeometry = new THREE.BoxGeometry(
-                                BLOCK_SIZE * 0.9, 
-                                BLOCK_SIZE * 0.9, 
-                                BLOCK_SIZE * 0.9
-                            );
-                            const blockMaterial = new THREE.MeshPhongMaterial({ 
-                                color: piece.color,
-                                shininess: 50
-                            });
-                            const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                            
-                            // Position the block
-                            block.position.set(
-                                x - piece.shape[z][y].length/2 + 0.5,
-                                y,
-                                z - piece.shape.length/2 + 0.5
-                            );
-                            
-                            pieceGroup.add(block);
-                        }
-                    }
-                }
-            }
-            
-            // Position at top center
-            pieceGroup.position.set(
-                GRID_SIZE/2 - 0.5, 
-                GRID_HEIGHT - 3, 
-                GRID_SIZE/2 - 0.5
-            );
-            
-            return {
-                piece: piece,
-                object: pieceGroup,
-                position: {
-                    x: Math.floor(GRID_SIZE/2) - 1,
-                    y: GRID_HEIGHT - 3,
-                    z: Math.floor(GRID_SIZE/2) - 1
-                }
-            };
-        }
-        
-        // Add piece to scene
-        function addPieceToScene() {
-            if (pieceObject) {
-                scene.remove(pieceObject);
-            }
-            currentPiece = createRandomPiece();
-            pieceObject = currentPiece.object;
-            scene.add(pieceObject);
-            
-            // Check for game over
-            if (!isValidPosition(
-                currentPiece.position.x, 
-                currentPiece.position.y, 
-                currentPiece.position.z, 
-                currentPiece.piece.shape
-            )) {
-                endGame();
-            }
-        }
-        
-        // Move piece
-        function movePiece(dx, dy, dz) {
-            if (!currentPiece || gameOver) return false;
-            
-            const newX = currentPiece.position.x + dx;
-            const newY = currentPiece.position.y + dy;
-            const newZ = currentPiece.position.z + dz;
-            
-            if (isValidPosition(newX, newY, newZ, currentPiece.piece.shape)) {
-                currentPiece.position.x = newX;
-                currentPiece.position.y = newY;
-                currentPiece.position.z = newZ;
-                
-                pieceObject.position.x = newX;
-                pieceObject.position.y = newY;
-                pieceObject.position.z = newZ;
-                
-                return true;
-            } else if (dy < 0) {
-                // Lock piece when it can't move down
-                lockPiece();
-                clearLines();
-                addPieceToScene();
-                return false;
-            }
-            
-            return false;
-        }
-        
-        // Rotate piece in 3D space
-        function rotatePiece(axis, direction) {
-            if (!currentPiece || gameOver) return;
-            
-            const originalShape = JSON.parse(JSON.stringify(currentPiece.piece.shape));
-            let newShape;
-            
-            switch(axis) {
-                case 'x':
-                    newShape = rotateX(originalShape, direction);
-                    break;
-                case 'y':
-                    newShape = rotateY(originalShape, direction);
-                    break;
-                case 'z':
-                    newShape = rotateZ(originalShape, direction);
-                    break;
-                default:
-                    return;
-            }
-            
-            if (isValidPosition(
-                currentPiece.position.x, 
-                currentPiece.position.y, 
-                currentPiece.position.z, 
-                newShape
-            )) {
-                currentPiece.piece.shape = newShape;
-                
-                // Remove old visualization
-                scene.remove(pieceObject);
-                
-                // Create new visualization
-                const newPieceGroup = new THREE.Group();
-                
-                for (let z = 0; z < newShape.length; z++) {
-                    for (let y = 0; y < newShape[z].length; y++) {
-                        for (let x = 0; x < newShape[z][y].length; x++) {
-                            if (newShape[z][y][x] === 1) {
-                                const blockGeometry = new THREE.BoxGeometry(
-                                    BLOCK_SIZE * 0.9, 
-                                    BLOCK_SIZE * 0.9, 
-                                    BLOCK_SIZE * 0.9
-                                );
-                                const blockMaterial = new THREE.MeshPhongMaterial({ 
-                                    color: currentPiece.piece.color,
-                                    shininess: 50
-                                });
-                                const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                                
-                                block.position.set(
-                                    x - newShape[z][y].length/2 + 0.5,
-                                    y,
-                                    z - newShape.length/2 + 0.5
-                                );
-                                
-                                newPieceGroup.add(block);
-                            }
-                        }
-                    }
-                }
-                
-                newPieceGroup.position.copy(pieceObject.position);
-                pieceObject = newPieceGroup;
-                scene.add(pieceObject);
-            }
-        }
-        
-        // Rotation helper functions
-        function rotateX(shape, direction) {
-            const depth = shape.length;
-            const height = shape[0].length;
-            const width = shape[0][0].length;
-            
-            const newShape = Array(width).fill().map(() => 
-                Array(depth).fill().map(() => 
-                    Array(height).fill(0)
-                )
-            );
-            
-            for (let z = 0; z < depth; z++) {
-                for (let y = 0; y < height; y++) {
-                    for (let x = 0; x < width; x++) {
-                        if (direction > 0) {
-                            newShape[x][depth-1-z][y] = shape[z][y][x];
-                        } else {
-                            newShape[width-1-x][z][y] = shape[z][y][x];
-                        }
-                    }
-                }
-            }
-            
-            return newShape;
-        }
-        
-        function rotateY(shape, direction) {
-            const depth = shape.length;
-            const height = shape[0].length;
-            const width = shape[0][0].length;
-            
-            const newShape = Array(depth).fill().map(() => 
-                Array(height).fill().map(() => 
-                    Array(width).fill(0)
-                )
-            );
-            
-            for (let z = 0; z < depth; z++) {
-                for (let y = 0; y < height; y++) {
-                    for (let x = 0; x < width; x++) {
-                        if (direction > 0) {
-                            newShape[depth-1-x][y][z] = shape[z][y][x];
-                        } else {
-                            newShape[x][y][depth-1-z] = shape[z][y][x];
-                        }
-                    }
-                }
-            }
-            
-            return newShape;
-        }
-        
-        function rotateZ(shape, direction) {
-            const depth = shape.length;
-            const height = shape[0].length;
-            const width = shape[0][0].length;
-            
-            const newShape = Array(depth).fill().map(() => 
-                Array(width).fill().map(() => 
-                    Array(height).fill(0)
-                )
-            );
-            
-            for (let z = 0; z < depth; z++) {
-                for (let y = 0; y < height; y++) {
-                    for (let x = 0; x < width; x++) {
-                        if (direction > 0) {
-                            newShape[z][x][height-1-y] = shape[z][y][x];
-                        } else {
-                            newShape[z][width-1-x][y] = shape[z][y][x];
-                        }
-                    }
-                }
-            }
-            
-            return newShape;
-        }
-        
-        // Check if position is valid
-        function isValidPosition(x, y, z, shape) {
-            const depth = shape.length;
-            const height = shape[0].length;
-            const width = shape[0][0].length;
-            
-            for (let dz = 0; dz < depth; dz++) {
-                for (let dy = 0; dy < height; dy++) {
-                    for (let dx = 0; dx < width; dx++) {
-                        if (shape[dz][dy][dx] === 1) {
-                            const newX = x + dx;
-                            const newY = y + dy;
-                            const newZ = z + dz;
-                            
-                            // Check boundaries
-                            if (newX < 0 || newX >= GRID_SIZE || 
-                                newY < 0 || newY >= GRID_HEIGHT || 
-                                newZ < 0 || newZ >= GRID_SIZE) {
-                                return false;
-                            }
-                            
-                            // Check collision with locked pieces
-                            if (newY >= 0 && gameGrid[newX][newY][newZ] !== null) {
-                                return false;
-                            }
-                        }
-                    }
-                }
-            }
-            
-            return true;
-        }
-        
-        // Lock piece in place
-        function lockPiece() {
-            const shape = currentPiece.piece.shape;
-            const {x, y, z} = currentPiece.position;
-            
-            for (let dz = 0; dz < shape.length; dz++) {
-                for (let dy = 0; dy < shape[dz].length; dy++) {
-                    for (let dx = 0; dx < shape[dz][dy].length; dx++) {
-                        if (shape[dz][dy][dx] === 1) {
-                            const newX = x + dx;
-                            const newY = y + dy;
-                            const newZ = z + dz;
-                            
-                            if (newY >= 0) {
-                                gameGrid[newX][newY][newZ] = currentPiece.piece.color;
-                                
-                                // Create visual block
-                                const blockGeometry = new THREE.BoxGeometry(
-                                    BLOCK_SIZE * 0.9, 
-                                    BLOCK_SIZE * 0.9, 
-                                    BLOCK_SIZE * 0.9
-                                );
-                                const blockMaterial = new THREE.MeshPhongMaterial({ 
-                                    color: currentPiece.piece.color,
-                                    shininess: 50
-                                });
-                                const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                                
-                                block.position.set(newX, newY, newZ);
-                                scene.add(block);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        
-        // Clear completed lines
-        function clearLines() {
-            let linesCleared = 0;
-            
-            // Check each layer in the Y direction
-            for (let y = 0; y < GRID_HEIGHT; y++) {
-                let layerFull = true;
-                
-                // Check if layer is full
-                for (let x = 0; x < GRID_SIZE; x++) {
-                    for (let z = 0; z < GRID_SIZE; z++) {
-                        if (gameGrid[x][y][z] === null) {
-                            layerFull = false;
-                            break;
-                        }
-                    }
-                    if (!layerFull) break;
-                }
-                
-                // Clear layer if full
-                if (layerFull) {
-                    linesCleared++;
-                    
-                    // Remove visual blocks
-                    const objectsToRemove = [];
-                    scene.traverse((obj) => {
-                        if (obj.isMesh && obj.position.y === y) {
-                            objectsToRemove.push(obj);
-                        }
-                    });
-                    
-                    objectsToRemove.forEach(obj => scene.remove(obj));
-                    
-                    // Move blocks above down
-                    for (let y2 = y; y2 < GRID_HEIGHT - 1; y2++) {
-                        for (let x = 0; x < GRID_SIZE; x++) {
-                            for (let z = 0; z < GRID_SIZE; z++) {
-                                gameGrid[x][y2][z] = gameGrid[x][y2+1][z];
-                            }
-                        }
-                    }
-                    
-                    // Clear top layer
-                    for (let x = 0; x < GRID_SIZE; x++) {
-                        for (let z = 0; z < GRID_SIZE; z++) {
-                            gameGrid[x][GRID_HEIGHT-1][z] = null;
-                        }
-                    }
-                    
-                    // Move visual blocks down
-                    scene.traverse((obj) => {
-                        if (obj.isMesh && obj.position.y > y) {
-                            obj.position.y -= 1;
-                        }
-                    });
-                    
-                    // Recheck same layer
-                    y--;
-                }
-            }
-            
-            // Update score
-            if (linesCleared > 0) {
-                score += linesCleared * 100;
-                document.getElementById('score').textContent = `Score: ${score}`;
-                
-                // Increase speed slightly
-                dropInterval = Math.max(100, dropInterval - linesCleared * 20);
-            }
-        }
-        
-        // Hard drop
-        function hardDrop() {
-            if (!currentPiece || gameOver) return;
-            
-            while (movePiece(0, -1, 0)) {
-                // Keep moving down until it can't
-            }
-        }
-        
-        // End game
-        function endGame() {
-            gameOver = true;
-            document.getElementById('gameOver').style.display = 'flex';
-        }
-        
-        // Restart game
-        function restartGame() {
-            // Clear scene of blocks
-            const objectsToRemove = [];
-            scene.traverse((obj) => {
-                if (obj.isMesh && obj !== board && obj !== gridHelper) {
-                    objectsToRemove.push(obj);
-                }
-            });
-            
-            objectsToRemove.forEach(obj => scene.remove(obj));
-            
-            // Reset game state
-            gameGrid = create3DGrid();
-            score = 0;
-            gameOver = false;
-            dropInterval = 1000;
-            
-            document.getElementById('score').textContent = `Score: ${score}`;
-            document.getElementById('gameOver').style.display = 'none';
-            
-            // Add first piece
-            addPieceToScene();
-        }
-        
-        // Keyboard controls
-        document.addEventListener('keydown', (event) => {
-            if (gameOver) return;
-            
-            switch(event.key) {
-                case 'ArrowLeft':
-                    movePiece(-1, 0, 0);
-                    break;
-                case 'ArrowRight':
-                    movePiece(1, 0, 0);
-                    break;
-                case 'ArrowDown':
-                    movePiece(0, -1, 0);
-                    break;
-                case 'ArrowUp':
-                    rotatePiece('y', 1);
-                    break;
-                case 'q':
-                case 'Q':
-                    rotatePiece('x', -1);
-                    break;
-                case 'e':
-                case 'E':
-                    rotatePiece('x', 1);
-                    break;
-                case ' ':
-                    hardDrop();
-                    break;
-            }
-        });
-        
-        // Restart button
-        document.getElementById('restartButton').addEventListener('click', restartGame);
-        
-        // Window resize handler
+        // Handle window resize
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
@@ -694,27 +100,14 @@
         });
         
         // Animation loop
-        function animate(time) {
+        function animate() {
             requestAnimationFrame(animate);
-            
-            const deltaTime = time - lastTime;
-            lastTime = time;
-            
-            if (!gameOver) {
-                dropCounter += deltaTime;
-                if (dropCounter > dropInterval) {
-                    movePiece(0, -1, 0);
-                    dropCounter = 0;
-                }
-            }
-            
             controls.update();
             renderer.render(scene, camera);
         }
         
-        // Start the game
-        addPieceToScene();
-        animate(0);
+        // Start animation
+        animate();
     </script>
 </body>
 </html>
