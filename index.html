@@ -1,143 +1,59 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <title>AR Wireframe Wormhole</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <style>
-        body { margin: 0; }
-        .ar-button {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #000;
-            color: #fff;
-            padding: 15px 30px;
-            font-size: 1.5em;
-            border: 2px solid #fff;
-            border-radius: 5px;
-            cursor: pointer;
-            font-family: sans-serif;
-            z-index: 1000;
-        }
-    </style>
-</head>
-<body>
-    <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/libs/webxr-polyfill.js"></script>
-    <script src="https://unpkg.com/three@0.128.0/examples/js/webxr/ARButton.js"></script>
-    <script>
-        let container;
-        let camera, scene, renderer;
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <title>VR Wormhole</title>
+  </head>
+  <body>
+    <a-scene background="color: #000000">
+      <!-- Wormhole tunnel using torus knots -->
+      <a-entity id="wormhole" 
+                geometry="primitive: torusKnot; radius: 5; radiusTubular: 0.5; p: 3; q: 7"
+                material="shader: standard; 
+                          color: #5d00ff; 
+                          emissive: #5d00ff; 
+                          emissiveIntensity: 0.5; 
+                          metalness: 0.8; 
+                          roughness: 0.2"
+                position="0 1.6 -5"
+                scale="1 1 3"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 10000; easing: linear">
+      </a-entity>
 
-        init();
-        animate();
+      <!-- Particle flow effect -->
+      <a-entity particle-system="preset: dust;
+                                color: #5d00ff, #00ffff;
+                                particleCount: 1000;
+                                velocityValue: 0 0 -5;
+                                accelerationValue: 0 0 0;
+                                size: 0.1;
+                                opacity: 0.8;
+                                maxAge: 5">
+      </a-entity>
 
-        function init() {
-            container = document.createElement('div');
-            document.body.appendChild(container);
+      <!-- Camera with slight movement -->
+      <a-entity id="cameraRig" position="0 1.6 0">
+        <a-entity camera look-controls>
+          <a-entity 
+            animation="property: rotation;
+                      to: -5 0 0;
+                      dir: alternate;
+                      dur: 4000;
+                      loop: true;
+                      easing: easeInOutSine">
+          </a-entity>
+        </a-entity>
+      </a-entity>
 
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputEncoding = THREE.sRGBEncoding;
-            renderer.xr.enabled = true;
-            container.appendChild(renderer.domElement);
-
-            document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-            const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-            light.position.set(0.5, 1, 0.25);
-            scene.add(light);
-
-            // A helper to show where the AR plane is detected
-            let controller = renderer.xr.getController(0);
-            const geometry = new THREE.CylinderBufferGeometry(0.1, 0.1, 0.2, 32).translate(0, -0.1, 0);
-            function onSelect() {
-                if (reticle.visible) {
-                    // Create the wormhole when the user "taps" on a detected surface
-                    const wormhole = createWormhole();
-                    wormhole.position.copy(reticle.position);
-                    scene.add(wormhole);
-                }
-            }
-            controller.addEventListener('select', onSelect);
-            scene.add(controller);
-
-            // Reticle to show where the object will be placed
-            const reticle = new THREE.Mesh(
-                new THREE.RingGeometry(0.15, 0.2, 32).rotateX(-Math.PI / 2),
-                new THREE.MeshBasicMaterial()
-            );
-            reticle.matrixAutoUpdate = false;
-            reticle.visible = false;
-            scene.add(reticle);
-
-            // This is the main part of the code that will update the position of the reticle
-            renderer.setAnimationLoop(() => {
-                if (renderer.xr.isPresenting) {
-                    const session = renderer.xr.getSession();
-                    session.requestAnimationFrame((time, frame) => {
-                        const hitTestResults = frame.getHitTestResultsForTransientInput({ profile: 'generic-touch' });
-                        if (hitTestResults.length > 0) {
-                            reticle.visible = true;
-                            reticle.matrix.fromArray(hitTestResults[0].results[0].getPose(renderer.xr.getReferenceSpace()).transform.matrix);
-                        } else {
-                            reticle.visible = false;
-                        }
-                    });
-                }
-                renderer.render(scene, camera);
-            });
-
-            window.addEventListener('resize', onWindowResize, false);
-        }
-
-        // Function to create the wormhole
-        function createWormhole() {
-            // A custom path for the wormhole shape
-            const CustomWormholeCurve = THREE.Curve.create(
-                function () { },
-                function (t) {
-                    const tx = Math.sin(t * Math.PI * 2) * 2;
-                    const ty = Math.cos(t * Math.PI * 2) * 2;
-                    const tz = t * 10;
-                    return new THREE.Vector3(tx, ty, tz);
-                }
-            );
-
-            const path = new CustomWormholeCurve();
-            const geometry = new THREE.TubeGeometry(path, 64, 0.5, 8, false);
-            const material = new THREE.MeshBasicMaterial({ color: 0xff00ff, wireframe: true });
-            const wormhole = new THREE.Mesh(geometry, material);
-
-            // Animate the wormhole rotation
-            function animateWormhole() {
-                wormhole.rotation.z += 0.01;
-                requestAnimationFrame(animateWormhole);
-            }
-            animateWormhole();
-            
-            return wormhole;
-        }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function animate() {
-            renderer.setAnimationLoop(render);
-        }
-
-        function render() {
-            renderer.render(scene, camera);
-        }
-    </script>
-</body>
+      <!-- Environment stars -->
+      <a-entity 
+        geometry="primitive: sphere; radius: 50; segmentsWidth: 64; segmentsHeight: 64"
+        material="shader: flat; color: #000000; side: back"
+        particle-system="preset: stars;
+                        color: #ffffff;
+                        particleCount: 2000;
+                        size: 1">
+      </a-entity>
+    </a-scene>
+  </body>
 </html>
