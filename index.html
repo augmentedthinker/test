@@ -952,9 +952,7 @@
                 }
             }
             
-            // Update visual locked blocks
-            updateLockedBlocks();
-            
+            // Don't update visual blocks yet - do it after line clearing
             checkLines();
             
             // Delay before creating next piece to allow for line clear animation
@@ -963,7 +961,7 @@
                     createPiece();
                     lastFallTime = performance.now();
                 }
-            }, 300);
+            }, 500);
         }
         
         function checkLines() {
@@ -998,12 +996,11 @@
                 }
                 
                 updateScoreDisplay();
-                
-                // Update locked blocks after line clearing
-                setTimeout(() => {
-                    updateLockedBlocks();
-                }, 200);
+                console.log(`${linesClearedNow} lines cleared! New score: ${score}`);
             }
+            
+            // Always update visual blocks after checking lines (whether cleared or not)
+            updateLockedBlocks();
         }
         
         function createLineClearEffect(row) {
