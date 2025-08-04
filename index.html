@@ -2,43 +2,13 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Tetris with AR Controls</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AR Screen with Wormhole Interaction</title>
     <style>
-        body { 
-            margin: 0; 
-            overflow: hidden; 
-            background: #111;
-            font-family: Arial, sans-serif;
-        }
-        #info {
-            position: absolute;
-            top: 20px;
-            width: 100%;
-            text-align: center;
-            color: white;
-            font-size: 24px;
-            pointer-events: none;
-            z-index: 100;
-            text-shadow: 1px 1px 2px black;
-        }
-        #instructions {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            text-align: center;
-            color: #aaa;
-            font-size: 16px;
-            pointer-events: none;
-            z-index: 100;
-            text-shadow: 1px 1px 2px black;
-        }
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
 </head>
 <body>
-    <div id="info">3D TETRIS CONTROLS</div>
-    <div id="instructions">START AR to see controllers | Point at buttons to interact</div>
-
     <script type="importmap">
         {
             "imports": {
@@ -47,12 +17,11 @@
             }
         }
     </script>
-
     <script type="module">
         import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- AR Button Setup (from your example) ---
+        // --- Minimal AR Button ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
@@ -66,8 +35,6 @@
                         currentSession = session;
                         if (currentSession) {
                             setupControllers();
-                            createGameBoard();
-                            createGamepad();
                         }
                     }
                     function onSessionEnded() {
@@ -78,8 +45,12 @@
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        if (gameBoard) scene.remove(gameBoard);
-                        if (gamepadGroup) scene.remove(gamepadGroup);
+                        if (wormholeGroup) scene.remove(wormholeGroup);
+                        // Clean up any remaining pulse spheres
+                        for (let i = pulseSpheres.length - 1; i >= 0; i--) {
+                            scene.remove(pulseSpheres[i].mesh);
+                        }
+                        pulseSpheres.length = 0;
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -110,47 +81,37 @@
         }
 
         // --- Core Three.js Setup ---
-        let camera, scene, renderer;
+        let camera, scene, renderer, wormholeGroup;
         let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
-        let gameBoard;
-        let gamepadGroup;
-        
+
+        // --- Controller & Laser Variables ---
+        const pointers = [];
+        const tempMatrix = new THREE.Matrix4();
+        const raycaster = new THREE.Raycaster();
+
+        // --- Pulse Sphere Variables ---
+        const pulseSpheres = []; // Array to hold active pulse spheres
+        const PULSE_DURATION = 1000; // ms
+
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x111111);
-        
         camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        camera.position.set(0, 1.6, 3);
-        
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-        scene.add(ambientLight);
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(5, 10, 7);
-        scene.add(directionalLight);
+        const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
+        scene.add(light);
 
-        // --- Game Constants ---
-        const BOARD_WIDTH = 10;
-        const BOARD_HEIGHT = 20;
-        const CELL_SIZE = 0.1;
-
-        // --- Gamepad Elements ---
-        let dpadUp, dpadDown, dpadLeft, dpadRight;
-        let buttonA, buttonB;
-        let gamepadElements = [];
-
-        // --- Controller Setup (from your example) ---
+        // --- Controller Setup ---
         function setupControllers() {
             controller1 = renderer.xr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
             scene.add(controller1);
             controller2 = renderer.xr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
             scene.add(controller2);
             controllerGrip1 = renderer.xr.getControllerGrip(0);
             scene.add(controllerGrip1);
@@ -161,216 +122,134 @@
             controllerGrip1.add(controllerModel1);
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
-            setupLaserPointer(controller1);
-            setupLaserPointer(controller2);
-            controller1.addEventListener('selectstart', onControllerSelectStart);
-            controller2.addEventListener('selectstart', onControllerSelectStart);
-            controller1.addEventListener('selectend', onControllerSelectEnd);
-            controller2.addEventListener('selectend', onControllerSelectEnd);
+            setupLaserPointer(controller1, 0);
+            setupLaserPointer(controller2, 1);
         }
 
-        function setupLaserPointer(controller) {
+        function setupLaserPointer(controller, index) {
             const geometry = new THREE.BufferGeometry();
             geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            const material = new THREE.LineBasicMaterial({ 
-                color: 0x00ffff, 
-                transparent: true, 
-                opacity: 0.7,
-                linewidth: 2
-            });
+            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
             const line = new THREE.Line(geometry, material);
             line.scale.z = 5;
             line.visible = false;
             controller.add(line);
+            pointers[index] = { controller: controller, line: line };
             controller.addEventListener('connected', function () { line.visible = true; });
             controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
-        // --- Game Board Creation ---
-        function createGameBoard() {
-            if (gameBoard) scene.remove(gameBoard);
-            gameBoard = new THREE.Group();
-            
-            // Create a 3D grid
-            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
-            
-            // Vertical lines
-            for (let x = 0; x <= BOARD_WIDTH; x++) {
-                const points = [];
-                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
-                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const line = new THREE.Line(geometry, gridMaterial);
-                gameBoard.add(line);
-            }
-            
-            // Horizontal lines
-            for (let y = 0; y <= BOARD_HEIGHT; y++) {
-                const points = [];
-                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
-                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const line = new THREE.Line(geometry, gridMaterial);
-                gameBoard.add(line);
-            }
-            
-            // Add some depth lines to show 3D nature
-            for (let z = -2; z <= 2; z++) {
-                const points = [];
-                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, 0, z * CELL_SIZE));
-                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, 0, z * CELL_SIZE));
-                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, z * CELL_SIZE));
-                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, z * CELL_SIZE));
-                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, 0, z * CELL_SIZE));
-                const geometry = new THREE.BufferGeometry().setFromPoints(points);
-                const line = new THREE.Line(geometry, gridMaterial);
-                gameBoard.add(line);
-            }
-            
-            gameBoard.position.set(0, 1.6, -2);
-            scene.add(gameBoard);
-            
-            // Add some sample 3D tetrominoes
-            const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff];
-            for (let i = 0; i < 5; i++) {
-                const blockGeometry = new THREE.BoxGeometry(CELL_SIZE * 0.9, CELL_SIZE * 0.9, CELL_SIZE * 0.9);
-                const blockMaterial = new THREE.MeshPhongMaterial({ color: colors[i] });
-                const block = new THREE.Mesh(blockGeometry, blockMaterial);
-                block.position.set(
-                    (i - 2) * CELL_SIZE * 2,  // Spread horizontally
-                    -5 * CELL_SIZE,           // Position in middle of board
-                    (i % 3 - 1) * CELL_SIZE   // Spread in depth
-                );
-                gameBoard.add(block);
-            }
-        }
-
-        // --- Gamepad Creation (from your example) ---
-        function createGamepad() {
-            if (gamepadGroup) scene.remove(gamepadGroup);
-            gamepadGroup = new THREE.Group();
-            const SCALE_FACTOR = 2.0;
-            const gamepadZOffset = 0.05;
-            
-            // Base plate
-            const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
-            const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
-            const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
-            gamepadBase.position.set(0, 0, 0);
-            gamepadGroup.add(gamepadBase);
-            
-            // D-Pad
-            const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-            const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
-            dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(dpadCenter);
-            
-            const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            
-            // Up
-            dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-            dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(dpadUp);
-            gamepadElements.push(dpadUp);
-            
-            // Down
-            dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-            dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(dpadDown);
-            gamepadElements.push(dpadDown);
-            
-            // Left
-            const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
-            dpadLeft.rotation.z = Math.PI / 2;
-            dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(dpadLeft);
-            gamepadElements.push(dpadLeft);
-            
-            // Right
-            const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
-            dpadRight.rotation.z = Math.PI / 2;
-            dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(dpadRight);
-            gamepadElements.push(dpadRight);
-            
-            // Buttons A and B
-            const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
-            const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-            buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
-            buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(buttonA);
-            gamepadElements.push(buttonA);
-            
-            const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-            buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
-            buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-            gamepadGroup.add(buttonB);
-            gamepadElements.push(buttonB);
-            
-            gamepadGroup.position.set(0, 1.6 - 2.2, -2);
-            scene.add(gamepadGroup);
-        }
-
-        // --- Controller Interaction (from your example) ---
-        function onControllerSelectStart(event) {
+        function onSelectStart(event) {
             const controller = event.target;
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.extractRotation(controller.matrixWorld);
-            const raycaster = new THREE.Raycaster();
+            const index = controller === controller1 ? 0 : 1;
+            checkAndInteract(controller);
+        }
+
+        function checkAndInteract(controller) {
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            const intersects = raycaster.intersectObjects(gamepadElements);
-            
-            if (intersects.length > 0) {
-                const object = intersects[0].object;
-                
-                // Highlight button when pressed
-                if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
-                    object.material.color.set(0xffffff);
-                } else if (object === buttonA) {
-                    object.material.color.set(0xff6666);
-                } else if (object === buttonB) {
-                    object.material.color.set(0x6666ff);
-                }
-                
-                // Handle button actions
-                if (object === dpadLeft) {
-                    console.log("Moving piece left");
-                    // In a full game, this would move the tetromino left
-                } else if (object === dpadRight) {
-                    console.log("Moving piece right");
-                    // In a full game, this would move the tetromino right
-                } else if (object === buttonA) {
-                    console.log("Rotating piece");
-                    // In a full game, this would rotate the tetromino
-                } else if (object === dpadDown) {
-                    console.log("Fast drop");
-                    // In a full game, this would drop the tetromino faster
+            // Check intersection only with the wormhole
+            if (wormholeGroup) {
+                const intersects = raycaster.intersectObject(wormholeGroup, true);
+                if (intersects.length > 0) {
+                    const point = intersects[0].point;
+                    createPulseSphere(point);
                 }
             }
         }
 
-        function onControllerSelectEnd(event) {
-            // Reset button colors when released
-            dpadUp.material.color.set(0x888888);
-            dpadDown.material.color.set(0x888888);
-            dpadLeft.material.color.set(0x888888);
-            dpadRight.material.color.set(0x888888);
-            buttonA.material.color.set(0xff0000);
-            buttonB.material.color.set(0x0000ff);
+        function createPulseSphere(position) {
+            const geometry = new THREE.SphereGeometry(0.03, 16, 16);
+            const material = new THREE.MeshBasicMaterial({
+                color: 0x00ffff,
+                transparent: true,
+                opacity: 0.8
+            });
+            const sphere = new THREE.Mesh(geometry, material);
+            sphere.position.copy(position);
+            scene.add(sphere);
+            const startTime = performance.now();
+            pulseSpheres.push({ mesh: sphere, startTime: startTime });
         }
 
-        // --- Animation Loop ---
-        function animate() {
-            requestAnimationFrame(animate);
-            renderer.render(scene, camera);
+        function updatePulseSpheres() {
+            const currentTime = performance.now();
+            for (let i = pulseSpheres.length - 1; i >= 0; i--) {
+                const pulse = pulseSpheres[i];
+                const elapsed = currentTime - pulse.startTime;
+                const progress = Math.min(elapsed / PULSE_DURATION, 1.0);
+                if (progress >= 1.0) {
+                    scene.remove(pulse.mesh);
+                    pulseSpheres.splice(i, 1);
+                } else {
+                    // Scale up and fade out
+                    const scale = 1.0 + progress * 3.0;
+                    pulse.mesh.scale.set(scale, scale, scale);
+                    pulse.mesh.material.opacity = 0.8 * (1.0 - progress);
+                }
+            }
         }
-        
-        // Start animation
-        animate();
+
+        function updateLasers() {
+            for (let i = 0; i < pointers.length; i++) {
+                const pointer = pointers[i];
+                if (!pointer || !pointer.controller || !pointer.controller.visible) continue;
+                // Lasers are always visible and extend, no need to update length unless hitting something
+            }
+        }
+
+        // --- Wormhole Creation Logic ---
+        function createWormhole() {
+            if (wormholeGroup) scene.remove(wormholeGroup);
+
+            // Create a torus knot for the wormhole
+            const wormholeGeometry = new THREE.TorusKnotGeometry(0.5, 0.2, 100, 16, 2, 3);
+            const wormholeMaterial = new THREE.MeshStandardMaterial({
+                color: 0x00ffff,
+                wireframe: true,
+                transparent: true,
+                opacity: 0.8
+            });
+
+            const wormholeMesh = new THREE.Mesh(wormholeGeometry, wormholeMaterial);
+            wormholeMesh.position.set(0, 0, -1.5);
+
+            // Add some particles for depth
+            const particleGeometry = new THREE.Geometry();
+            for (let i = 0; i < 1000; i++) {
+                const particle = new THREE.Vector3(
+                    Math.random() * 4 - 2,
+                    Math.random() * 4 - 2,
+                    Math.random() * 4 - 2
+                ).multiplyScalar(Math.random() * 0.5 + 0.5);
+                particleGeometry.vertices.push(particle);
+            }
+            const particleMaterial = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: 0.01,
+                transparent: true,
+                opacity: 0.5
+            });
+            const particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+            particleSystem.position.set(0, 0, -1.5);
+
+            wormholeGroup = new THREE.Group();
+            wormholeGroup.add(wormholeMesh);
+            wormholeGroup.add(particleSystem);
+            scene.add(wormholeGroup);
+
+            console.log("AR Wormhole with interaction created");
+        }
+
+        renderer.xr.addEventListener('sessionstart', createWormhole);
+
+        // --- Animation Loop ---
+        renderer.setAnimationLoop(() => {
+            updateLasers();
+            updatePulseSpheres();
+            renderer.render(scene, camera);
+        });
     </script>
 </body>
 </html>
