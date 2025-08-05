@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Enhanced AR Tetris - Glass Blocks & Particles</title>
+    <title>Enhanced AR Tetris - Glass Blocks & NES Controller</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -21,6 +21,7 @@
  
        import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
         // --- AR Button Setup ---
         class ARButton {
@@ -483,7 +484,8 @@
             return Math.max(50, 1000 - (level - 1) * 100);
         }
 
-        // --- Gamepad Elements ---
+        // --- NES Controller Elements ---
+        let nesController = null;
         let dpadUp, dpadDown, dpadLeft, dpadRight;
         let buttonA, buttonB;
         let gamepadElements = [];
@@ -565,69 +567,93 @@
             console.log("Enhanced AR Tetris board created with particle system and UI");
         }
 
-        // --- Gamepad Creation ---
+        // --- NES Controller Creation ---
         function createGamepad() {
-             if (gamepadGroup) scene.remove(gamepadGroup);
-             gamepadGroup = new THREE.Group();
+            if (gamepadGroup) scene.remove(gamepadGroup);
+            gamepadGroup = new THREE.Group();
 
-             const SCALE_FACTOR = 2.0;
-             const gamepadZOffset = 0.05;
-             // Base plate
-             const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
-             const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
-             const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
-             gamepadBase.position.set(0, 0, 0);
-             gamepadGroup.add(gamepadBase);
+            // Load the NES controller GLB model
+            const loader = new GLTFLoader();
+            loader.load(
+                'https://github.com/augmentedthinker/test/blob/main/nintendo_nes_controller.glb?raw=true',
+                function (gltf) {
+                    nesController = gltf.scene;
+                    
+                    // Scale and position the controller
+                    nesController.scale.set(0.3, 0.3, 0.3);
+                    nesController.position.set(0, 0, 0);
+                    
+                    // Add the controller to the gamepad group
+                    gamepadGroup.add(nesController);
+                    
+                    // Create invisible interaction zones for the buttons
+                    createControllerInteractionZones();
+                    
+                    console.log("NES Controller loaded successfully");
+                },
+                function (progress) {
+                    console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
+                },
+                function (error) {
+                    console.error('Error loading NES controller:', error);
+                    // Fallback to basic gamepad if model fails to load
+                    createBasicGamepad();
+                }
+            );
 
-             // D-Pad
-             const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
-             const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-             const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
-             dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(dpadCenter);
-             const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-             // Up
-             dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-             dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(dpadUp);
-             gamepadElements.push(dpadUp);
-             // Down
-             dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
-             dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(dpadDown);
-             gamepadElements.push(dpadDown);
-             // Left
-             const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-             dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
-             dpadLeft.rotation.z = Math.PI / 2;
-             dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(dpadLeft);
-             gamepadElements.push(dpadLeft);
+            // Position the gamepad below the board
+            gamepadGroup.position.set(0, 1.6 - 2.2, -2);
+            scene.add(gamepadGroup);
+            console.log("NES Controller gamepad setup initiated");
+        }
+        
+        function createControllerInteractionZones() {
+            // Create invisible collision boxes for the NES controller buttons
+            // These positions are approximated for a typical NES controller layout
+            
+            // D-Pad collision zones
+            const dpadMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xff0000, 
+                transparent: true, 
+                opacity: 0.0 // Invisible but still detectable
+            });
+            
+            // D-Pad Up
+            const dpadUpGeometry = new THREE.BoxGeometry(0.04, 0.04, 0.02);
+            dpadUp = new THREE.Mesh(dpadUpGeometry, dpadMaterial.clone());
+            dpadUp.position.set(-0.15, 0.05, 0.02); // Adjusted for NES controller
+            gamepadGroup.add(dpadUp);
+            gamepadElements.push(dpadDown);
+            
+            // Left
+            const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
+            dpadLeft.rotation.z = Math.PI / 2;
+            dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(dpadLeft);
+            gamepadElements.push(dpadLeft);
 
-             // Right
-             const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-             dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
-             dpadRight.rotation.z = Math.PI / 2;
-             dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(dpadRight);
-             gamepadElements.push(dpadRight);
+            // Right
+            const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
+            dpadRight.rotation.z = Math.PI / 2;
+            dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(dpadRight);
+            gamepadElements.push(dpadRight);
 
-             // Buttons A and B
-             const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
-             const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-             buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
-             buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(buttonA);
-             gamepadElements.push(buttonA);
-             const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
-             buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
-             buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
-             gamepadGroup.add(buttonB);
-             gamepadElements.push(buttonB);
-
-             gamepadGroup.position.set(0, 1.6 - 2.2, -2);
-             scene.add(gamepadGroup);
-             console.log("Gamepad created below the board");
+            // Buttons A and B
+            const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
+            const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
+            buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(buttonA);
+            gamepadElements.push(buttonA);
+            
+            const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+            buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
+            buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(buttonB);
+            gamepadElements.push(buttonB);
         }
 
         // --- Controller Interaction ---
@@ -643,12 +669,16 @@
             const intersects = raycaster.intersectObjects(gamepadElements);
             if (intersects.length > 0) {
                 const object = intersects[0].object;
-                if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
-                    object.material.color.set(0xffffff);
-                } else if (object === buttonA) {
-                    object.material.color.set(0xff6666);
-                } else if (object === buttonB) {
-                    object.material.color.set(0x6666ff);
+                
+                // Visual feedback for button press (only works with basic gamepad)
+                if (!nesController) {
+                    if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
+                        object.material.color.set(0xffffff);
+                    } else if (object === buttonA) {
+                        object.material.color.set(0xff6666);
+                    } else if (object === buttonB) {
+                        object.material.color.set(0x6666ff);
+                    }
                 }
 
                 if (isPieceActive) {
@@ -670,12 +700,15 @@
         }
 
         function onControllerSelectEnd(event) {
-            dpadUp.material.color.set(0x888888);
-            dpadDown.material.color.set(0x888888);
-            dpadLeft.material.color.set(0x888888);
-            dpadRight.material.color.set(0x888888);
-            buttonA.material.color.set(0xff0000);
-            buttonB.material.color.set(0x0000ff);
+            // Reset button colors (only for basic gamepad)
+            if (!nesController && gamepadElements.length > 0) {
+                if (dpadUp && dpadUp.material) dpadUp.material.color.set(0x888888);
+                if (dpadDown && dpadDown.material) dpadDown.material.color.set(0x888888);
+                if (dpadLeft && dpadLeft.material) dpadLeft.material.color.set(0x888888);
+                if (dpadRight && dpadRight.material) dpadRight.material.color.set(0x888888);
+                if (buttonA && buttonA.material) buttonA.material.color.set(0xff0000);
+                if (buttonB && buttonB.material) buttonB.material.color.set(0x0000ff);
+            }
         }
 
         // --- Helper Functions ---
@@ -1019,4 +1052,75 @@
         });
     </script>
 </body>
-</html>
+</html>(dpadUp);
+            
+            // D-Pad Down
+            dpadDown = new THREE.Mesh(dpadUpGeometry, dpadMaterial.clone());
+            dpadDown.position.set(-0.15, -0.05, 0.02);
+            gamepadGroup.add(dpadDown);
+            gamepadElements.push(dpadDown);
+            
+            // D-Pad Left
+            dpadLeft = new THREE.Mesh(dpadUpGeometry, dpadMaterial.clone());
+            dpadLeft.position.set(-0.2, 0, 0.02);
+            gamepadGroup.add(dpadLeft);
+            gamepadElements.push(dpadLeft);
+            
+            // D-Pad Right
+            dpadRight = new THREE.Mesh(dpadUpGeometry, dpadMaterial.clone());
+            dpadRight.position.set(-0.1, 0, 0.02);
+            gamepadGroup.add(dpadRight);
+            gamepadElements.push(dpadRight);
+            
+            // A and B buttons
+            const buttonGeometry = new THREE.SphereGeometry(0.02, 8, 8);
+            
+            // B Button (left button on NES controller)
+            buttonB = new THREE.Mesh(buttonGeometry, dpadMaterial.clone());
+            buttonB.position.set(0.1, -0.02, 0.02);
+            gamepadGroup.add(buttonB);
+            gamepadElements.push(buttonB);
+            
+            // A Button (right button on NES controller)
+            buttonA = new THREE.Mesh(buttonGeometry, dpadMaterial.clone());
+            buttonA.position.set(0.15, -0.02, 0.02);
+            gamepadGroup.add(buttonA);
+            gamepadElements.push(buttonA);
+            
+            console.log("NES Controller interaction zones created");
+        }
+        
+        function createBasicGamepad() {
+            // Fallback basic gamepad if GLB model fails to load
+            console.log("Creating fallback basic gamepad");
+            
+            const SCALE_FACTOR = 2.0;
+            const gamepadZOffset = 0.05;
+            
+            // Base plate
+            const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+            const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
+            const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
+            gamepadBase.position.set(0, 0, 0);
+            gamepadGroup.add(gamepadBase);
+
+            // D-Pad
+            const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+            const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
+            dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(dpadCenter);
+            
+            const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            
+            // Up
+            dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
+            dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(dpadUp);
+            gamepadElements.push(dpadUp);
+            
+            // Down
+            dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
+            dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+            gamepadGroup.add(dpadDown);
+            gamepadElements.push
