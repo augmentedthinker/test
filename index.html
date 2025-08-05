@@ -572,15 +572,22 @@
             if (gamepadGroup) scene.remove(gamepadGroup);
             gamepadGroup = new THREE.Group();
 
+            // Position the gamepad below the board first
+            gamepadGroup.position.set(0, 1.6 - 2.2, -2);
+            scene.add(gamepadGroup);
+
             // Load the NES controller GLB model
             const loader = new GLTFLoader();
+            console.log("Attempting to load NES controller...");
+            
             loader.load(
-                'https://github.com/augmentedthinker/test/blob/main/nintendo_nes_controller.glb?raw=true',
+                'https://raw.githubusercontent.com/augmentedthinker/test/main/nintendo_nes_controller.glb',
                 function (gltf) {
+                    console.log("NES Controller loaded successfully!");
                     nesController = gltf.scene;
                     
                     // Scale and position the controller
-                    nesController.scale.set(0.3, 0.3, 0.3);
+                    nesController.scale.set(0.5, 0.5, 0.5);
                     nesController.position.set(0, 0, 0);
                     
                     // Add the controller to the gamepad group
@@ -588,22 +595,18 @@
                     
                     // Create invisible interaction zones for the buttons
                     createControllerInteractionZones();
-                    
-                    console.log("NES Controller loaded successfully");
                 },
                 function (progress) {
                     console.log('Loading progress:', (progress.loaded / progress.total * 100) + '%');
                 },
                 function (error) {
                     console.error('Error loading NES controller:', error);
+                    console.log('Falling back to basic gamepad...');
                     // Fallback to basic gamepad if model fails to load
                     createBasicGamepad();
                 }
             );
 
-            // Position the gamepad below the board
-            gamepadGroup.position.set(0, 1.6 - 2.2, -2);
-            scene.add(gamepadGroup);
             console.log("NES Controller gamepad setup initiated");
         }
         
