@@ -56,6 +56,7 @@
                         if (gameBoard) scene.remove(gameBoard);
                         if (gamepadGroup) scene.remove(gamepadGroup);
                         if (particleSystem) scene.remove(particleSystem);
+                        if (uiPanel) scene.remove(uiPanel);
                     }
                     button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
                         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -300,6 +301,187 @@
         let currentPieceType = null;
         let currentPieceRotation = 0;
         let currentShape = [];
+        
+        // --- Scoring System ---
+        let score = 0;
+        let level = 1;
+        let totalLinesCleared = 0;
+        let dropScore = 0; // Points for soft/hard drops
+        
+        // Classic Tetris scoring values
+        const SCORING = {
+            SINGLE_LINE: 40,
+            DOUBLE_LINE: 100,
+            TRIPLE_LINE: 300,
+            TETRIS: 1200,
+            SOFT_DROP: 1,
+            HARD_DROP: 2
+        };
+        
+        // UI Elements
+        let uiPanel = null;
+        let scoreText = null;
+        let levelText = null;
+        let linesText = null;
+
+        // --- 3D UI Creation ---
+        function createUIPanel() {
+            if (uiPanel) scene.remove(uiPanel);
+            uiPanel = new THREE.Group();
+            
+            // Panel background
+            const panelGeometry = new THREE.PlaneGeometry(1.2, 1.5);
+            const panelMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x1a1a2e,
+                transparent: true,
+                opacity: 0.9,
+                roughness: 0.3,
+                metalness: 0.1,
+                clearcoat: 0.8,
+                clearcoatRoughness: 0.2
+            });
+            const panelBackground = new THREE.Mesh(panelGeometry, panelMaterial);
+            uiPanel.add(panelBackground);
+            
+            // Title
+            const titleCanvas = createTextCanvas('TETRIS AR', 64, '#00ffff', '#1a1a2e');
+            const titleTexture = new THREE.CanvasTexture(titleCanvas);
+            const titleMaterial = new THREE.MeshBasicMaterial({ map: titleTexture, transparent: true });
+            const titleGeometry = new THREE.PlaneGeometry(0.8, 0.2);
+            const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
+            titleMesh.position.set(0, 0.6, 0.01);
+            uiPanel.add(titleMesh);
+            
+            // Score display
+            scoreText = createTextDisplay('SCORE: 0', 0, 0.3, '#ffff00');
+            uiPanel.add(scoreText);
+            
+            // Level display
+            levelText = createTextDisplay('LEVEL: 1', 0, 0, '#ff6600');
+            uiPanel.add(levelText);
+            
+            // Lines cleared display
+            linesText = createTextDisplay('LINES: 0', 0, -0.3, '#00ff00');
+            uiPanel.add(linesText);
+            
+            // Position the UI panel to the right of the game board
+            uiPanel.position.set(1.5, 1.6, -2);
+            scene.add(uiPanel);
+            
+            console.log("3D UI Panel created");
+        }
+        
+        function createTextCanvas(text, fontSize, textColor, backgroundColor) {
+            const canvas = document.createElement('canvas');
+            const context = canvas.getContext('2d');
+            
+            // Set canvas size
+            canvas.width = 512;
+            canvas.height = 128;
+            
+            // Fill background
+            context.fillStyle = backgroundColor;
+            context.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Set text properties
+            context.font = `bold ${fontSize}px Arial`;
+            context.fillStyle = textColor;
+            context.textAlign = 'center';
+            context.textBaseline = 'middle';
+            
+            // Add text shadow for better visibility
+            context.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            context.shadowOffsetX = 2;
+            context.shadowOffsetY = 2;
+            context.shadowBlur = 4;
+            
+            // Draw text
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
+            
+            return canvas;
+        }
+        
+        function createTextDisplay(text, x, y, color) {
+            const canvas = createTextCanvas(text, 32, color, 'rgba(26, 26, 46, 0.8)');
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const geometry = new THREE.PlaneGeometry(0.8, 0.15);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, 0.01);
+            return mesh;
+        }
+        
+        function updateUIDisplay() {
+            // Update score text
+            if (scoreText) {
+                const canvas = createTextCanvas(`SCORE: ${score.toLocaleString()}`, 32, '#ffff00', 'rgba(26, 26, 46, 0.8)');
+                scoreText.material.map.dispose();
+                scoreText.material.map = new THREE.CanvasTexture(canvas);
+                scoreText.material.needsUpdate = true;
+            }
+            
+            // Update level text
+            if (levelText) {
+                const canvas = createTextCanvas(`LEVEL: ${level}`, 32, '#ff6600', 'rgba(26, 26, 46, 0.8)');
+                levelText.material.map.dispose();
+                levelText.material.map = new THREE.CanvasTexture(canvas);
+                levelText.material.needsUpdate = true;
+            }
+            
+            // Update lines text
+            if (linesText) {
+                const canvas = createTextCanvas(`LINES: ${totalLinesCleared}`, 32, '#00ff00', 'rgba(26, 26, 46, 0.8)');
+                linesText.material.map.dispose();
+                linesText.material.map = new THREE.CanvasTexture(canvas);
+                linesText.material.needsUpdate = true;
+            }
+        }
+        
+        // --- Scoring Functions ---
+        function calculateLineScore(linesCleared) {
+            let baseScore = 0;
+            
+            switch(linesCleared) {
+                case 1:
+                    baseScore = SCORING.SINGLE_LINE;
+                    break;
+                case 2:
+                    baseScore = SCORING.DOUBLE_LINE;
+                    break;
+                case 3:
+                    baseScore = SCORING.TRIPLE_LINE;
+                    break;
+                case 4:
+                    baseScore = SCORING.TETRIS;
+                    break;
+                default:
+                    baseScore = 0;
+            }
+            
+            // Multiply by level for classic Tetris scoring
+            return baseScore * level;
+        }
+        
+        function addScore(points) {
+            score += points;
+            updateUIDisplay();
+            console.log(`Score added: ${points}, Total: ${score}`);
+        }
+        
+        function updateLevel() {
+            const newLevel = Math.floor(totalLinesCleared / 10) + 1;
+            if (newLevel !== level) {
+                level = newLevel;
+                // Increase fall speed with level (classic Tetris)
+                const newFallSpeed = Math.max(50, 1000 - (level - 1) * 100);
+                console.log(`Level up! New level: ${level}, Fall speed: ${newFallSpeed}ms`);
+            }
+        }
+        
+        function getFallSpeed() {
+            // Classic Tetris speed progression
+            return Math.max(50, 1000 - (level - 1) * 100);
+        }
 
         // --- Gamepad Elements ---
         let dpadUp, dpadDown, dpadLeft, dpadRight;
@@ -376,7 +558,11 @@
             
             // Initialize particle system
             initParticleSystem();
-            console.log("Enhanced AR Tetris board created with particle system");
+            
+            // Create UI panel
+            createUIPanel();
+            
+            console.log("Enhanced AR Tetris board created with particle system and UI");
         }
 
         // --- Gamepad Creation ---
@@ -565,9 +751,16 @@
 
         function fastDrop() {
             if (!isPieceActive) return;
+            let dropDistance = 0;
             while (canMoveDown()) {
                 piecePosition.row++;
+                dropDistance++;
             }
+            // Award points for hard drop
+            const hardDropPoints = dropDistance * SCORING.HARD_DROP;
+            addScore(hardDropPoints);
+            dropScore += hardDropPoints;
+            
             updatePiecePosition();
             lockPiece();
         }
@@ -629,9 +822,19 @@
                     staticBlocks.remove(staticBlocks.children[0]);
                 }
             }
+            
+            // Reset game state
+            score = 0;
+            level = 1;
+            totalLinesCleared = 0;
+            dropScore = 0;
+            
             currentPieceRotation = 0;
             createPiece();
             lastFallTime = performance.now();
+            
+            // Update UI
+            updateUIDisplay();
         }
 
         // --- Piece Creation ---
@@ -666,7 +869,8 @@
         // --- Game Logic ---
         function updateGame(timestamp) {
             if (!isPieceActive) return;
-            if (timestamp - lastFallTime > FALL_SPEED) {
+            const currentFallSpeed = getFallSpeed();
+            if (timestamp - lastFallTime > currentFallSpeed) {
                 movePieceDown();
                 lastFallTime = timestamp;
             }
@@ -675,6 +879,9 @@
         function movePieceDown() {
             if (canMoveDown()) {
                 piecePosition.row++;
+                // Award soft drop points
+                addScore(SCORING.SOFT_DROP);
+                dropScore += SCORING.SOFT_DROP;
                 updatePiecePosition();
             } else {
                 lockPiece();
@@ -716,6 +923,17 @@
             
             const clearedRows = checkLines();
             if (clearedRows.length > 0) {
+                // Calculate and add score for line clears
+                const lineScore = calculateLineScore(clearedRows.length);
+                addScore(lineScore);
+                
+                // Update total lines cleared and level
+                totalLinesCleared += clearedRows.length;
+                updateLevel();
+                updateUIDisplay();
+                
+                console.log(`${clearedRows.length} line(s) cleared! Score: +${lineScore}`);
+                
                 // Create particle explosions for each cleared row
                 clearedRows.forEach(row => {
                     const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
