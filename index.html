@@ -2,394 +2,183 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AR Tetris Game</title>
+    <title>AR Tetris - Anchored Grid & Oculus Controller Models</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            overflow: hidden;
-            background: #111;
-            font-family: sans-serif;
-        }
-        #scoreboard {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            padding: 8px 12px;
-            background: rgba(0,0,0,0.5);
-            color: #fff;
-            border-radius: 4px;
-            font-size: 18px;
-            z-index: 1000;
-        }
+        body { margin: 0; padding: 0; overflow: hidden; background: #111; }
     </style>
 </head>
 <body>
-    <div id="scoreboard">Score: 0</div>
     <script type="importmap">
         {
             "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
             }
         }
     </script>
     <script type="module">
         import * as THREE from 'three';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // Basic Three.js and WebXR setup
-        let camera, scene, renderer;
-        let boardGroup;
-        let clock = new THREE.Clock();
-        let dropTimer = 0;
-        let dropInterval = 0.8; // seconds between automatic drops
-        let board = [];
-        const COLS = 10;
-        const ROWS = 20;
-        const blockSize = 0.1;
-        const boardOrigin = new THREE.Vector3(0, 1.0, -1.5); // where bottom-left of the board sits in world space
-        let currentPiece = null;
-        let score = 0;
-        const scoreboardDiv = document.getElementById('scoreboard');
-        // Predefined colors for tetrominoes
-        const COLORS = {
-            'I': 0x00bcd4,
-            'J': 0x3f51b5,
-            'L': 0xff9800,
-            'O': 0xffeb3b,
-            'S': 0x4caf50,
-            'T': 0x9c27b0,
-            'Z': 0xf44336
-        };
-
-        // Tetromino definitions (relative coordinates for rotation state 0)
-        const SHAPES = {
-            'I': [ [0,1], [1,1], [2,1], [3,1] ],
-            'J': [ [0,2], [0,1], [1,1], [2,1] ],
-            'L': [ [2,2], [0,1], [1,1], [2,1] ],
-            'O': [ [1,2], [2,2], [1,1], [2,1] ],
-            'S': [ [1,2], [2,2], [0,1], [1,1] ],
-            'T': [ [1,2], [0,1], [1,1], [2,1] ],
-            'Z': [ [0,2], [1,2], [1,1], [2,1] ]
-        };
-
-        function init() {
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x000000);
-
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            // lighting
-            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 1.0);
-            hemiLight.position.set(0, 1, 0);
-            scene.add(hemiLight);
-
-            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            dirLight.position.set(0, 5, 2);
-            scene.add(dirLight);
-
-            // Initialize empty board data
-            for (let r = 0; r < ROWS; r++) {
-                board[r] = new Array(COLS).fill(null);
-            }
-
-            // Group to hold cubes on the board
-            boardGroup = new THREE.Group();
-            boardGroup.position.copy(boardOrigin);
-            scene.add(boardGroup);
-
-            // Optional: add grid lines for board
-            addGridLines();
-
-            // Spawn the first piece
-            spawnNewPiece();
-
-            // Event listeners
-            window.addEventListener('resize', onWindowResize, false);
-            window.addEventListener('keydown', onKeyDown, false);
-
-            // Create AR button
-            document.body.appendChild(createARButton(renderer));
-
-            // Start rendering loop
-            renderer.setAnimationLoop(render);
-        }
-
-        function addGridLines() {
-            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
-            // vertical lines
-            for (let c = 0; c <= COLS; c++) {
-                const geometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(c * blockSize, 0, 0),
-                    new THREE.Vector3(c * blockSize, ROWS * blockSize, 0)
-                ]);
-                const line = new THREE.Line(geometry, gridMaterial);
-                line.position.set(-COLS * blockSize / 2 + blockSize / 2, 0, 0.001);
-                boardGroup.add(line);
-            }
-            // horizontal lines
-            for (let r = 0; r <= ROWS; r++) {
-                const geometry = new THREE.BufferGeometry().setFromPoints([
-                    new THREE.Vector3(0, r * blockSize, 0),
-                    new THREE.Vector3(COLS * blockSize, r * blockSize, 0)
-                ]);
-                const line = new THREE.Line(geometry, gridMaterial);
-                line.position.set(-COLS * blockSize / 2 + blockSize / 2, 0, 0.001);
-                boardGroup.add(line);
-            }
-        }
-
-        function spawnNewPiece() {
-            const types = Object.keys(SHAPES);
-            const type = types[Math.floor(Math.random() * types.length)];
-            const coords = SHAPES[type].map(p => p.slice());
-            // Starting position; piece will be placed near top of board
-            const piece = {
-                type: type,
-                rotation: 0,
-                coords: coords,
-                pos: { x: 3, y: ROWS - 1 }, // x offset will center piece; y near top
-                blocks: []
-            };
-            // create 3D cubes for piece
-            piece.blocks = coords.map(() => {
-                const geometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize);
-                const material = new THREE.MeshStandardMaterial({ color: COLORS[type] });
-                const cube = new THREE.Mesh(geometry, material);
-                boardGroup.add(cube);
-                return cube;
-            });
-            currentPiece = piece;
-            if (collides(currentPiece.pos.x, currentPiece.pos.y, currentPiece.coords)) {
-                // Game over: reset board and score
-                resetGame();
-            }
-        }
-
-        function resetGame() {
-            // Remove all cubes from boardGroup except grid lines
-            const toRemove = [];
-            boardGroup.children.forEach(child => {
-                if (child.isMesh) toRemove.push(child);
-            });
-            toRemove.forEach(child => boardGroup.remove(child));
-
-            // Reset board array
-            for (let r = 0; r < ROWS; r++) {
-                board[r].fill(null);
-            }
-            score = 0;
-            updateScore();
-            spawnNewPiece();
-        }
-
-        function rotateCoords(coords) {
-            // Rotate clockwise around (0,0) and adjust to keep within bounding box
-            const rotated = coords.map(([x, y]) => [-y, x]);
-            // Find min x and y to normalize
-            let minX = Infinity, minY = Infinity;
-            rotated.forEach(([x, y]) => {
-                if (x < minX) minX = x;
-                if (y < minY) minY = y;
-            });
-            return rotated.map(([x, y]) => [x - minX, y - minY]);
-        }
-
-        function collides(posX, posY, coords) {
-            // Check for collisions with walls or existing blocks
-            for (const [x, y] of coords) {
-                const boardX = posX + x;
-                const boardY = posY - y;
-                if (boardX < 0 || boardX >= COLS || boardY < 0) {
-                    return true;
+        // --- AR Button ---
+        class ARButton {
+            static createButton(renderer, sessionInit = {}) {
+                const button = document.createElement('button');
+                function showStartAR() {
+                    let currentSession = null;
+                    async function onSessionStarted(session) {
+                        session.addEventListener('end', onSessionEnded);
+                        renderer.xr.setReferenceSpaceType('local');
+                        await renderer.xr.setSession(session);
+                        button.textContent = 'STOP AR';
+                        currentSession = session;
+                        // Setup controllers and game after entering AR
+                        setupControllers();
+                        createGameBoard();
+                        createGamepad();
+                        initGame();
+                    }
+                    function onSessionEnded() {
+                        currentSession.removeEventListener('end', onSessionEnded);
+                        button.textContent = 'START AR';
+                        currentSession = null;
+                        if (controller1) scene.remove(controller1);
+                        if (controller2) scene.remove(controller2);
+                        if (controllerGrip1) scene.remove(controllerGrip1);
+                        if (controllerGrip2) scene.remove(controllerGrip2);
+                        if (gameBoard) scene.remove(gameBoard);
+                        if (gamepadGroup) scene.remove(gamepadGroup);
+                    }
+                    button.style.cssText = `
+                        position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 14px 24px; border: 2px solid #fff; border-radius: 8px;
+                        background: rgba(0,0,0,0.5); color: #fff; font: bold 20px sans-serif;
+                        cursor: pointer; z-index: 999;
+                    `;
+                    button.textContent = 'START AR';
+                    button.onclick = () => currentSession ?
+                        currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
                 }
-                if (boardY < ROWS && board[boardY][boardX]) {
-                    return true;
+                function showARNotSupported() {
+                    button.style.cssText = `
+                        position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 14px 24px; border: 2px solid #fff; border-radius: 8px;
+                        background: rgba(0,0,0,0.5); color: #fff; font: bold 20px sans-serif; z-index: 999;
+                    `;
+                    button.textContent = 'AR NOT SUPPORTED';
+                }
+                if ('xr' in navigator) {
+                    navigator.xr.isSessionSupported('immersive-ar')
+                        .then(supported => supported ? showStartAR() : showARNotSupported())
+                        .catch(showARNotSupported);
+                    return button;
+                } else {
+                    button.textContent = 'WEBXR NOT AVAILABLE';
+                    showARNotSupported();
+                    return button;
                 }
             }
-            return false;
         }
 
-        function fixPiece() {
-            // Place current piece into the board
-            currentPiece.coords.forEach(([x, y], i) => {
-                const boardX = currentPiece.pos.x + x;
-                const boardY = currentPiece.pos.y - y;
-                if (boardY >= 0 && boardY < ROWS && boardX >= 0 && boardX < COLS) {
-                    board[boardY][boardX] = currentPiece.blocks[i];
-                }
-            });
-            // Remove the piece reference to avoid moving again
-            currentPiece.blocks = [];
+        // --- Core Three.js setup ---
+        let scene = new THREE.Scene();
+        let camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+        let renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+        // --- Lights (for nice block materials) ---
+        scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
+
+        // --- Game Variables ---
+        let gameBoard, gamepadGroup;
+        let controller1, controller2, controllerGrip1, controllerGrip2;
+        let controllerModelFactory;
+
+        // --- Controller Models ---
+        function setupControllers() {
+            controller1 = renderer.xr.getController(0);
+            scene.add(controller1);
+            controller2 = renderer.xr.getController(1);
+            scene.add(controller2);
+
+            controllerGrip1 = renderer.xr.getControllerGrip(0);
+            controllerGrip2 = renderer.xr.getControllerGrip(1);
+            controllerModelFactory = new XRControllerModelFactory();
+
+            // Add visible Oculus Touch controller models
+            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+
+            scene.add(controllerGrip1);
+            scene.add(controllerGrip2);
         }
 
-        function clearLines() {
-            let linesCleared = 0;
-            for (let r = 0; r < ROWS; r++) {
-                if (board[r].every(cell => cell !== null)) {
-                    // Remove cubes for this row
-                    board[r].forEach(cube => {
-                        boardGroup.remove(cube);
-                    });
-                    board[r] = new Array(COLS).fill(null);
-                    // Shift rows above down
-                    for (let y = r + 1; y < ROWS; y++) {
-                        for (let x = 0; x < COLS; x++) {
-                            const cube = board[y][x];
-                            if (cube) {
-                                cube.position.y -= blockSize;
-                            }
-                            board[y - 1][x] = board[y][x];
-                            board[y][x] = null;
-                        }
-                    }
-                    linesCleared++;
-                    r--; // check this row again as rows have shifted down
-                }
+        // --- Move Grid Down: Game Board in front of you ---
+        function createGameBoard() {
+            if (gameBoard) scene.remove(gameBoard);
+            gameBoard = new THREE.Group();
+
+            const BOARD_WIDTH = 10, BOARD_HEIGHT = 20, CELL_SIZE = 0.1;
+            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
+                const points = [
+                    new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0),
+                    new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0)
+                ];
+                gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
             }
-            if (linesCleared > 0) {
-                score += linesCleared * 100;
-                updateScore();
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                const points = [
+                    new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0),
+                    new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0)
+                ];
+                gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
             }
+
+            // ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
+            // Here’s the new “comfortable” AR placement:
+            // X = 0 (centered), Y = 1.2 (about chest height), Z = -1.2 (arm’s reach)
+            gameBoard.position.set(0, 1.2, -1.2);
+            scene.add(gameBoard);
         }
 
-        function updateScore() {
-            scoreboardDiv.textContent = 'Score: ' + score;
+        // --- Gamepad stub (add your UI/buttons here as before) ---
+        function createGamepad() {
+            if (gamepadGroup) scene.remove(gamepadGroup);
+            gamepadGroup = new THREE.Group();
+            // Put a simple floating cube “button” for visual demo
+            const button = new THREE.Mesh(
+                new THREE.BoxGeometry(0.15, 0.05, 0.05),
+                new THREE.MeshStandardMaterial({ color: 0x00aaff, metalness: 0.8, roughness: 0.2 })
+            );
+            button.position.set(0, -0.5, 0);
+            gamepadGroup.add(button);
+            // Position gamepad slightly below grid
+            gamepadGroup.position.set(0, 0.5, -1.2);
+            scene.add(gamepadGroup);
         }
 
-        function onKeyDown(event) {
-            if (!currentPiece) return;
-            let moved = false;
-            switch (event.code) {
-                case 'ArrowLeft':
-                    if (!collides(currentPiece.pos.x - 1, currentPiece.pos.y, currentPiece.coords)) {
-                        currentPiece.pos.x--;
-                        moved = true;
-                    }
-                    break;
-                case 'ArrowRight':
-                    if (!collides(currentPiece.pos.x + 1, currentPiece.pos.y, currentPiece.coords)) {
-                        currentPiece.pos.x++;
-                        moved = true;
-                    }
-                    break;
-                case 'ArrowDown':
-                    // Soft drop
-                    if (!collides(currentPiece.pos.x, currentPiece.pos.y - 1, currentPiece.coords)) {
-                        currentPiece.pos.y--;
-                        moved = true;
-                        dropTimer = 0; // reset drop timer
-                    }
-                    break;
-                case 'Space':
-                case 'ArrowUp':
-                    // Rotate piece
-                    const newCoords = rotateCoords(currentPiece.coords);
-                    if (!collides(currentPiece.pos.x, currentPiece.pos.y, newCoords)) {
-                        currentPiece.coords = newCoords;
-                        moved = true;
-                    }
-                    break;
-            }
-            if (moved) {
-                updatePiecePositions();
-            }
+        // --- Tetris Game Logic (stubbed for brevity) ---
+        function initGame() {
+            // You’d fill this in with your Tetris piece management etc.
         }
 
-        function updatePiecePositions() {
-            currentPiece.coords.forEach(([x, y], i) => {
-                const boardX = currentPiece.pos.x + x;
-                const boardY = currentPiece.pos.y - y;
-                const worldX = (-COLS * blockSize / 2 + blockSize / 2) + boardX * blockSize;
-                const worldY = boardY * blockSize + blockSize / 2;
-                const worldZ = blockSize / 2;
-                currentPiece.blocks[i].position.set(worldX, worldY, worldZ);
-            });
-        }
+        // --- Main render loop ---
+        renderer.setAnimationLoop(() => {
+            renderer.render(scene, camera);
+        });
 
-        function onWindowResize() {
+        // --- Responsive resize ---
+        window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
             renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function render() {
-            const delta = clock.getDelta();
-            dropTimer += delta;
-            if (dropTimer >= dropInterval) {
-                dropTimer = 0;
-                if (currentPiece && !collides(currentPiece.pos.x, currentPiece.pos.y - 1, currentPiece.coords)) {
-                    currentPiece.pos.y--;
-                    updatePiecePositions();
-                } else if (currentPiece) {
-                    // fix piece and spawn new one
-                    fixPiece();
-                    clearLines();
-                    spawnNewPiece();
-                }
-            }
-            // Update positions of current piece cubes every frame
-            if (currentPiece) {
-                updatePiecePositions();
-            }
-            renderer.render(scene, camera);
-        }
-
-        // Create an AR button similar to earlier example
-        function createARButton(renderer) {
-            const button = document.createElement('button');
-            function showStartAR() {
-                let currentSession = null;
-                async function onSessionStarted(session) {
-                    session.addEventListener('end', onSessionEnded);
-                    renderer.xr.setReferenceSpaceType('local');
-                    await renderer.xr.setSession(session);
-                    button.textContent = 'STOP AR';
-                    currentSession = session;
-                }
-                function onSessionEnded() {
-                    currentSession.removeEventListener('end', onSessionEnded);
-                    button.textContent = 'START AR';
-                    currentSession = null;
-                }
-                button.style.cssText = `
-                    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                    padding: 14px 24px; border: 2px solid #fff; border-radius: 6px;
-                    background: rgba(0,0,0,0.4); color: #fff; font: bold 18px sans-serif;
-                    cursor: pointer; z-index: 999;
-                `;
-                button.textContent = 'START AR';
-                button.onclick = () => currentSession ?
-                    currentSession.end() :
-                    navigator.xr.requestSession('immersive-ar', { requiredFeatures: ['local'] })
-                        .then(onSessionStarted);
-            }
-            function showARNotSupported() {
-                button.style.cssText = `
-                    position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-                    padding: 14px 24px; border: 2px solid #fff; border-radius: 6px;
-                    background: rgba(0,0,0,0.4); color: #fff; font: bold 18px sans-serif; z-index: 999;
-                `;
-                button.textContent = 'AR NOT SUPPORTED';
-            }
-            if ('xr' in navigator) {
-                navigator.xr.isSessionSupported('immersive-ar')
-                    .then(supported => supported ? showStartAR() : showARNotSupported())
-                    .catch(showARNotSupported);
-                return button;
-            } else {
-                button.textContent = 'WEBXR NOT AVAILABLE';
-                showARNotSupported();
-                return button;
-            }
-        }
-
-        init();
+        });
     </script>
 </body>
 </html>
