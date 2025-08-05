@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - With Visual Effects</title>
+    <title>Enhanced AR Tetris - Glass Blocks & Particles</title>
     <style>
         body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
@@ -18,468 +18,754 @@
         }
     </script>
     <script type="module">
-        import * as THREE from 'three';
+ 
+       import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-        import { createARButton } from 'three/addons/webxr/ARButton.js';
+
+        // --- AR Button Setup ---
+        class ARButton {
+            static createButton(renderer, sessionInit = {}) {
+                const button = document.createElement('button');
+                function showStartAR() {
+                    let currentSession = null;
+                    async function onSessionStarted(session) {
+                        session.addEventListener('end', onSessionEnded);
+                        renderer.xr.setReferenceSpaceType('local');
+                        await renderer.xr.setSession(session);
+                        button.textContent = 'STOP AR';
+                        currentSession = session;
+                        if (currentSession) {
+                            // Resume audio context after user interaction
+                            if (listener && listener.context.state === 'suspended') {
+                                listener.context.resume();
+                            }
+                            setupControllers();
+                            createGameBoard();
+                            createGamepad();
+                            initGame();
+                        }
+                    }
+                    function onSessionEnded() {
+                        currentSession.removeEventListener('end', onSessionEnded);
+                        button.textContent = 'START AR';
+                        currentSession = null;
+                        if (controller1) scene.remove(controller1);
+                        if (controller2) scene.remove(controller2);
+                        if (controllerGrip1) scene.remove(controllerGrip1);
+                        if (controllerGrip2) scene.remove(controllerGrip2);
+                        if (gameBoard) scene.remove(gameBoard);
+                        if (gamepadGroup) scene.remove(gamepadGroup);
+                        if (particleSystem) scene.remove(particleSystem);
+                    }
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
+                        cursor: pointer; z-index: 999;`;
+                    button.textContent = 'START AR';
+                    button.onclick = () => currentSession ?
+                        currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+                }
+                function showARNotSupported() {
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`;
+                    button.textContent = 'AR NOT SUPPORTED';
+                }
+                if ('xr' in navigator) {
+                    navigator.xr.isSessionSupported('immersive-ar').then(supported => supported ? showStartAR() : showARNotSupported()).catch(showARNotSupported);
+                    return button;
+                } else {
+                    const message = document.createElement('a');
+                    message.innerHTML = 'WEBXR NOT AVAILABLE';
+                    message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+                        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+                        background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif;
+                        text-decoration: none; z-index: 999;`;
+                    return message;
+                }
+            }
+        }
+
+        // --- Core Three.js Setup ---
+        let camera, scene, renderer;
+        let controller1, controller2, controllerGrip1, controllerGrip2;
+        let controllerModelFactory;
+        let gameBoard;
+        let gamepadGroup;
+        let currentPiece;
+        let staticBlocks; // This will hold all the locked blocks
+        let listener, lockSound, clearSound; // For audio
+        let particleSystem; // For particle effects
+        let particles = []; // Array to track active particles
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.xr.enabled = true;
+        document.body.appendChild(renderer.domElement);
+        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+        // --- Audio Setup ---
+        listener = new THREE.AudioListener();
+        camera.add(listener);
+
+        const audioLoader = new THREE.AudioLoader();
+        lockSound = new THREE.Audio(listener);
+        clearSound = new THREE.Audio(listener);
+
+        // Load lock sound
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', function(buffer) {
+            lockSound.setBuffer(buffer);
+            lockSound.setVolume(0.5);
+        });
+
+        // Load line clear sound
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', function(buffer) {
+            clearSound.setBuffer(buffer);
+            clearSound.setVolume(0.7);
+        });
+
+        // Enhanced Lighting for Realistic Materials
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4); // Soft ambient light
+        scene.add(ambientLight);
+        
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 5);
+        scene.add(directionalLight);
+        
+        const pointLight1 = new THREE.PointLight(0x00ffff, 0.8, 10);
+        pointLight1.position.set(-2, 2, 0);
+        scene.add(pointLight1);
+        
+        const pointLight2 = new THREE.PointLight(0xff00ff, 0.8, 10);
+        pointLight2.position.set(2, 2, 0);
+        scene.add(pointLight2);
 
         // --- Game Constants ---
         const BOARD_WIDTH = 10;
         const BOARD_HEIGHT = 20;
-        const CELL_SIZE = 0.08;
-        const SHAPE_COLORS = [
-            0x00ffff, // I
-            0x0000ff, // J
-            0xffa500, // L
-            0xffff00, // O
-            0x00ff00, // S
-            0x800080, // T
-            0xff0000, // Z
-            0x666666  // Ghost
-        ];
+        const CELL_SIZE = 0.1;
+        const FALL_SPEED = 1000;
 
-        // prettier-ignore
-        const SHAPES = [
-            // I-shape
-            [ [1,1,1,1] ],
-            // J-shape
-            [ [1,0,0], [1,1,1] ],
-            // L-shape
-            [ [0,0,1], [1,1,1] ],
-            // O-shape
-            [ [1,1], [1,1] ],
-            // S-shape
-            [ [0,1,1], [1,1,0] ],
-            // T-shape
-            [ [0,1,0], [1,1,1] ],
-            // Z-shape
-            [ [1,1,0], [0,1,1] ]
-        ];
+        // --- Enhanced Tetris Pieces with Glass/Metal Materials ---
+        const PIECES = {
+            I: { 
+                shape: [[1,1,1,1]], 
+                color: 0x00ffff,
+                material: 'glass'
+            },
+            O: { 
+                shape: [[1,1],[1,1]], 
+                color: 0xffff00,
+                material: 'metal'
+            },
+            T: { 
+                shape: [[0,1,0],[1,1,1]], 
+                color: 0x800080,
+                material: 'glass'
+            },
+            S: { 
+                shape: [[0,1,1],[1,1,0]], 
+                color: 0x00ff00,
+                material: 'crystal'
+            },
+            Z: { 
+                shape: [[1,1,0],[0,1,1]], 
+                color: 0xff0000,
+                material: 'metal'
+            },
+            J: { 
+                shape: [[1,0,0],[1,1,1]], 
+                color: 0x0000ff,
+                material: 'glass'
+            },
+            L: { 
+                shape: [[0,0,1],[1,1,1]], 
+                color: 0xffa500,
+                material: 'crystal'
+            }
+        };
 
-        // --- AR Setup ---
-        let camera, scene, renderer;
-        let controller1, controller2;
-        let controllerGrip1, controllerGrip2;
+        // --- Enhanced Material Creation ---
+        function createEnhancedMaterial(color, materialType) {
+            switch(materialType) {
+                case 'glass':
+                    return new THREE.MeshPhysicalMaterial({
+                        color: color,
+                        transmission: 0.8,
+                        roughness: 0.1,
+                        metalness: 0.0,
+                        clearcoat: 1.0,
+                        clearcoatRoughness: 0.1,
+                        ior: 1.5,
+                        transparent: true,
+                        opacity: 0.8
+                    });
+                case 'metal':
+                    return new THREE.MeshStandardMaterial({
+                        color: color,
+                        metalness: 0.9,
+                        roughness: 0.2,
+                        emissive: new THREE.Color(color).multiplyScalar(0.1)
+                    });
+                case 'crystal':
+                    return new THREE.MeshPhysicalMaterial({
+                        color: color,
+                        transmission: 0.5,
+                        roughness: 0.0,
+                        metalness: 0.0,
+                        clearcoat: 1.0,
+                        clearcoatRoughness: 0.0,
+                        ior: 2.4,
+                        transparent: true,
+                        opacity: 0.9,
+                        emissive: new THREE.Color(color).multiplyScalar(0.05)
+                    });
+                default:
+                    return new THREE.MeshStandardMaterial({ color: color });
+            }
+        }
 
-        const clock = new THREE.Clock();
+        // --- Particle System Setup ---
+        function initParticleSystem() {
+            particleSystem = new THREE.Group();
+            scene.add(particleSystem);
+        }
+
+        function createParticleExplosion(position, color, count = 20) {
+            for (let i = 0; i < count; i++) {
+                // Create particle geometry and material
+                const particleGeometry = new THREE.SphereGeometry(0.01, 4, 4);
+                const particleMaterial = new THREE.MeshBasicMaterial({
+                    color: color,
+                    transparent: true,
+                    opacity: 1.0
+                });
+                
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                
+                // Position at explosion center
+                particle.position.copy(position);
+                
+                // Random velocity
+                const velocity = new THREE.Vector3(
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2,
+                    (Math.random() - 0.5) * 2
+                );
+                
+                // Particle properties
+                particle.userData = {
+                    velocity: velocity,
+                    life: 1.0,
+                    decay: 0.02 + Math.random() * 0.02
+                };
+                
+                particleSystem.add(particle);
+                particles.push(particle);
+            }
+        }
+
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const particle = particles[i];
+                const userData = particle.userData;
+                
+                // Update position
+                particle.position.add(userData.velocity);
+                
+                // Apply gravity
+                userData.velocity.y -= 0.01;
+                
+                // Update life and opacity
+                userData.life -= userData.decay;
+                particle.material.opacity = userData.life;
+                
+                // Remove dead particles
+                if (userData.life <= 0) {
+                    particleSystem.remove(particle);
+                    particles.splice(i, 1);
+                    particle.geometry.dispose();
+                    particle.material.dispose();
+                }
+            }
+        }
 
         // --- Game State ---
+        let lastFallTime = 0;
+        let piecePosition = { row: 0, col: 0 };
+        let isPieceActive = true;
         let boardState = [];
-        let currentPiece;
-        let currentPiecePosition;
-        let gameOver = false;
-        let lastDropTime = 0;
-        let dropInterval = 1000; // milliseconds
-        let staticBlocks;
+        let currentPieceType = null;
+        let currentPieceRotation = 0;
+        let currentShape = [];
 
-        // --- Gamepad Interaction ---
-        const gamepad = new THREE.Group();
-        const buttons = {};
-        const raycaster = new THREE.Raycaster();
-        const tempMatrix = new THREE.Matrix4();
-        let lastControllerButtonPress = 0;
-        const COOLDOWN_TIME = 150; // ms
+        // --- Gamepad Elements ---
+        let dpadUp, dpadDown, dpadLeft, dpadRight;
+        let buttonA, buttonB;
+        let gamepadElements = [];
 
-        // --- Sound Effects ---
-        let listener, audioLoader;
-        let lockSound, lineClearSound;
-
-        // --- Particles ---
-        const particles = [];
-        const PARTICLE_COUNT = 20;
-        const PARTICLE_LIFETIME = 1000; // ms
-
-        // --- Initialize the scene and game ---
-        init();
-
-        function init() {
-            scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-            renderer = new THREE.WebGLRenderer({ antialiasing: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.outputColorSpace = THREE.SRGBColorSpace;
-            renderer.xr.enabled = true;
-            document.body.appendChild(renderer.domElement);
-
-            // --- Add lighting to the scene ---
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5); // Soft white light
-            scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            directionalLight.position.set(0, 5, 2);
-            scene.add(directionalLight);
-
-            // --- AR Button ---
-            document.body.appendChild(createARButton(renderer, {
-                requiredFeatures: ['hit-test', 'local-floor'],
-                optionalFeatures: ['hand-tracking']
-            }));
-
-            // --- Controllers ---
+        // --- Controller Setup ---
+        function setupControllers() {
             controller1 = renderer.xr.getController(0);
-            controller1.addEventListener('selectstart', onSelectStart);
-            controller1.addEventListener('selectend', onSelectEnd);
             scene.add(controller1);
-
             controller2 = renderer.xr.getController(1);
-            controller2.addEventListener('selectstart', onSelectStart);
-            controller2.addEventListener('selectend', onSelectEnd);
             scene.add(controller2);
-
-            const controllerModelFactory = new XRControllerModelFactory();
-
             controllerGrip1 = renderer.xr.getControllerGrip(0);
-            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
             scene.add(controllerGrip1);
-
             controllerGrip2 = renderer.xr.getControllerGrip(1);
-            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
             scene.add(controllerGrip2);
+            controllerModelFactory = new XRControllerModelFactory();
+            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
+            controllerGrip1.add(controllerModel1);
+            const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
+            controllerGrip2.add(controllerModel2);
+            setupLaserPointer(controller1);
+            setupLaserPointer(controller2);
 
-            // --- Audio ---
-            listener = new THREE.AudioListener();
-            camera.add(listener);
-
-            audioLoader = new THREE.AudioLoader();
-            lockSound = new THREE.Audio(listener);
-            lineClearSound = new THREE.Audio(listener);
-            audioLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/sounds/lock.ogg', function (buffer) {
-                lockSound.setBuffer(buffer);
-            });
-            audioLoader.load('https://raw.githubusercontent.com/mrdoob/three.js/master/examples/sounds/lineclear.ogg', function (buffer) {
-                lineClearSound.setBuffer(buffer);
-            });
-
-            // --- Initialize Game ---
-            initBoardState();
-            createGameboard();
-            createGamepad();
-            newPiece();
+            controller1.addEventListener('selectstart', onControllerSelectStart);
+            controller2.addEventListener('selectstart', onControllerSelectStart);
+            controller1.addEventListener('selectend', onControllerSelectEnd);
+            controller2.addEventListener('selectend', onControllerSelectEnd);
         }
 
-        function initBoardState() {
-            boardState = new Array(BOARD_HEIGHT).fill(0).map(() => new Array(BOARD_WIDTH).fill(0));
+        function setupLaserPointer(controller) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            const material = new THREE.LineBasicMaterial({ 
+                color: 0x00ffff, 
+                transparent: true, 
+                opacity: 0.7,
+                linewidth: 2
+            });
+            const line = new THREE.Line(geometry, material);
+            line.scale.z = 5;
+            line.visible = false;
+            controller.add(line);
+            controller.addEventListener('connected', function () { line.visible = true; });
+            controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
-        // --- Game Board ---
-        function createGameboard() {
-            const group = new THREE.Group();
-            group.position.set(0, 1.6, -2);
-            scene.add(group);
-
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            const boardOffsetY = -(BOARD_HEIGHT * CELL_SIZE) / 2;
-
-            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x888888 });
-            const lineGeometry = new THREE.BufferGeometry();
-
-            const vertices = [];
-
-            // Horizontal lines
-            for (let i = 0; i <= BOARD_HEIGHT; i++) {
-                vertices.push(boardOffsetX, i * -CELL_SIZE, 0);
-                vertices.push(boardOffsetX + BOARD_WIDTH * CELL_SIZE, i * -CELL_SIZE, 0);
-            }
-            // Vertical lines
-            for (let i = 0; i <= BOARD_WIDTH; i++) {
-                vertices.push(boardOffsetX + i * CELL_SIZE, 0, 0);
-                vertices.push(boardOffsetX + i * CELL_SIZE, -BOARD_HEIGHT * CELL_SIZE, 0);
-            }
-
-            lineGeometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
-            const grid = new THREE.LineSegments(lineGeometry, gridMaterial);
-            grid.position.set(0, boardOffsetY, 0);
-            group.add(grid);
-
+        // --- Game Board Creation ---
+        function createGameBoard() {
+            if (gameBoard) scene.remove(gameBoard);
+            gameBoard = new THREE.Group();
             staticBlocks = new THREE.Group();
-            staticBlocks.position.set(0, boardOffsetY, 0);
-            group.add(staticBlocks);
+            gameBoard.add(staticBlocks);
 
-            currentPiece = new THREE.Group();
-            group.add(currentPiece);
-
-            // Center the entire gameboard
-            group.position.x = -boardOffsetX;
-            group.position.y = -boardOffsetY + 1.6;
+            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
+                const points = [];
+                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0));
+                points.push(new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0));
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                gameBoard.add(line);
+            }
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                const points = [];
+                points.push(new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
+                points.push(new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0));
+                const geometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(geometry, gridMaterial);
+                gameBoard.add(line);
+            }
+            gameBoard.position.set(0, 1.6, -2);
+            scene.add(gameBoard);
+            
+            // Initialize particle system
+            initParticleSystem();
+            console.log("Enhanced AR Tetris board created with particle system");
         }
 
-        // --- Gamepad ---
+        // --- Gamepad Creation ---
         function createGamepad() {
-            gamepad.position.set(0, 1.2, -1.8);
-            scene.add(gamepad);
+             if (gamepadGroup) scene.remove(gamepadGroup);
+             gamepadGroup = new THREE.Group();
 
-            const buttonSize = 0.05;
-            const buttonMaterial = new THREE.MeshStandardMaterial({
-                color: 0xcccccc,
-                metalness: 0.8,
-                roughness: 0.2
-            });
+             const SCALE_FACTOR = 2.0;
+             const gamepadZOffset = 0.05;
+             // Base plate
+             const gamepadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444 });
+             const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.2 * SCALE_FACTOR, 0.02 * SCALE_FACTOR);
+             const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
+             gamepadBase.position.set(0, 0, 0);
+             gamepadGroup.add(gamepadBase);
 
-            const buttonGeometry = new THREE.BoxGeometry(buttonSize, buttonSize, 0.01);
+             // D-Pad
+             const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x888888 });
+             const dpadCenterGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+             const dpadCenter = new THREE.Mesh(dpadCenterGeometry, dpadMaterial);
+             dpadCenter.position.set(-0.08 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(dpadCenter);
+             const dpadArmGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+             // Up
+             dpadUp = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
+             dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(dpadUp);
+             gamepadElements.push(dpadUp);
+             // Down
+             dpadDown = new THREE.Mesh(dpadArmGeometry, dpadMaterial.clone());
+             dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.055 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(dpadDown);
+             gamepadElements.push(dpadDown);
+             // Left
+             const dpadLeftGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+             dpadLeft = new THREE.Mesh(dpadLeftGeometry, dpadMaterial.clone());
+             dpadLeft.rotation.z = Math.PI / 2;
+             dpadLeft.position.set(-0.135 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(dpadLeft);
+             gamepadElements.push(dpadLeft);
 
-            const createButton = (name, x, y, z, color) => {
-                const mesh = new THREE.Mesh(buttonGeometry, new THREE.MeshStandardMaterial({
-                    color: color,
-                    metalness: 0.8,
-                    roughness: 0.2
-                }));
-                mesh.position.set(x, y, z);
-                mesh.userData.name = name;
-                gamepad.add(mesh);
-                buttons[name] = mesh;
-            };
+             // Right
+             const dpadRightGeometry = new THREE.BoxGeometry(0.03 * SCALE_FACTOR, 0.08 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+             dpadRight = new THREE.Mesh(dpadRightGeometry, dpadMaterial.clone());
+             dpadRight.rotation.z = Math.PI / 2;
+             dpadRight.position.set(-0.025 * SCALE_FACTOR, 0, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(dpadRight);
+             gamepadElements.push(dpadRight);
 
-            // D-pad
-            createButton('left', -0.1, 0, 0, 0x00ff00);
-            createButton('right', 0.1, 0, 0, 0x00ff00);
-            createButton('down', 0, -0.1, 0, 0x00ff00);
-            createButton('rotate', 0, 0.1, 0, 0x00ff00);
+             // Buttons A and B
+             const buttonGeometry = new THREE.SphereGeometry(0.025 * SCALE_FACTOR, 16, 16);
+             const buttonAMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+             buttonA = new THREE.Mesh(buttonGeometry, buttonAMaterial);
+             buttonA.position.set(0.08 * SCALE_FACTOR, 0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(buttonA);
+             gamepadElements.push(buttonA);
+             const buttonBMaterial = new THREE.MeshBasicMaterial({ color: 0x0000ff });
+             buttonB = new THREE.Mesh(buttonGeometry, buttonBMaterial);
+             buttonB.position.set(0.13 * SCALE_FACTOR, -0.02 * SCALE_FACTOR, 0.01 * SCALE_FACTOR + gamepadZOffset);
+             gamepadGroup.add(buttonB);
+             gamepadElements.push(buttonB);
 
-            // A/B Buttons
-            createButton('a', 0.2, 0.1, 0, 0x0000ff);
-            createButton('b', 0.2, -0.1, 0, 0xff0000);
+             gamepadGroup.position.set(0, 1.6 - 2.2, -2);
+             scene.add(gamepadGroup);
+             console.log("Gamepad created below the board");
         }
 
-        function handleGamepadInput(controller) {
-            if (Date.now() - lastControllerButtonPress < COOLDOWN_TIME) return;
+        // --- Controller Interaction ---
+        function onControllerSelectStart(event) {
+            const controller = event.target;
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.extractRotation(controller.matrixWorld);
 
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
+            const raycaster = new THREE.Raycaster();
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
 
-            const intersects = raycaster.intersectObjects(gamepad.children, false);
-
+            const intersects = raycaster.intersectObjects(gamepadElements);
             if (intersects.length > 0) {
-                const intersect = intersects[0];
-                const buttonName = intersect.object.userData.name;
-
-                if (buttonName === 'left') {
-                    movePiece(-1, 0);
-                } else if (buttonName === 'right') {
-                    movePiece(1, 0);
-                } else if (buttonName === 'down') {
-                    movePiece(0, 1);
-                } else if (buttonName === 'rotate') {
-                    rotatePiece();
-                } else if (buttonName === 'a') {
-                    dropPiece();
+                const object = intersects[0].object;
+                if (object === dpadUp || object === dpadDown || object === dpadLeft || object === dpadRight) {
+                    object.material.color.set(0xffffff);
+                } else if (object === buttonA) {
+                    object.material.color.set(0xff6666);
+                } else if (object === buttonB) {
+                    object.material.color.set(0x6666ff);
                 }
 
-                lastControllerButtonPress = Date.now();
-            }
-        }
-
-        function onSelectStart(event) {
-            const controller = event.target;
-            handleGamepadInput(controller);
-        }
-
-        function onSelectEnd() {
-            // Nothing to do on release for now
-        }
-
-        // --- Game Logic ---
-        function newPiece() {
-            if (gameOver) return;
-
-            const shapeIndex = Math.floor(Math.random() * SHAPES.length);
-            const shape = SHAPES[shapeIndex];
-            const color = SHAPE_COLORS[shapeIndex];
-
-            // Clear old piece
-            while (currentPiece.children.length > 0) {
-                currentPiece.remove(currentPiece.children[0]);
-            }
-
-            const material = new THREE.MeshStandardMaterial({
-                color: color,
-                metalness: 0.8,
-                roughness: 0.2
-            });
-            const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-
-            for (let row = 0; row < shape.length; row++) {
-                for (let col = 0; col < shape[row].length; col++) {
-                    if (shape[row][col]) {
-                        const cube = new THREE.Mesh(geometry, material);
-                        cube.position.set(
-                            col * CELL_SIZE + CELL_SIZE / 2,
-                            -row * CELL_SIZE - CELL_SIZE / 2,
-                            0
-                        );
-                        currentPiece.add(cube);
+                if (isPieceActive) {
+                    if (object === dpadLeft) {
+                        console.log("Moving piece left");
+                        movePieceHorizontally(-1);
+                    } else if (object === dpadRight) {
+                        console.log("Moving piece right");
+                        movePieceHorizontally(1);
+                    } else if (object === buttonA) {
+                         console.log("Rotating piece");
+                         rotatePiece();
+                    } else if (object === dpadDown) {
+                        console.log("Fast drop");
+                        fastDrop();
                     }
                 }
             }
-
-            currentPiece.userData.shape = shape;
-            currentPiece.userData.color = color;
-            currentPiecePosition = {
-                x: Math.floor(BOARD_WIDTH / 2) - Math.floor(shape[0].length / 2),
-                y: 0
-            };
-
-            // Check for game over
-            if (collides()) {
-                gameOver = true;
-                console.log('Game Over!');
-                return;
-            }
-
-            updatePiecePosition();
         }
 
-        function updatePiecePosition() {
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            const boardOffsetY = -(BOARD_HEIGHT * CELL_SIZE) / 2;
-
-            currentPiece.position.set(
-                boardOffsetX + currentPiecePosition.x * CELL_SIZE,
-                boardOffsetY - currentPiecePosition.y * CELL_SIZE,
-                0
-            );
+        function onControllerSelectEnd(event) {
+            dpadUp.material.color.set(0x888888);
+            dpadDown.material.color.set(0x888888);
+            dpadLeft.material.color.set(0x888888);
+            dpadRight.material.color.set(0x888888);
+            buttonA.material.color.set(0xff0000);
+            buttonB.material.color.set(0x0000ff);
         }
 
-        function movePiece(dx, dy) {
-            const originalPosition = { ...currentPiecePosition };
-            currentPiecePosition.x += dx;
-            currentPiecePosition.y += dy;
-
-            if (collides()) {
-                currentPiecePosition = originalPosition;
-                return false;
-            }
-
-            updatePiecePosition();
-            return true;
-        }
-
-        function rotatePiece() {
-            const originalShape = currentPiece.userData.shape;
-            const rotatedShape = rotateMatrix(originalShape);
-
-            // Temporarily replace the shape to check for collision
-            currentPiece.userData.shape = rotatedShape;
-            if (collides()) {
-                // If it collides, revert to the original shape
-                currentPiece.userData.shape = originalShape;
-                return;
-            }
-
-            // Update the mesh to reflect the new shape
-            while (currentPiece.children.length > 0) {
-                currentPiece.remove(currentPiece.children[0]);
-            }
-            const material = new THREE.MeshStandardMaterial({
-                color: currentPiece.userData.color,
-                metalness: 0.8,
-                roughness: 0.2
-            });
-            const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
-
-            for (let row = 0; row < rotatedShape.length; row++) {
-                for (let col = 0; col < rotatedShape[row].length; col++) {
-                    if (rotatedShape[row][col]) {
-                        const cube = new THREE.Mesh(geometry, material);
-                        cube.position.set(
-                            col * CELL_SIZE + CELL_SIZE / 2,
-                            -row * CELL_SIZE - CELL_SIZE / 2,
-                            0
-                        );
-                        currentPiece.add(cube);
-                    }
-                }
-            }
-            updatePiecePosition();
-        }
-
+        // --- Helper Functions ---
         function rotateMatrix(matrix) {
             const rows = matrix.length;
             const cols = matrix[0].length;
-            const rotated = new Array(cols).fill(0).map(() => new Array(rows).fill(0));
-
-            for (let i = 0; i < rows; i++) {
-                for (let j = 0; j < cols; j++) {
-                    rotated[j][rows - 1 - i] = matrix[i][j];
+            const rotated = [];
+            for (let i = 0; i < cols; i++) {
+                rotated[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    rotated[i][j] = matrix[rows - 1 - j][i];
                 }
             }
             return rotated;
         }
 
-        function dropPiece() {
-            while (movePiece(0, 1)) {
-                // Keep moving down until collision
+        function getShapeBlocks(shape) {
+            const blocks = [];
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col] === 1) {
+                        blocks.push({ x: col, y: row });
+                    }
+                }
             }
+            return blocks;
+        }
+
+        // --- Piece Movement Logic ---
+        function movePieceHorizontally(deltaCol) {
+            if (!isPieceActive) return;
+            const newPosition = {
+                row: piecePosition.row,
+                col: piecePosition.col + deltaCol
+            };
+            if (canMoveTo(newPosition, currentShape)) {
+                piecePosition.col = newPosition.col;
+                updatePiecePosition();
+                console.log(`Piece moved to column ${piecePosition.col}`);
+            } else {
+                console.log("Cannot move piece, collision or boundary");
+            }
+        }
+
+        function rotatePiece() {
+            if (!isPieceActive) return;
+            const rotatedShape = rotateMatrix(currentShape);
+            
+            if (canMoveTo(piecePosition, rotatedShape)) {
+                currentShape = rotatedShape;
+                currentPieceRotation = (currentPieceRotation + 1) % 4;
+                updatePieceVisuals();
+                console.log(`Piece rotated to state ${currentPieceRotation}`);
+            } else {
+                // Try wall kicks (slight position adjustments to make rotation work)
+                const wallKicks = [-1, 1, -2, 2];
+                // Try moving left/right
+                for (let kick of wallKicks) {
+                    const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick };
+                    if (canMoveTo(kickPosition, rotatedShape)) {
+                        piecePosition.col = kickPosition.col;
+                        currentShape = rotatedShape;
+                        currentPieceRotation = (currentPieceRotation + 1) % 4;
+                        updatePieceVisuals();
+                        updatePiecePosition();
+                        console.log(`Piece rotated with wall kick ${kick}`);
+                        return;
+                    }
+                }
+                console.log("Cannot rotate piece, no valid position");
+            }
+        }
+
+        function fastDrop() {
+            if (!isPieceActive) return;
+            while (canMoveDown()) {
+                piecePosition.row++;
+            }
+            updatePiecePosition();
             lockPiece();
         }
 
-        function collides() {
-            const shape = currentPiece.userData.shape;
-            for (let row = 0; row < shape.length; row++) {
-                for (let col = 0; col < shape[row].length; col++) {
-                    if (shape[row][col]) {
-                        const boardRow = currentPiecePosition.y + row;
-                        const boardCol = currentPiecePosition.x + col;
+        function canMoveTo(position, shape) {
+            const blocks = getShapeBlocks(shape);
+            for (let block of blocks) {
+                const newRow = position.row + block.y;
+                const newCol = position.col + block.x;
 
-                        // Check boundaries and other blocks
-                        if (
-                            boardCol < 0 || boardCol >= BOARD_WIDTH ||
-                            boardRow >= BOARD_HEIGHT ||
-                            (boardRow >= 0 && boardState[boardRow][boardCol] !== 0)
-                        ) {
-                            return true;
-                        }
-                    }
+                if (newCol < 0 || newCol >= BOARD_WIDTH) {
+                    return false;
+                }
+
+                if (newRow >= BOARD_HEIGHT) {
+                    return false;
+                }
+
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) { // Check against non-empty cells
+                    return false;
                 }
             }
-            return false;
+            return true;
+        }
+
+        function updatePiecePosition() {
+            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+            currentPiece.position.set(
+                boardOffsetX + piecePosition.col * CELL_SIZE,
+                -piecePosition.row * CELL_SIZE,
+                0
+            );
+        }
+
+        function updatePieceVisuals() {
+            while(currentPiece.children.length > 0) {
+                currentPiece.remove(currentPiece.children[0]);
+            }
+
+            const material = createEnhancedMaterial(currentPieceType.color, currentPieceType.material);
+            const blocks = getShapeBlocks(currentShape);
+            blocks.forEach(block => {
+                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(
+                    block.x * CELL_SIZE + (CELL_SIZE / 2),
+                    -block.y * CELL_SIZE - (CELL_SIZE / 2),
+                    0
+                );
+                currentPiece.add(cube);
+            });
+        }
+
+        // --- Game Initialization ---
+        function initGame() {
+            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            if (staticBlocks) {
+                 while(staticBlocks.children.length > 0) {
+                    staticBlocks.remove(staticBlocks.children[0]);
+                }
+            }
+            currentPieceRotation = 0;
+            createPiece();
+            lastFallTime = performance.now();
+        }
+
+        // --- Piece Creation ---
+        function createPiece() {
+            if (!canMoveTo({row: 0, col: Math.floor(BOARD_WIDTH/2) - 1}, PIECES.I.shape)) {
+                console.log("GAME OVER");
+                isPieceActive = false;
+                // You could add a game over message here
+                return;
+            }
+
+            const pieceTypes = Object.keys(PIECES);
+            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+            currentPieceType = PIECES[randomType];
+            currentShape = currentPieceType.shape;
+            
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
+            piecePosition.row = 0;
+            currentPieceRotation = 0;
+
+            if (currentPiece) gameBoard.remove(currentPiece);
+            currentPiece = new THREE.Group();
+            gameBoard.add(currentPiece);
+            
+            updatePieceVisuals();
+            updatePiecePosition();
+            
+            isPieceActive = true;
+            console.log(`New ${randomType}-piece created with ${currentPieceType.material} material`);
+        }
+
+        // --- Game Logic ---
+        function updateGame(timestamp) {
+            if (!isPieceActive) return;
+            if (timestamp - lastFallTime > FALL_SPEED) {
+                movePieceDown();
+                lastFallTime = timestamp;
+            }
+        }
+
+        function movePieceDown() {
+            if (canMoveDown()) {
+                piecePosition.row++;
+                updatePiecePosition();
+            } else {
+                lockPiece();
+            }
+        }
+
+        function canMoveDown() {
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
+                const newRow = piecePosition.row + 1 + block.y;
+                const newCol = piecePosition.col + block.x;
+                if (newRow >= BOARD_HEIGHT) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false; // Check against non-empty cells
+            }
+            return true;
         }
 
         function lockPiece() {
-            const shape = currentPiece.userData.shape;
-            if (!shape) return;
+            isPieceActive = false;
+            console.log(`Piece locked in place`);
+            
+            if (lockSound && lockSound.buffer && !lockSound.isPlaying) {
+                lockSound.play();
+            }
 
-            for (let row = 0; row < shape.length; row++) {
-                for (let col = 0; col < shape[row].length; col++) {
-                    if (shape[row][col]) {
-                        const boardRow = currentPiecePosition.y + row;
-                        const boardCol = currentPiecePosition.x + col;
-                        if (boardRow >= 0 && boardRow < BOARD_HEIGHT && boardCol >= 0 && boardCol < BOARD_WIDTH) {
-                            boardState[boardRow][boardCol] = currentPiece.userData.color;
-                        }
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + block.x;
+                if (row >= 0) {
+                    boardState[row][col] = {
+                        color: currentPieceType.color,
+                        material: currentPieceType.material
+                    }; // Store both color and material type
+                }
+            }
+            
+            gameBoard.remove(currentPiece); // Remove the active piece group
+            
+            const clearedRows = checkLines();
+            if (clearedRows.length > 0) {
+                // Create particle explosions for each cleared row
+                clearedRows.forEach(row => {
+                    const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                    const rowY = -row * CELL_SIZE;
+                    
+                    // Create multiple explosion points along the cleared row
+                    for (let col = 0; col < BOARD_WIDTH; col++) {
+                        const explosionPos = new THREE.Vector3(
+                            boardOffsetX + col * CELL_SIZE + CELL_SIZE / 2,
+                            rowY - CELL_SIZE / 2,
+                            0
+                        );
+                        // Transform to world coordinates
+                        explosionPos.applyMatrix4(gameBoard.matrixWorld);
+                        
+                        // Get the color of the cleared block for particle color
+                        const blockData = boardState[row][col];
+                        const particleColor = blockData ? blockData.color : 0xffffff;
+                        
+                        createParticleExplosion(explosionPos, particleColor, 8);
                     }
+                });
+                
+                if (clearSound && clearSound.buffer && !clearSound.isPlaying) {
+                    clearSound.play();
                 }
             }
 
-            if (lockSound.isPlaying) lockSound.stop();
-            lockSound.play();
-
-            if (checkLines()) {
-                if (lineClearSound.isPlaying) lineClearSound.stop();
-                lineClearSound.play();
-            }
-
-            redrawStaticBlocks();
-            newPiece();
+            redrawStaticBlocks(); // Redraw the entire board from the state
+            
+            setTimeout(() => {
+                createPiece();
+                lastFallTime = performance.now();
+            }, 200); // Shorter delay for smoother gameplay
         }
 
         function checkLines() {
-            let linesCleared = 0;
+            let clearedRows = [];
             for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
-                if (boardState[row].every(cell => cell !== 0)) {
-                    // Line is full, remove it
+                if (boardState[row].every(cell => cell !== 0)) { // A line is full if no cell is 0
+                    clearedRows.push(row);
+                    console.log(`Line cleared at row ${row}`);
                     boardState.splice(row, 1);
-                    // Add a new empty row at the top
-                    boardState.unshift(new Array(BOARD_WIDTH).fill(0));
-                    linesCleared++;
-                    createLineClearParticles(row); // <--- New particle function call
+                    boardState.unshift(Array(BOARD_WIDTH).fill(0));
                     row++; // Check the same row again in case multiple lines are cleared
                 }
             }
-            return linesCleared > 0;
+            return clearedRows;
         }
-
+        
         function redrawStaticBlocks() {
             // Clear existing static blocks
             while(staticBlocks.children.length > 0) {
@@ -491,13 +777,9 @@
             // Redraw based on boardState
             for (let row = 0; row < BOARD_HEIGHT; row++) {
                 for (let col = 0; col < BOARD_WIDTH; col++) {
-                    const color = boardState[row][col];
-                    if (color !== 0) {
-                        const material = new THREE.MeshStandardMaterial({
-                            color: color,
-                            metalness: 0.8,
-                            roughness: 0.2
-                        });
+                    const blockData = boardState[row][col];
+                    if (blockData !== 0) {
+                        const material = createEnhancedMaterial(blockData.color, blockData.material);
                         const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
                         const cube = new THREE.Mesh(geometry, material);
                         cube.position.set(
@@ -511,82 +793,12 @@
             }
         }
 
-        // --- New Particle System Function ---
-        function createLineClearParticles(clearedRow) {
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            const boardOffsetY = -(BOARD_HEIGHT * CELL_SIZE) / 2;
-
-            for (let i = 0; i < PARTICLE_COUNT; i++) {
-                const particleGeometry = new THREE.BoxGeometry(CELL_SIZE / 4, CELL_SIZE / 4, CELL_SIZE / 4);
-                const particleMaterial = new THREE.MeshStandardMaterial({
-                    color: 0xffffff,
-                    metalness: 0.8,
-                    roughness: 0.2,
-                    transparent: true,
-                    opacity: 1
-                });
-                const particleMesh = new THREE.Mesh(particleGeometry, particleMaterial);
-
-                // Start particle at a random position within the cleared row
-                const startX = boardOffsetX + Math.random() * (BOARD_WIDTH * CELL_SIZE);
-                const startY = boardOffsetY - (clearedRow * CELL_SIZE + CELL_SIZE / 2);
-                particleMesh.position.set(startX, startY, 0);
-
-                // Give the particle a random velocity and store its start time
-                particleMesh.userData.velocity = new THREE.Vector3(
-                    (Math.random() - 0.5) * 0.5, // X velocity
-                    (Math.random() - 0.5) * 0.5, // Y velocity
-                    (Math.random() - 0.5) * 0.5 // Z velocity
-                );
-                particleMesh.userData.startTime = Date.now();
-
-                particles.push(particleMesh);
-                scene.add(particleMesh);
-            }
-        }
-
         // --- Animation Loop ---
         renderer.setAnimationLoop((timestamp) => {
             updateGame(timestamp);
+            updateParticles(); // Update particle system
             renderer.render(scene, camera);
         });
-
-        function updateGame(timestamp) {
-            if (gameOver) return;
-            
-            // Check if it's time to drop the piece
-            if (timestamp - lastDropTime > dropInterval) {
-                if (!movePiece(0, 1)) {
-                    lockPiece();
-                }
-                lastDropTime = timestamp;
-            }
-
-            // --- Update particles ---
-            const newParticles = [];
-            for (let i = 0; i < particles.length; i++) {
-                const particle = particles[i];
-                const elapsedTime = Date.now() - particle.userData.startTime;
-
-                if (elapsedTime < PARTICLE_LIFETIME) {
-                    // Update particle position
-                    particle.position.addScaledVector(particle.userData.velocity, clock.getDelta());
-
-                    // Fade out the particle
-                    const opacity = 1 - (elapsedTime / PARTICLE_LIFETIME);
-                    particle.material.opacity = opacity;
-
-                    newParticles.push(particle);
-                } else {
-                    // Remove particle once its lifetime is over
-                    scene.remove(particle);
-                    particle.geometry.dispose();
-                    particle.material.dispose();
-                }
-            }
-            particles.length = 0;
-            particles.push(...newParticles);
-        }
     </script>
 </body>
 </html>
