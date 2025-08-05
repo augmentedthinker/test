@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>AR Tetris - Anchored Grid & Oculus Controller Models</title>
+    <title>AR Tetris - Fully Functional NES Controller</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background: #111; }
+        body { margin: 0; padding: 0; overflow: hidden; background: #000; }
     </style>
 </head>
 <body>
@@ -20,8 +20,9 @@
     <script type="module">
         import * as THREE from 'three';
         import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+        import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-        // --- AR Button ---
+        // --- AR Button Setup ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
                 const button = document.createElement('button');
@@ -33,11 +34,16 @@
                         await renderer.xr.setSession(session);
                         button.textContent = 'STOP AR';
                         currentSession = session;
-                        // Setup controllers and game after entering AR
-                        setupControllers();
-                        createGameBoard();
-                        createGamepad();
-                        initGame();
+                        if (currentSession) {
+                            // Resume audio context after user interaction
+                            if (listener && listener.context.state === 'suspended') {
+                                listener.context.resume();
+                            }
+                            setupControllers();
+                            createGameBoard();
+                            createGamepad();
+                            initGame();
+                        }
                     }
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
@@ -49,6 +55,8 @@
                         if (controllerGrip2) scene.remove(controllerGrip2);
                         if (gameBoard) scene.remove(gameBoard);
                         if (gamepadGroup) scene.remove(gamepadGroup);
+                        if (particleSystem) scene.remove(particleSystem);
+                        if (uiPanel) scene.remove(uiPanel);
                     }
                     button.style.cssText = `
                         position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
@@ -81,95 +89,583 @@
             }
         }
 
-        // --- Core Three.js setup ---
-        let scene = new THREE.Scene();
-        let camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        let renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        // --- Core Three.js Setup ---
+        let camera, scene, renderer;
+        let controller1, controller2, controllerGrip1, controllerGrip2;
+        let controllerModelFactory;
+        let gameBoard, staticBlocks;
+        let gamepadGroup;
+        let currentPiece;
+        let listener, lockSound, clearSound;
+        let particleSystem; // For line clear effects
+        let particles = []; // Array to track active particles
+
+        scene = new THREE.Scene();
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-        // --- Lights (for nice block materials) ---
-        scene.add(new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3));
+        // --- Audio Setup ---
+        listener = new THREE.AudioListener();
+        camera.add(listener);
+        const audioLoader = new THREE.AudioLoader();
+        lockSound = new THREE.Audio(listener);
+        clearSound = new THREE.Audio(listener);
 
-        // --- Game Variables ---
-        let gameBoard, gamepadGroup;
-        let controller1, controller2, controllerGrip1, controllerGrip2;
-        let controllerModelFactory;
+        // Load lock/clear sounds
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', buffer => {
+            lockSound.setBuffer(buffer);
+            lockSound.setVolume(0.5);
+        });
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', buffer => {
+            clearSound.setBuffer(buffer);
+            clearSound.setVolume(0.7);
+        });
 
-        // --- Controller Models ---
-        function setupControllers() {
-            controller1 = renderer.xr.getController(0);
-            scene.add(controller1);
-            controller2 = renderer.xr.getController(1);
-            scene.add(controller2);
+        // --- Lighting ---
+        scene.add(new THREE.AmbientLight(0x404040, 0.4));
+        const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+        dirLight.position.set(5, 10, 5); scene.add(dirLight);
+        scene.add(new THREE.PointLight(0x00ffff, 0.8, 10).position.set(-2,2,0));
+        scene.add(new THREE.PointLight(0xff00ff, 0.8, 10).position.set(2,2,0));
 
-            controllerGrip1 = renderer.xr.getControllerGrip(0);
-            controllerGrip2 = renderer.xr.getControllerGrip(1);
-            controllerModelFactory = new XRControllerModelFactory();
+        // --- Game Constants ---
+        const BOARD_WIDTH = 10, BOARD_HEIGHT = 20, CELL_SIZE = 0.1;
+        const PIECES = {
+            I: { shape: [[1,1,1,1]], color: 0x00ffff, material: 'glass' },
+            O: { shape: [[1,1],[1,1]], color: 0xffff00, material: 'metal' },
+            T: { shape: [[0,1,0],[1,1,1]], color: 0x800080, material: 'glass' },
+            S: { shape: [[0,1,1],[1,1,0]], color: 0x00ff00, material: 'crystal' },
+            Z: { shape: [[1,1,0],[0,1,1]], color: 0xff0000, material: 'metal' },
+            J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff, material: 'glass' },
+            L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500, material: 'crystal' }
+        };
 
-            // Add visible Oculus Touch controller models
-            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-
-            scene.add(controllerGrip1);
-            scene.add(controllerGrip2);
+        // --- Materials ---
+        function createEnhancedMaterial(color, materialType) {
+            switch(materialType) {
+                case 'glass':
+                    return new THREE.MeshPhysicalMaterial({
+                        color, transmission: 0.8, roughness: 0.1, metalness: 0.0,
+                        clearcoat: 1.0, clearcoatRoughness: 0.1, ior: 1.5, transparent: true, opacity: 0.8
+                    });
+                case 'metal':
+                    return new THREE.MeshStandardMaterial({
+                        color, metalness: 0.9, roughness: 0.2,
+                        emissive: new THREE.Color(color).multiplyScalar(0.1)
+                    });
+                case 'crystal':
+                    return new THREE.MeshPhysicalMaterial({
+                        color, transmission: 0.5, roughness: 0.0, metalness: 0.0,
+                        clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.4, transparent: true, opacity: 0.9,
+                        emissive: new THREE.Color(color).multiplyScalar(0.05)
+                    });
+                default:
+                    return new THREE.MeshStandardMaterial({ color });
+            }
         }
 
-        // --- Move Grid Down: Game Board in front of you ---
+        // --- Particle System ---
+        function initParticleSystem() {
+            particleSystem = new THREE.Group();
+            scene.add(particleSystem);
+        }
+        function createParticleExplosion(position, color, count = 16) {
+            for (let i = 0; i < count; i++) {
+                const particleGeometry = new THREE.SphereGeometry(0.01, 4, 4);
+                const particleMaterial = new THREE.MeshBasicMaterial({
+                    color: color, transparent: true, opacity: 1.0
+                });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
+                particle.position.copy(position);
+                const velocity = new THREE.Vector3(
+                    (Math.random()-0.5)*2, (Math.random()-0.5)*2, (Math.random()-0.5)*2
+                );
+                particle.userData = { velocity, life: 1.0, decay: 0.02 + Math.random() * 0.02 };
+                particleSystem.add(particle); particles.push(particle);
+            }
+        }
+        function updateParticles() {
+            for (let i = particles.length-1; i>=0; i--) {
+                const particle = particles[i], ud = particle.userData;
+                particle.position.add(ud.velocity);
+                ud.velocity.y -= 0.01; // gravity
+                ud.life -= ud.decay;
+                particle.material.opacity = ud.life;
+                if (ud.life <= 0) {
+                    particleSystem.remove(particle);
+                    particles.splice(i, 1);
+                    particle.geometry.dispose(); particle.material.dispose();
+                }
+            }
+        }
+
+        // --- 3D UI Panel (score/level/lines) ---
+        let uiPanel, scoreText, levelText, linesText;
+        let score = 0, level = 1, totalLinesCleared = 0, dropScore = 0;
+        function createUIPanel() {
+            if (uiPanel) scene.remove(uiPanel);
+            uiPanel = new THREE.Group();
+            // Panel background
+            const panelGeometry = new THREE.PlaneGeometry(1.2, 1.5);
+            const panelMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x1a1a2e, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.1,
+                clearcoat: 0.8, clearcoatRoughness: 0.2
+            });
+            const panelBackground = new THREE.Mesh(panelGeometry, panelMaterial);
+            uiPanel.add(panelBackground);
+            // Title
+            const titleCanvas = createTextCanvas('TETRIS AR', 64, '#00ffff', '#1a1a2e');
+            const titleTexture = new THREE.CanvasTexture(titleCanvas);
+            const titleMaterial = new THREE.MeshBasicMaterial({ map: titleTexture, transparent: true });
+            const titleGeometry = new THREE.PlaneGeometry(0.8, 0.2);
+            const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
+            titleMesh.position.set(0, 0.6, 0.01); uiPanel.add(titleMesh);
+            // Score display
+            scoreText = createTextDisplay('SCORE: 0', 0, 0.3, '#ffff00'); uiPanel.add(scoreText);
+            // Level
+            levelText = createTextDisplay('LEVEL: 1', 0, 0, '#ff6600'); uiPanel.add(levelText);
+            // Lines cleared
+            linesText = createTextDisplay('LINES: 0', 0, -0.3, '#00ff00'); uiPanel.add(linesText);
+            uiPanel.position.set(1.5, 1.2, -1.2); // To the right of grid
+            scene.add(uiPanel);
+        }
+        function createTextCanvas(text, fontSize, textColor, backgroundColor) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = 512; canvas.height = 128;
+            ctx.fillStyle = backgroundColor; ctx.fillRect(0,0,canvas.width,canvas.height);
+            ctx.font = `bold ${fontSize}px Arial`;
+            ctx.fillStyle = textColor;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+            ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2; ctx.shadowBlur = 4;
+            ctx.fillText(text, canvas.width/2, canvas.height/2);
+            return canvas;
+        }
+        function createTextDisplay(text, x, y, color) {
+            const canvas = createTextCanvas(text, 32, color, 'rgba(26, 26, 46, 0.8)');
+            const texture = new THREE.CanvasTexture(canvas);
+            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
+            const geometry = new THREE.PlaneGeometry(0.8, 0.15);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, 0.01); return mesh;
+        }
+        function updateUIDisplay() {
+            // Update score text
+            if (scoreText) {
+                const canvas = createTextCanvas(`SCORE: ${score.toLocaleString()}`, 32, '#ffff00', 'rgba(26, 26, 46, 0.8)');
+                scoreText.material.map.dispose();
+                scoreText.material.map = new THREE.CanvasTexture(canvas);
+                scoreText.material.needsUpdate = true;
+            }
+            // Update level text
+            if (levelText) {
+                const canvas = createTextCanvas(`LEVEL: ${level}`, 32, '#ff6600', 'rgba(26, 26, 46, 0.8)');
+                levelText.material.map.dispose();
+                levelText.material.map = new THREE.CanvasTexture(canvas);
+                levelText.material.needsUpdate = true;
+            }
+            // Update lines text
+            if (linesText) {
+                const canvas = createTextCanvas(`LINES: ${totalLinesCleared}`, 32, '#00ff00', 'rgba(26, 26, 46, 0.8)');
+                linesText.material.map.dispose();
+                linesText.material.map = new THREE.CanvasTexture(canvas);
+                linesText.material.needsUpdate = true;
+            }
+        }
+
+        // --- Controller Model and Setup ---
+        let nesController = null;
+        let dpadUp, dpadDown, dpadLeft, dpadRight, buttonA, buttonB;
+        let gamepadElements = [];
+
+        function setupControllers() {
+            controller1 = renderer.xr.getController(0); scene.add(controller1);
+            controller2 = renderer.xr.getController(1); scene.add(controller2);
+            controllerGrip1 = renderer.xr.getControllerGrip(0); scene.add(controllerGrip1);
+            controllerGrip2 = renderer.xr.getControllerGrip(1); scene.add(controllerGrip2);
+            controllerModelFactory = new XRControllerModelFactory();
+            controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+            controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+            setupLaserPointer(controller1); setupLaserPointer(controller2);
+
+            controller1.addEventListener('selectstart', onControllerSelectStart);
+            controller2.addEventListener('selectstart', onControllerSelectStart);
+        }
+        function setupLaserPointer(controller) {
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0,0,0,-1], 3));
+            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7 });
+            const line = new THREE.Line(geometry, material); line.scale.z = 5; line.visible = false;
+            controller.add(line);
+            controller.addEventListener('connected', function(){ line.visible = true; });
+            controller.addEventListener('disconnected', function(){ line.visible = false; });
+        }
+
+        // --- Game Board ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
             gameBoard = new THREE.Group();
+            staticBlocks = new THREE.Group();
+            gameBoard.add(staticBlocks);
 
-            const BOARD_WIDTH = 10, BOARD_HEIGHT = 20, CELL_SIZE = 0.1;
             const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.5 });
-
             for (let x = 0; x <= BOARD_WIDTH; x++) {
                 const points = [
-                    new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, 0, 0),
-                    new THREE.Vector3(x * CELL_SIZE - (BOARD_WIDTH * CELL_SIZE)/2, -BOARD_HEIGHT * CELL_SIZE, 0)
+                    new THREE.Vector3(x*CELL_SIZE-(BOARD_WIDTH*CELL_SIZE)/2, 0, 0),
+                    new THREE.Vector3(x*CELL_SIZE-(BOARD_WIDTH*CELL_SIZE)/2, -BOARD_HEIGHT*CELL_SIZE, 0)
                 ];
                 gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
             }
             for (let y = 0; y <= BOARD_HEIGHT; y++) {
                 const points = [
-                    new THREE.Vector3(-(BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0),
-                    new THREE.Vector3((BOARD_WIDTH * CELL_SIZE)/2, -y * CELL_SIZE, 0)
+                    new THREE.Vector3(-(BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0),
+                    new THREE.Vector3((BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0)
                 ];
                 gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial));
             }
-
-            // ↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓↓
-            // Here’s the new “comfortable” AR placement:
-            // X = 0 (centered), Y = 1.2 (about chest height), Z = -1.2 (arm’s reach)
+            // Position in front of user, comfortable height:
             gameBoard.position.set(0, 1.2, -1.2);
             scene.add(gameBoard);
+
+            // Particle system and UI panel
+            initParticleSystem();
+            createUIPanel();
         }
 
-        // --- Gamepad stub (add your UI/buttons here as before) ---
+        // --- NES Controller with Functional Buttons ---
         function createGamepad() {
             if (gamepadGroup) scene.remove(gamepadGroup);
             gamepadGroup = new THREE.Group();
-            // Put a simple floating cube “button” for visual demo
-            const button = new THREE.Mesh(
-                new THREE.BoxGeometry(0.15, 0.05, 0.05),
-                new THREE.MeshStandardMaterial({ color: 0x00aaff, metalness: 0.8, roughness: 0.2 })
-            );
-            button.position.set(0, -0.5, 0);
-            gamepadGroup.add(button);
-            // Position gamepad slightly below grid
-            gamepadGroup.position.set(0, 0.5, -1.2);
+            // Below the board, centered
+            gamepadGroup.position.set(0, -1.3, -1.2);
             scene.add(gamepadGroup);
+
+            // NES controller model
+            const loader = new GLTFLoader();
+            loader.load(
+                'https://raw.githubusercontent.com/augmentedthinker/test/main/nintendo_nes_controller.glb',
+                function (gltf) {
+                    nesController = gltf.scene;
+                    nesController.scale.set(0.5, 0.5, 0.5);
+                    nesController.position.set(0, 0, 0);
+                    gamepadGroup.add(nesController);
+                    createControllerInteractionZones();
+                },
+                undefined,
+                function (error) {
+                    console.error('Error loading NES controller:', error);
+                    // fallback? (not needed)
+                }
+            );
         }
 
-        // --- Tetris Game Logic (stubbed for brevity) ---
+        // --- Invisible zones for button/collision interaction ---
+        function createControllerInteractionZones() {
+            // Material: Slightly visible for debug (set opacity:0 for full invis)
+            const dpadMaterial = new THREE.MeshBasicMaterial({ color: 0x444444, transparent: true, opacity: 0.15 });
+
+            const dpadSize = 0.042;
+            // Up
+            dpadUp = new THREE.Mesh(new THREE.BoxGeometry(dpadSize, dpadSize, 0.018), dpadMaterial.clone());
+            dpadUp.position.set(-0.15, 0.05, 0.025); gamepadGroup.add(dpadUp); gamepadElements.push(dpadUp);
+            // Down
+            dpadDown = new THREE.Mesh(new THREE.BoxGeometry(dpadSize, dpadSize, 0.018), dpadMaterial.clone());
+            dpadDown.position.set(-0.15, -0.05, 0.025); gamepadGroup.add(dpadDown); gamepadElements.push(dpadDown);
+            // Left
+            dpadLeft = new THREE.Mesh(new THREE.BoxGeometry(dpadSize, dpadSize, 0.018), dpadMaterial.clone());
+            dpadLeft.position.set(-0.2, 0, 0.025); gamepadGroup.add(dpadLeft); gamepadElements.push(dpadLeft);
+            // Right
+            dpadRight = new THREE.Mesh(new THREE.BoxGeometry(dpadSize, dpadSize, 0.018), dpadMaterial.clone());
+            dpadRight.position.set(-0.1, 0, 0.025); gamepadGroup.add(dpadRight); gamepadElements.push(dpadRight);
+
+            // A/B Buttons
+            const abRadius = 0.022;
+            buttonA = new THREE.Mesh(new THREE.SphereGeometry(abRadius, 16, 16), dpadMaterial.clone());
+            buttonA.position.set(0.15, -0.02, 0.025); gamepadGroup.add(buttonA); gamepadElements.push(buttonA);
+            buttonB = new THREE.Mesh(new THREE.SphereGeometry(abRadius, 16, 16), dpadMaterial.clone());
+            buttonB.position.set(0.1, -0.02, 0.025); gamepadGroup.add(buttonB); gamepadElements.push(buttonB);
+
+            console.log("NES Controller interaction zones created");
+        }
+
+        // --- Controller Interaction Logic: ALL buttons work ---
+        function onControllerSelectStart(event) {
+            const controller = event.target;
+            const tempMatrix = new THREE.Matrix4();
+            tempMatrix.extractRotation(controller.matrixWorld);
+
+            const raycaster = new THREE.Raycaster();
+            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+            const intersects = raycaster.intersectObjects(gamepadElements);
+            if (intersects.length > 0) {
+                const object = intersects[0].object;
+                // Button flash visual feedback
+                const originalColor = object.material.color.getHex();
+                object.material.color.set(0xffffff);
+                setTimeout(() => object.material.color.set(originalColor), 140);
+
+                // --- Full NES control mapping ---
+                if (isPieceActive) {
+                    if (object === dpadLeft) {
+                        movePieceHorizontally(-1);
+                    } else if (object === dpadRight) {
+                        movePieceHorizontally(1);
+                    } else if (object === dpadDown) {
+                        movePieceDown(); // Soft drop
+                    } else if (object === dpadUp) {
+                        rotatePiece();
+                    } else if (object === buttonA) {
+                        rotatePiece();
+                    } else if (object === buttonB) {
+                        rotatePiece();
+                    }
+                }
+            }
+        }
+
+        // --- Tetris Game Logic (unchanged from your current working version) ---
+        let boardState = [], piecePosition = { row: 0, col: 0 }, isPieceActive = true;
+        let currentPieceType = null, currentPieceRotation = 0, currentShape = [];
+
+        const SCORING = { SINGLE_LINE: 40, DOUBLE_LINE: 100, TRIPLE_LINE: 300, TETRIS: 1200, SOFT_DROP: 1, HARD_DROP: 2 };
+
+        function rotateMatrix(matrix) {
+            const rows = matrix.length, cols = matrix[0].length, rotated = [];
+            for (let i = 0; i < cols; i++) {
+                rotated[i] = [];
+                for (let j = 0; j < rows; j++) {
+                    rotated[i][j] = matrix[rows-1-j][i];
+                }
+            }
+            return rotated;
+        }
+        function getShapeBlocks(shape) {
+            const blocks = [];
+            for (let row = 0; row < shape.length; row++) {
+                for (let col = 0; col < shape[row].length; col++) {
+                    if (shape[row][col] === 1) {
+                        blocks.push({ x: col, y: row });
+                    }
+                }
+            }
+            return blocks;
+        }
+        function movePieceHorizontally(deltaCol) {
+            if (!isPieceActive) return;
+            const newPosition = { row: piecePosition.row, col: piecePosition.col + deltaCol };
+            if (canMoveTo(newPosition, currentShape)) {
+                piecePosition.col = newPosition.col;
+                updatePiecePosition();
+            }
+        }
+        function rotatePiece() {
+            if (!isPieceActive) return;
+            const rotatedShape = rotateMatrix(currentShape);
+            if (canMoveTo(piecePosition, rotatedShape)) {
+                currentShape = rotatedShape;
+                currentPieceRotation = (currentPieceRotation + 1) % 4;
+                updatePieceVisuals();
+            } else {
+                // Wall kicks
+                const wallKicks = [-1, 1, -2, 2];
+                for (let kick of wallKicks) {
+                    const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick };
+                    if (canMoveTo(kickPosition, rotatedShape)) {
+                        piecePosition.col = kickPosition.col;
+                        currentShape = rotatedShape;
+                        currentPieceRotation = (currentPieceRotation + 1) % 4;
+                        updatePieceVisuals();
+                        updatePiecePosition();
+                        return;
+                    }
+                }
+            }
+        }
+        function movePieceDown() {
+            if (canMoveDown()) {
+                piecePosition.row++;
+                score += SCORING.SOFT_DROP; dropScore += SCORING.SOFT_DROP;
+                updatePiecePosition();
+            } else {
+                lockPiece();
+            }
+        }
+        function canMoveDown() {
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
+                const newRow = piecePosition.row + 1 + block.y;
+                const newCol = piecePosition.col + block.x;
+                if (newRow >= BOARD_HEIGHT) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
+            }
+            return true;
+        }
+        function canMoveTo(position, shape) {
+            const blocks = getShapeBlocks(shape);
+            for (let block of blocks) {
+                const newRow = position.row + block.y;
+                const newCol = position.col + block.x;
+                if (newCol < 0 || newCol >= BOARD_WIDTH) return false;
+                if (newRow >= BOARD_HEIGHT) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
+            }
+            return true;
+        }
+        function updatePiecePosition() {
+            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+            currentPiece.position.set(
+                boardOffsetX + piecePosition.col * CELL_SIZE,
+                -piecePosition.row * CELL_SIZE,
+                0
+            );
+        }
+        function updatePieceVisuals() {
+            while(currentPiece.children.length > 0) currentPiece.remove(currentPiece.children[0]);
+            const material = createEnhancedMaterial(currentPieceType.color, currentPieceType.material);
+            const blocks = getShapeBlocks(currentShape);
+            blocks.forEach(block => {
+                const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                const cube = new THREE.Mesh(geometry, material);
+                cube.position.set(
+                    block.x * CELL_SIZE + (CELL_SIZE / 2),
+                    -block.y * CELL_SIZE - (CELL_SIZE / 2),
+                    0
+                );
+                currentPiece.add(cube);
+            });
+        }
+        // Game start/reset
         function initGame() {
-            // You’d fill this in with your Tetris piece management etc.
+            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
+            if (staticBlocks) {
+                while(staticBlocks.children.length > 0) {
+                    staticBlocks.remove(staticBlocks.children[0]);
+                }
+            }
+            score = 0; level = 1; totalLinesCleared = 0; dropScore = 0;
+            currentPieceRotation = 0; createPiece();
+            lastFallTime = performance.now();
+            updateUIDisplay();
+        }
+        // Piece creation
+        function createPiece() {
+            const pieceTypes = Object.keys(PIECES);
+            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
+            currentPieceType = PIECES[randomType]; currentShape = currentPieceType.shape;
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
+            piecePosition.row = 0; currentPieceRotation = 0;
+            if (currentPiece) gameBoard.remove(currentPiece);
+            currentPiece = new THREE.Group(); gameBoard.add(currentPiece);
+            updatePieceVisuals(); updatePiecePosition(); isPieceActive = true;
+        }
+        // Game update logic
+        let lastFallTime = 0;
+        function updateGame(timestamp) {
+            if (!isPieceActive) return;
+            const currentFallSpeed = Math.max(50, 1000 - (level-1)*100);
+            if (timestamp - lastFallTime > currentFallSpeed) {
+                movePieceDown();
+                lastFallTime = timestamp;
+            }
+        }
+        function lockPiece() {
+            isPieceActive = false;
+            if (lockSound && lockSound.buffer && !lockSound.isPlaying) lockSound.play();
+            const blocks = getShapeBlocks(currentShape);
+            for (let block of blocks) {
+                const row = piecePosition.row + block.y;
+                const col = piecePosition.col + block.x;
+                if (row >= 0) {
+                    boardState[row][col] = {
+                        color: currentPieceType.color,
+                        material: currentPieceType.material
+                    };
+                }
+            }
+            gameBoard.remove(currentPiece);
+            const clearedRows = checkLines();
+            if (clearedRows.length > 0) {
+                const lineScore = calculateLineScore(clearedRows.length);
+                score += lineScore;
+                totalLinesCleared += clearedRows.length;
+                updateLevel(); updateUIDisplay();
+                // Particle explosion for each cleared row
+                clearedRows.forEach(row => {
+                    const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+                    const rowY = -row * CELL_SIZE;
+                    for (let col = 0; col < BOARD_WIDTH; col++) {
+                        const explosionPos = new THREE.Vector3(
+                            boardOffsetX + col * CELL_SIZE + CELL_SIZE / 2,
+                            rowY - CELL_SIZE / 2, 0
+                        );
+                        explosionPos.applyMatrix4(gameBoard.matrixWorld);
+                        const blockData = boardState[row][col];
+                        const particleColor = blockData ? blockData.color : 0xffffff;
+                        createParticleExplosion(explosionPos, particleColor, 8);
+                    }
+                });
+                if (clearSound && clearSound.buffer && !clearSound.isPlaying) clearSound.play();
+            }
+            redrawStaticBlocks();
+            setTimeout(() => { createPiece(); lastFallTime = performance.now(); }, 220);
+        }
+        function checkLines() {
+            let clearedRows = [];
+            for (let row = BOARD_HEIGHT-1; row>=0; row--) {
+                if (boardState[row].every(cell => cell !== 0)) {
+                    clearedRows.push(row);
+                    boardState.splice(row, 1);
+                    boardState.unshift(Array(BOARD_WIDTH).fill(0));
+                    row++;
+                }
+            }
+            return clearedRows;
+        }
+        function redrawStaticBlocks() {
+            while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]);
+            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
+            for (let row=0; row<BOARD_HEIGHT; row++) {
+                for (let col=0; col<BOARD_WIDTH; col++) {
+                    const blockData = boardState[row][col];
+                    if (blockData !== 0) {
+                        const material = createEnhancedMaterial(blockData.color, blockData.material);
+                        const geometry = new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                        const cube = new THREE.Mesh(geometry, material);
+                        cube.position.set(
+                            boardOffsetX + col*CELL_SIZE + CELL_SIZE/2,
+                            -row*CELL_SIZE - CELL_SIZE/2,
+                            0
+                        );
+                        staticBlocks.add(cube);
+                    }
+                }
+            }
+        }
+        function calculateLineScore(linesCleared) {
+            switch(linesCleared) {
+                case 1: return SCORING.SINGLE_LINE*level;
+                case 2: return SCORING.DOUBLE_LINE*level;
+                case 3: return SCORING.TRIPLE_LINE*level;
+                case 4: return SCORING.TETRIS*level;
+                default: return 0;
+            }
+        }
+        function updateLevel() {
+            const newLevel = Math.floor(totalLinesCleared/10)+1;
+            if (newLevel !== level) level = newLevel;
         }
 
-        // --- Main render loop ---
-        renderer.setAnimationLoop(() => {
+        // --- Main Render Loop ---
+        renderer.setAnimationLoop((timestamp) => {
+            updateGame(timestamp);
+            updateParticles();
             renderer.render(scene, camera);
         });
 
