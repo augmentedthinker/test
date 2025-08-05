@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>AR Tetris - Fixed Rotation</title>
+    <title>AR Tetris - With Sound</title>
     <style>
         body { margin: 0;
 padding: 0; overflow: hidden; background-color: #000; }
@@ -35,6 +35,10 @@ renderer.xr.setReferenceSpaceType('local');
                         button.textContent = 'STOP AR';
                         currentSession = session;
 if (currentSession) {
+                            // Resume audio context after user interaction
+                            if (listener && listener.context.state === 'suspended') {
+                                listener.context.resume();
+                            }
                             setupControllers();
 createGameBoard();
                             createGamepad();
@@ -94,6 +98,7 @@ let controller1, controller2, controllerGrip1, controllerGrip2;
         let gamepadGroup;
         let currentPiece;
         let staticBlocks; // This will hold all the locked blocks
+        let listener, lockSound, clearSound; // For audio
 
         scene = new THREE.Scene();
 camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -102,6 +107,26 @@ camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight,
 renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+        // --- Audio Setup ---
+        listener = new THREE.AudioListener();
+        camera.add(listener);
+
+        const audioLoader = new THREE.AudioLoader();
+        lockSound = new THREE.Audio(listener);
+        clearSound = new THREE.Audio(listener);
+
+        // Load lock sound
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', function(buffer) {
+            lockSound.setBuffer(buffer);
+            lockSound.setVolume(0.5);
+        });
+
+        // Load line clear sound
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', function(buffer) {
+            clearSound.setBuffer(buffer);
+            clearSound.setVolume(0.7);
+        });
 
         // Lighting
         const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 3);
@@ -441,7 +466,8 @@ const blocks = getShapeBlocks(currentShape);
                 const cube = new THREE.Mesh(geometry, material);
                 cube.position.set(
                     block.x * CELL_SIZE + (CELL_SIZE / 2),
-                    -block.y * CELL_SIZE - (CELL_SIZE / 2),
+             
+       -block.y * CELL_SIZE - (CELL_SIZE / 2),
                     0
                 );
                 currentPiece.add(cube);
@@ -521,27 +547,35 @@ if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false; // Check agai
 
         function lockPiece() {
             isPieceActive = false;
-console.log(`Piece locked in place`);
+            console.log(`Piece locked in place`);
             
+            if (lockSound && lockSound.buffer && !lockSound.isPlaying) {
+                lockSound.play();
+            }
+
             const blocks = getShapeBlocks(currentShape);
             for (let block of blocks) {
                 const row = piecePosition.row + block.y;
-const col = piecePosition.col + block.x;
+                const col = piecePosition.col + block.x;
                 if (row >= 0) {
                     boardState[row][col] = currentPieceType.color; // Store color instead of 1
-}
+                }
             }
             
             gameBoard.remove(currentPiece); // Remove the active piece group
             
-            checkLines();
+            const wasLineCleared = checkLines();
+            if (wasLineCleared && clearSound && clearSound.buffer && !clearSound.isPlaying) {
+                clearSound.play();
+            }
+
             redrawStaticBlocks(); // Redraw the entire board from the state
             
-setTimeout(() => {
+            setTimeout(() => {
                 createPiece();
                 lastFallTime = performance.now();
             }, 200); // Shorter delay for smoother gameplay
-}
+        }
 
         function checkLines() {
             let linesCleared = 0;
@@ -549,7 +583,7 @@ setTimeout(() => {
                 if (boardState[row].every(cell => cell !== 0)) { // A line is full if no cell is 0
                     linesCleared++;
                     console.log(`Line cleared at row ${row}`);
-boardState.splice(row, 1);
+                    boardState.splice(row, 1);
                     boardState.unshift(Array(BOARD_WIDTH).fill(0));
                     row++; // Check the same row again in case multiple lines are cleared
                 }
