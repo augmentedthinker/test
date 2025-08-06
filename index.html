@@ -326,16 +326,12 @@
             // Lines cleared display
             linesText = createTextDisplay('LINES: 0', 0, -0.3, '#00ff00');
             uiPanel.add(linesText);
-            // Position the UI panel to the right of the game board
-            // --- ADJUSTED POSITION ---
-            // Original: uiPanel.position.set(1.5, 1.6, -2);
-            // Game board is at (0, 1.6, -2)
-            // BOARD_HEIGHT * CELL_SIZE = 20 * 0.1 = 2.0
-            // Center of board is at y = 1.6 - (2.0 / 2) = 1.6 - 1.0 = 0.6
-            // Place UI panel at y = 0.6 to align vertically with the board center
-            uiPanel.position.set(1.5, 0.6, -2);
+            // Position the UI panel next to the game board (adjust Y and Z)
+            // Original position: uiPanel.position.set(1.5, 1.6, -2);
+            // New position: Move down (lower Y) and slightly forward (less negative Z)
+            uiPanel.position.set(1.5, 0.6, -1.5); // Adjusted Y from 1.6 to 0.6, Z from -2 to -1.5
             scene.add(uiPanel);
-            console.log("3D UI Panel created");
+            console.log("3D UI Panel created and positioned next to the game grid");
         }
         function createTextCanvas(text, fontSize, textColor, backgroundColor) {
             const canvas = document.createElement('canvas');
@@ -497,7 +493,7 @@
                 const line = new THREE.Line(geometry, gridMaterial);
                 gameBoard.add(line);
             }
-            gameBoard.position.set(0, 1.6, -2); // This is the fixed position of the game board
+            gameBoard.position.set(0, 1.6, -2);
             scene.add(gameBoard);
             // Initialize particle system
             initParticleSystem();
