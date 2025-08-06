@@ -1,667 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Enhanced AR Tetris - Glass Blocks & Particles</title>
-    <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
-    </style>
+  <meta charset="UTF-8">
+  <title>AR Skeleton - Quest 2 Controllers Only</title>
+  <style>
+    body { margin: 0; padding: 0; overflow: hidden; background: #000; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-    <script type="importmap">
-        {
-            "imports": {
-                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-            }
-        }
-    </script>
-    <script type="module">
-        import * as THREE from 'three';
-        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+<script type="module">
+  import * as THREE from 'three';
+  import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-        // --- AR Button Setup ---
-        class ARButton {
-            static createButton(renderer, sessionInit = {}) {
-                const button = document.createElement('button');
-                function showStartAR() {
-                    let currentSession = null;
-                    async function onSessionStarted(session) {
-                        session.addEventListener('end', onSessionEnded);
-                        renderer.xr.setReferenceSpaceType('local');
-                        await renderer.xr.setSession(session);
-                        button.textContent = 'STOP AR';
-                        currentSession = session;
-                        if (currentSession) {
-                            if (listener && listener.context.state === 'suspended') {
-                                listener.context.resume();
-                            }
-                            setupControllers();
-                            createGameBoard();
-                            createGamepad();
-                            initGame();
-                        }
-                    }
-                    function onSessionEnded() {
-                        currentSession.removeEventListener('end', onSessionEnded);
-                        button.textContent = 'START AR';
-                        currentSession = null;
-                        if (controller1) scene.remove(controller1);
-                        if (controller2) scene.remove(controller2);
-                        if (controllerGrip1) scene.remove(controllerGrip1);
-                        if (controllerGrip2) scene.remove(controllerGrip2);
-                        if (gameBoard) scene.remove(gameBoard);
-                        if (gamepadGroup) scene.remove(gamepadGroup);
-                        if (particleSystem) scene.remove(particleSystem);
-                        if (uiPanel) scene.remove(uiPanel);
-                    }
-                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; cursor: pointer; z-index: 999;`;
-                    button.textContent = 'START AR';
-                    button.onclick = () => currentSession ? currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-                }
-                function showARNotSupported() {
-                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`;
-                    button.textContent = 'AR NOT SUPPORTED';
-                }
-                if ('xr' in navigator) {
-                    navigator.xr.isSessionSupported('immersive-ar').then(supported => supported ? showStartAR() : showARNotSupported()).catch(showARNotSupported);
-                    return button;
-                } else {
-                    const message = document.createElement('a');
-                    message.innerHTML = 'WEBXR NOT AVAILABLE';
-                    message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; text-decoration: none; z-index: 999;`;
-                    return message;
-                }
-            }
-        }
-
-        // --- Core Three.js Setup ---
-        let camera, scene, renderer;
-        let controller1, controller2, controllerGrip1, controllerGrip2;
-        let controllerModelFactory;
-        let gameBoard;
-        let gamepadGroup;
-        let currentPiece;
-        let staticBlocks;
-        let listener, lockSound, clearSound;
-        let particleSystem;
-        let particles = [];
-
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
-        document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
-
-        // --- Audio Setup ---
-        listener = new THREE.AudioListener();
-        camera.add(listener);
-        const audioLoader = new THREE.AudioLoader();
-        lockSound = new THREE.Audio(listener);
-        clearSound = new THREE.Audio(listener);
-        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', function(buffer) { lockSound.setBuffer(buffer); lockSound.setVolume(0.5); });
-        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', function(buffer) { clearSound.setBuffer(buffer); clearSound.setVolume(0.7); });
-
-        // --- Enhanced Lighting for Realistic Materials ---
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-        scene.add(ambientLight);
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(5, 10, 5);
-        scene.add(directionalLight);
-        const pointLight1 = new THREE.PointLight(0x00ffff, 0.8, 10);
-        pointLight1.position.set(-2, 2, 0);
-        scene.add(pointLight1);
-        const pointLight2 = new THREE.PointLight(0xff00ff, 0.8, 10);
-        pointLight2.position.set(2, 2, 0);
-        scene.add(pointLight2);
-
-        // --- Game Constants ---
-        const BOARD_WIDTH = 10;
-        const BOARD_HEIGHT = 20;
-        const CELL_SIZE = 0.1;
-        const FALL_SPEED = 1000;
-
-        // --- Enhanced Tetris Pieces with Glass/Metal Materials ---
-        const PIECES = {
-            I: { shape: [[1,1,1,1]], color: 0x00ffff, material: 'glass' },
-            O: { shape: [[1,1],[1,1]], color: 0xffff00, material: 'metal' },
-            T: { shape: [[0,1,0],[1,1,1]], color: 0x800080, material: 'glass' },
-            S: { shape: [[0,1,1],[1,1,0]], color: 0x00ff00, material: 'crystal' },
-            Z: { shape: [[1,1,0],[0,1,1]], color: 0xff0000, material: 'metal' },
-            J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff, material: 'glass' },
-            L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500, material: 'crystal' }
-        };
-
-        // --- Enhanced Material Creation ---
-        function createEnhancedMaterial(color, materialType) {
-            switch(materialType) {
-                case 'glass': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.8, roughness: 0.1, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.1, ior: 1.5, transparent: true, opacity: 0.8 });
-                case 'metal': return new THREE.MeshStandardMaterial({ color: color, metalness: 0.9, roughness: 0.2, emissive: new THREE.Color(color).multiplyScalar(0.1) });
-                case 'crystal': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.5, roughness: 0.0, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.4, transparent: true, opacity: 0.9, emissive: new THREE.Color(color).multiplyScalar(0.05) });
-                default: return new THREE.MeshStandardMaterial({ color: color });
-            }
-        }
-
-        // --- Particle System Setup ---
-        function initParticleSystem() {
-            particleSystem = new THREE.Group();
-            scene.add(particleSystem);
-        }
-        function createParticleExplosion(position, color, count = 20) {
-            for (let i = 0; i < count; i++) {
-                const particleGeometry = new THREE.SphereGeometry(0.01, 4, 4);
-                const particleMaterial = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1.0 });
-                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
-                particle.position.copy(position);
-                const velocity = new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
-                particle.userData = { velocity: velocity, life: 1.0, decay: 0.02 + Math.random() * 0.02 };
-                particleSystem.add(particle);
-                particles.push(particle);
-            }
-        }
-        function updateParticles() {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const particle = particles[i];
-                const userData = particle.userData;
-                particle.position.add(userData.velocity);
-                userData.velocity.y -= 0.01;
-                userData.life -= userData.decay;
-                particle.material.opacity = userData.life;
-                if (userData.life <= 0) {
-                    particleSystem.remove(particle);
-                    particles.splice(i, 1);
-                    particle.geometry.dispose();
-                    particle.material.dispose();
-                }
-            }
-        }
-
-        // --- Game State & Scoring System ---
-        let lastFallTime = 0, piecePosition = { row: 0, col: 0 }, isPieceActive = true, boardState = [], currentPieceType = null, currentPieceRotation = 0, currentShape = [];
-        let score = 0, level = 1, totalLinesCleared = 0, dropScore = 0;
-        const SCORING = { SINGLE_LINE: 40, DOUBLE_LINE: 100, TRIPLE_LINE: 300, TETRIS: 1200, SOFT_DROP: 1, HARD_DROP: 2 };
-        let uiPanel = null, scoreText = null, levelText = null, linesText = null;
-
-        // --- 3D UI Creation ---
-        function createUIPanel() {
-            if (uiPanel) scene.remove(uiPanel);
-            uiPanel = new THREE.Group();
-            const panelGeometry = new THREE.PlaneGeometry(1.0, 1.2);
-            const panelMaterial = new THREE.MeshPhysicalMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.2 });
-            const panelBackground = new THREE.Mesh(panelGeometry, panelMaterial);
-            uiPanel.add(panelBackground);
-            
-            const titleCanvas = createTextCanvas('TETRIS AR', 64, '#00ffff', 'rgba(0,0,0,0)');
-            const titleTexture = new THREE.CanvasTexture(titleCanvas);
-            const titleMaterial = new THREE.MeshBasicMaterial({ map: titleTexture, transparent: true });
-            const titleGeometry = new THREE.PlaneGeometry(0.8, 0.2);
-            const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
-            titleMesh.position.set(0, 0.45, 0.01);
-            uiPanel.add(titleMesh);
-            
-            scoreText = createTextDisplay('SCORE: 0', 0, 0.15, '#ffff00');
-            uiPanel.add(scoreText);
-            levelText = createTextDisplay('LEVEL: 1', 0, -0.1, '#ff6600');
-            uiPanel.add(levelText);
-            linesText = createTextDisplay('LINES: 0', 0, -0.35, '#00ff00');
-            uiPanel.add(linesText);
-            
-            // Position the UI panel to the right and vertically centered with the game board
-            const boardHeight = BOARD_HEIGHT * CELL_SIZE;
-            const boardCenterY = 1.6 - boardHeight / 2;
-            const boardWidth = BOARD_WIDTH * CELL_SIZE;
-            uiPanel.position.set(boardWidth / 2 + 0.6, boardCenterY, -2);
-            
-            scene.add(uiPanel);
-        }
-        function createTextCanvas(text, fontSize, textColor, backgroundColor) {
-            const canvas = document.createElement('canvas');
-            const context = canvas.getContext('2d');
-            canvas.width = 512; canvas.height = 128;
-            context.fillStyle = backgroundColor;
-            context.fillRect(0, 0, canvas.width, canvas.height);
-            context.font = `bold ${fontSize}px Arial`;
-            context.fillStyle = textColor;
-            context.textAlign = 'center';
-            context.textBaseline = 'middle';
-            context.shadowColor = 'rgba(0, 0, 0, 0.8)';
-            context.shadowOffsetX = 2; context.shadowOffsetY = 2; context.shadowBlur = 4;
-            context.fillText(text, canvas.width / 2, canvas.height / 2);
-            return canvas;
-        }
-        function createTextDisplay(text, x, y, color) {
-            const canvas = createTextCanvas(text, 48, color, 'rgba(0,0,0,0)');
-            const texture = new THREE.CanvasTexture(canvas);
-            const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-            const geometry = new THREE.PlaneGeometry(0.9, 0.2);
-            const mesh = new THREE.Mesh(geometry, material);
-            mesh.position.set(x, y, 0.01);
-            return mesh;
-        }
-        function updateUIDisplay() {
-            if (scoreText) {
-                const canvas = createTextCanvas(`SCORE: ${score.toLocaleString()}`, 48, '#ffff00', 'rgba(0,0,0,0)');
-                scoreText.material.map.dispose();
-                scoreText.material.map = new THREE.CanvasTexture(canvas);
-            }
-            if (levelText) {
-                const canvas = createTextCanvas(`LEVEL: ${level}`, 48, '#ff6600', 'rgba(0,0,0,0)');
-                levelText.material.map.dispose();
-                levelText.material.map = new THREE.CanvasTexture(canvas);
-            }
-            if (linesText) {
-                const canvas = createTextCanvas(`LINES: ${totalLinesCleared}`, 48, '#00ff00', 'rgba(0,0,0,0)');
-                linesText.material.map.dispose();
-                linesText.material.map = new THREE.CanvasTexture(canvas);
-            }
-        }
-        
-        // --- Scoring Functions ---
-        function calculateLineScore(linesCleared) {
-            let baseScore = 0;
-            switch(linesCleared) {
-                case 1: baseScore = SCORING.SINGLE_LINE; break;
-                case 2: baseScore = SCORING.DOUBLE_LINE; break;
-                case 3: baseScore = SCORING.TRIPLE_LINE; break;
-                case 4: baseScore = SCORING.TETRIS; break;
-                default: baseScore = 0;
-            }
-            return baseScore * level;
-        }
-        function addScore(points) {
-            score += points;
-            updateUIDisplay();
-        }
-        function updateLevel() {
-            const newLevel = Math.floor(totalLinesCleared / 10) + 1;
-            if (newLevel !== level) {
-                level = newLevel;
-            }
-        }
-        function getFallSpeed() {
-            return Math.max(50, 1000 - (level - 1) * 100);
-        }
-
-        // --- Gamepad Elements ---
-        let dpadUp, dpadDown, dpadLeft, dpadRight;
-        let buttonA, buttonB;
-        let gamepadElements = [];
-
-        // --- Controller Setup ---
-        function setupControllers() {
-            controller1 = renderer.xr.getController(0); scene.add(controller1);
-            controller2 = renderer.xr.getController(1); scene.add(controller2);
-            controllerGrip1 = renderer.xr.getControllerGrip(0); scene.add(controllerGrip1);
-            controllerGrip2 = renderer.xr.getControllerGrip(1); scene.add(controllerGrip2);
-            controllerModelFactory = new XRControllerModelFactory();
-            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
-            controllerGrip1.add(controllerModel1);
-            const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
-            controllerGrip2.add(controllerModel2);
-            setupLaserPointer(controller1); setupLaserPointer(controller2);
-            controller1.addEventListener('selectstart', onControllerSelectStart);
-            controller2.addEventListener('selectstart', onControllerSelectStart);
-            controller1.addEventListener('selectend', onControllerSelectEnd);
-            controller2.addEventListener('selectend', onControllerSelectEnd);
-        }
-        function setupLaserPointer(controller) {
-            const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
-            const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7, linewidth: 2 });
-            const line = new THREE.Line(geometry, material);
-            line.scale.z = 5;
-            line.visible = false;
-            controller.add(line);
-            controller.addEventListener('connected', function () { line.visible = true; });
-            controller.addEventListener('disconnected', function () { line.visible = false; });
-        }
-
-        // --- Game Board Creation ---
-        function createGameBoard() {
-            if (gameBoard) scene.remove(gameBoard);
-            gameBoard = new THREE.Group();
-            staticBlocks = new THREE.Group();
-            gameBoard.add(staticBlocks);
-            const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
-            for (let x = 0; x <= BOARD_WIDTH; x++) {
-                const points = [new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, 0, 0), new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, -BOARD_HEIGHT*CELL_SIZE, 0)];
-                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial);
-                gameBoard.add(line);
-            }
-            for (let y = 0; y <= BOARD_HEIGHT; y++) {
-                const points = [new THREE.Vector3(-(BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0), new THREE.Vector3((BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0)];
-                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial);
-                gameBoard.add(line);
-            }
-            gameBoard.position.set(0, 1.6, -2);
-            scene.add(gameBoard);
-            initParticleSystem();
-            createUIPanel();
-        }
-        
-        // --- Stylized Gamepad Creation (FIXED) ---
-        function createGamepad() {
-            if (gamepadGroup) scene.remove(gamepadGroup);
-            gamepadGroup = new THREE.Group();
-            gamepadElements = [];
-
-            const SCALE_FACTOR = 1.5;
-            const gamepadZOffset = 0.02;
-
-            // Base plate - Sleek but with simple geometry
-            const gamepadMaterial = new THREE.MeshPhysicalMaterial({
-                color: 0x222233,
-                roughness: 0.4,
-                metalness: 0.1,
-                transmission: 0.5,
-                transparent: true,
-                opacity: 0.7
-            });
-            const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.15 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
-            gamepadGroup.add(gamepadBase);
-
-            // --- Glowing Buttons ---
-            const createButtonMaterial = (color) => new THREE.MeshStandardMaterial({
-                color: color,
-                emissive: color,
-                emissiveIntensity: 0.6,
-                roughness: 0.3
-            });
-
-            // D-Pad (using simple, reliable boxes)
-            const dpadGeomVert = new THREE.BoxGeometry(0.04 * SCALE_FACTOR, 0.05 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            const dpadGeomHoriz = new THREE.BoxGeometry(0.05 * SCALE_FACTOR, 0.04 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            const dpadMat = createButtonMaterial(0xcccccc);
-
-            dpadUp = new THREE.Mesh(dpadGeomVert, dpadMat);
-            dpadUp.position.set(-0.09 * SCALE_FACTOR, 0.035 * SCALE_FACTOR, gamepadZOffset);
-            gamepadGroup.add(dpadUp);
-            gamepadElements.push(dpadUp);
-
-            dpadDown = new THREE.Mesh(dpadGeomVert, dpadMat.clone());
-            dpadDown.position.set(-0.09 * SCALE_FACTOR, -0.035 * SCALE_FACTOR, gamepadZOffset);
-            gamepadGroup.add(dpadDown);
-            gamepadElements.push(dpadDown);
-
-            dpadLeft = new THREE.Mesh(dpadGeomHoriz, dpadMat.clone());
-            dpadLeft.position.set(-0.13 * SCALE_FACTOR, 0, gamepadZOffset);
-            gamepadGroup.add(dpadLeft);
-            gamepadElements.push(dpadLeft);
-
-            dpadRight = new THREE.Mesh(dpadGeomHoriz, dpadMat.clone());
-            dpadRight.position.set(-0.05 * SCALE_FACTOR, 0, gamepadZOffset);
-            gamepadGroup.add(dpadRight);
-            gamepadElements.push(dpadRight);
-
-            // A & B Buttons (using cylinders for a rounded look)
-            const buttonGeom = new THREE.CylinderGeometry(0.025 * SCALE_FACTOR, 0.025 * SCALE_FACTOR, 0.015 * SCALE_FACTOR, 24);
-            buttonGeom.rotateX(Math.PI / 2); // Orient them to face the player
-
-            buttonA = new THREE.Mesh(buttonGeom, createButtonMaterial(0x00ffff)); // Cyan
-            buttonA.position.set(0.06 * SCALE_FACTOR, 0.025 * SCALE_FACTOR, gamepadZOffset);
-            gamepadGroup.add(buttonA);
-            gamepadElements.push(buttonA);
-
-            buttonB = new THREE.Mesh(buttonGeom, createButtonMaterial(0xff00ff)); // Magenta
-            buttonB.position.set(0.11 * SCALE_FACTOR, -0.025 * SCALE_FACTOR, gamepadZOffset);
-            gamepadGroup.add(buttonB);
-            gamepadElements.push(buttonB);
-
-            // Position gamepad below the board
-            gamepadGroup.position.set(0, 1.6 - (BOARD_HEIGHT * CELL_SIZE) - 0.2, -2);
-            scene.add(gamepadGroup);
-        }
-
-        // --- Controller Interaction ---
-        function onControllerSelectStart(event) {
-            const controller = event.target;
-            const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld);
-            const raycaster = new THREE.Raycaster();
-            raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-            raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-            const intersects = raycaster.intersectObjects(gamepadElements);
-            if (intersects.length > 0) {
-                const object = intersects[0].object;
-                object.material.emissiveIntensity = 1.5; // Highlight selected button
-                
-                if (isPieceActive) {
-                    if (object === dpadLeft) movePieceHorizontally(-1);
-                    else if (object === dpadRight) movePieceHorizontally(1);
-                    else if (object === buttonA) rotatePiece();
-                    else if (object === dpadDown) fastDrop();
-                    // Note: D-pad Up has no action in this game logic
-                }
-            }
-        }
-        function onControllerSelectEnd(event) {
-            // Reset all buttons to base intensity
-            gamepadElements.forEach(btn => {
-                if(btn.material.emissiveIntensity !== 0.6) {
-                   btn.material.emissiveIntensity = 0.6;
-                }
-            });
-        }
-
-        // --- Helper Functions ---
-        function rotateMatrix(matrix) {
-            const rows = matrix.length, cols = matrix[0].length;
-            const rotated = Array.from({ length: cols }, () => Array(rows));
-            for (let i = 0; i < cols; i++) {
-                for (let j = 0; j < rows; j++) {
-                    rotated[i][j] = matrix[rows - 1 - j][i];
-                }
-            }
-            return rotated;
-        }
-        function getShapeBlocks(shape) {
-            const blocks = [];
-            for (let row = 0; row < shape.length; row++) {
-                for (let col = 0; col < shape[row].length; col++) {
-                    if (shape[row][col] === 1) blocks.push({ x: col, y: row });
-                }
-            }
-            return blocks;
-        }
-
-        // --- Piece Movement Logic ---
-        function movePieceHorizontally(deltaCol) {
-            if (!isPieceActive) return;
-            const newPosition = { row: piecePosition.row, col: piecePosition.col + deltaCol };
-            if (canMoveTo(newPosition, currentShape)) {
-                piecePosition.col = newPosition.col;
-                updatePiecePosition();
-            }
-        }
-        function rotatePiece() {
-            if (!isPieceActive) return;
-            const rotatedShape = rotateMatrix(currentShape);
-            if (canMoveTo(piecePosition, rotatedShape)) {
-                currentShape = rotatedShape;
-                currentPieceRotation = (currentPieceRotation + 1) % 4;
-                updatePieceVisuals();
-            } else {
-                const wallKicks = [-1, 1, -2, 2];
-                for (let kick of wallKicks) {
-                    const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick };
-                    if (canMoveTo(kickPosition, rotatedShape)) {
-                        piecePosition.col = kickPosition.col;
-                        currentShape = rotatedShape;
-                        currentPieceRotation = (currentPieceRotation + 1) % 4;
-                        updatePieceVisuals();
-                        updatePiecePosition();
-                        return;
-                    }
-                }
-            }
-        }
-        function fastDrop() {
-            if (!isPieceActive) return;
-            let dropDistance = 0;
-            while (canMoveDown()) {
-                piecePosition.row++;
-                dropDistance++;
-            }
-            addScore(dropDistance * SCORING.HARD_DROP);
-            updatePiecePosition();
-            lockPiece();
-        }
-        function canMoveTo(position, shape) {
-            const blocks = getShapeBlocks(shape);
-            for (let block of blocks) {
-                const newRow = position.row + block.y;
-                const newCol = position.col + block.x;
-                if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) return false;
-                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
-            }
-            return true;
-        }
-        function updatePiecePosition() {
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            currentPiece.position.set(boardOffsetX + piecePosition.col * CELL_SIZE, -piecePosition.row * CELL_SIZE, 0);
-        }
-        function updatePieceVisuals() {
-            while(currentPiece.children.length > 0) currentPiece.remove(currentPiece.children[0]);
-            const material = createEnhancedMaterial(currentPieceType.color, currentPieceType.material);
-            const blocks = getShapeBlocks(currentShape);
-            blocks.forEach(block => {
-                const cube = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE), material);
-                cube.position.set(block.x * CELL_SIZE + (CELL_SIZE / 2), -block.y * CELL_SIZE - (CELL_SIZE / 2), 0);
-                currentPiece.add(cube);
-            });
-        }
-
-        // --- Game Initialization ---
-        function initGame() {
-            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
-            if (staticBlocks) {
-                 while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]);
-            }
-            score = 0; level = 1; totalLinesCleared = 0; dropScore = 0;
-            currentPieceRotation = 0;
-            createPiece();
-            lastFallTime = performance.now();
-            updateUIDisplay();
-        }
-
-        // --- Piece Creation ---
-        function createPiece() {
-            if (!canMoveTo({row: 0, col: Math.floor(BOARD_WIDTH/2) - 1}, PIECES.I.shape)) {
-                isPieceActive = false;
-                return;
-            }
-            const pieceTypes = Object.keys(PIECES);
-            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
-            currentPieceType = PIECES[randomType];
-            currentShape = currentPieceType.shape;
-            piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
-            piecePosition.row = 0;
-            currentPieceRotation = 0;
-            if (currentPiece) gameBoard.remove(currentPiece);
-            currentPiece = new THREE.Group();
-            gameBoard.add(currentPiece);
-            updatePieceVisuals();
-            updatePiecePosition();
-            isPieceActive = true;
-        }
-
-        // --- Game Logic ---
-        function updateGame(timestamp) {
-            if (!isPieceActive) return;
-            if (timestamp - lastFallTime > getFallSpeed()) {
-                movePieceDown();
-                lastFallTime = timestamp;
-            }
-        }
-        function movePieceDown() {
-            if (canMoveDown()) {
-                piecePosition.row++;
-                addScore(SCORING.SOFT_DROP);
-                dropScore += SCORING.SOFT_DROP;
-                updatePiecePosition();
-            } else {
-                lockPiece();
-            }
-        }
-        function canMoveDown() {
-            const blocks = getShapeBlocks(currentShape);
-            for (let block of blocks) {
-                const newRow = piecePosition.row + 1 + block.y;
-                const newCol = piecePosition.col + block.x;
-                if (newRow >= BOARD_HEIGHT) return false;
-                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
-            }
-            return true;
-        }
-        function lockPiece() {
-            isPieceActive = false;
-            if (lockSound && lockSound.buffer && !lockSound.isPlaying) lockSound.play();
-            const blocks = getShapeBlocks(currentShape);
-            for (let block of blocks) {
-                const row = piecePosition.row + block.y;
-                const col = piecePosition.col + block.x;
-                if (row >= 0) boardState[row][col] = { color: currentPieceType.color, material: currentPieceType.material };
-            }
-            gameBoard.remove(currentPiece);
-            const clearedRows = checkLines();
-            if (clearedRows.length > 0) {
-                const lineScore = calculateLineScore(clearedRows.length);
-                addScore(lineScore);
-                totalLinesCleared += clearedRows.length;
-                updateLevel();
-                updateUIDisplay();
-                clearedRows.forEach(row => {
-                    const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-                    const rowY = -row * CELL_SIZE;
-                    for (let col = 0; col < BOARD_WIDTH; col++) {
-                        const explosionPos = new THREE.Vector3(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, rowY - CELL_SIZE/2, 0);
-                        explosionPos.applyMatrix4(gameBoard.matrixWorld);
-                        const blockData = boardState[row][col];
-                        const particleColor = blockData ? blockData.color : 0xffffff;
-                        createParticleExplosion(explosionPos, particleColor, 8);
-                    }
-                });
-                if (clearSound && clearSound.buffer && !clearSound.isPlaying) clearSound.play();
-            }
-            redrawStaticBlocks();
-            setTimeout(() => { createPiece(); lastFallTime = performance.now(); }, 200);
-        }
-        function checkLines() {
-            let clearedRows = [];
-            for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
-                if (boardState[row].every(cell => cell !== 0)) {
-                    clearedRows.push(row);
-                    boardState.splice(row, 1);
-                    boardState.unshift(Array(BOARD_WIDTH).fill(0));
-                    row++;
-                }
-            }
-            return clearedRows;
-        }
-        function redrawStaticBlocks() {
-            while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]);
-            const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            for (let row = 0; row < BOARD_HEIGHT; row++) {
-                for (let col = 0; col < BOARD_WIDTH; col++) {
-                    const blockData = boardState[row][col];
-                    if (blockData !== 0) {
-                        const material = createEnhancedMaterial(blockData.color, blockData.material);
-                        const cube = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE), material);
-                        cube.position.set(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, -row*CELL_SIZE - CELL_SIZE/2, 0);
-                        staticBlocks.add(cube);
-                    }
-                }
-            }
-        }
-
-        // --- Animation Loop ---
-        renderer.setAnimationLoop((timestamp) => {
-            updateGame(timestamp);
-            updateParticles();
-            renderer.render(scene, camera);
+  // AR Button setup (almost identical to your previous project)
+  class ARButton {
+    static createButton(renderer, sessionInit = {}) {
+      const button = document.createElement('button');
+      let currentSession = null;
+      async function onSessionStarted(session) {
+        session.addEventListener('end', onSessionEnded);
+        renderer.xr.setReferenceSpaceType('local');
+        await renderer.xr.setSession(session);
+        button.textContent = 'STOP AR';
+        currentSession = session;
+        setupControllers(); // Set up the controller models when AR starts
+      }
+      function onSessionEnded() {
+        currentSession.removeEventListener('end', onSessionEnded);
+        button.textContent = 'START AR';
+        currentSession = null;
+        // Remove controllers from scene if AR ends
+        if (controllerGrip1) scene.remove(controllerGrip1);
+        if (controllerGrip2) scene.remove(controllerGrip2);
+      }
+      button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+        padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
+        background: rgba(0,0,0,0.3); color: #fff; font: 13px sans-serif;
+        cursor: pointer; z-index: 999;`;
+      button.textContent = 'START AR';
+      button.onclick = () => currentSession ?
+        currentSession.end() :
+        navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
+      if ('xr' in navigator) {
+        navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+          if (!supported) button.textContent = 'AR NOT SUPPORTED';
         });
-    </script>
+      } else {
+        button.textContent = 'WEBXR NOT AVAILABLE';
+      }
+      return button;
+    }
+  }
+
+  // Three.js scene setup
+  let scene, camera, renderer;
+  let controllerGrip1, controllerGrip2;
+  let controllerModelFactory;
+
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
+
+  // Ambient lighting so controller models are visible
+  const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 2);
+  scene.add(light);
+
+  // Controller model setup
+  function setupControllers() {
+    // Remove existing if re-entered AR
+    if (controllerGrip1) scene.remove(controllerGrip1);
+    if (controllerGrip2) scene.remove(controllerGrip2);
+
+    controllerModelFactory = new XRControllerModelFactory();
+
+    controllerGrip1 = renderer.xr.getControllerGrip(0);
+    controllerGrip2 = renderer.xr.getControllerGrip(1);
+
+    const model1 = controllerModelFactory.createControllerModel(controllerGrip1);
+    const model2 = controllerModelFactory.createControllerModel(controllerGrip2);
+
+    controllerGrip1.add(model1);
+    controllerGrip2.add(model2);
+
+    scene.add(controllerGrip1);
+    scene.add(controllerGrip2);
+  }
+
+  // Animation loop (basic)
+  renderer.setAnimationLoop(() => {
+    renderer.render(scene, camera);
+  });
+
+  // Responsive resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+</script>
 </body>
 </html>
