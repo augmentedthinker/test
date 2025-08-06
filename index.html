@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>Enhanced AR Tetris - Glass Blocks & Particles</title>
     <style>
-        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; [cite_start]} [cite: 16]
+        body { margin: 0; padding: 0; overflow: hidden; background-color: #000; }
     </style>
 </head>
 <body>
@@ -18,59 +18,59 @@
         }
     </script>
     <script type="module">
-        [cite_start]import * as THREE from 'three'; [cite: 17]
-        [cite_start]import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js'; [cite: 17]
+        import * as THREE from 'three';
+        import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
         // --- AR Button Setup ---
         class ARButton {
             static createButton(renderer, sessionInit = {}) {
-                [cite_start]const button = document.createElement('button'); [cite: 18]
+                const button = document.createElement('button');
                 function showStartAR() {
-                    [cite_start]let currentSession = null; [cite: 19]
+                    let currentSession = null;
                     async function onSessionStarted(session) {
-                        [cite_start]session.addEventListener('end', onSessionEnded); [cite: 20]
-                        [cite_start]renderer.xr.setReferenceSpaceType('local'); [cite: 21]
+                        session.addEventListener('end', onSessionEnded);
+                        renderer.xr.setReferenceSpaceType('local');
                         await renderer.xr.setSession(session);
                         button.textContent = 'STOP AR';
                         currentSession = session;
                         if (currentSession) {
-                            [cite_start]if (listener && listener.context.state === 'suspended') { [cite: 22]
-                                [cite_start]listener.context.resume(); [cite: 23]
+                            if (listener && listener.context.state === 'suspended') {
+                                listener.context.resume();
                             }
                             setupControllers();
-                            [cite_start]createGameBoard(); [cite: 24]
+                            createGameBoard();
                             createGamepad();
                             initGame();
                         }
                     }
                     function onSessionEnded() {
                         currentSession.removeEventListener('end', onSessionEnded);
-                        [cite_start]button.textContent = 'START AR'; [cite: 25]
+                        button.textContent = 'START AR';
                         currentSession = null;
                         if (controller1) scene.remove(controller1);
                         if (controller2) scene.remove(controller2);
                         if (controllerGrip1) scene.remove(controllerGrip1);
                         if (controllerGrip2) scene.remove(controllerGrip2);
-                        [cite_start]if (gameBoard) scene.remove(gameBoard); [cite: 26]
+                        if (gameBoard) scene.remove(gameBoard);
                         if (gamepadGroup) scene.remove(gamepadGroup);
                         if (particleSystem) scene.remove(particleSystem);
-                        [cite_start]if (uiPanel) scene.remove(uiPanel); [cite: 27]
+                        if (uiPanel) scene.remove(uiPanel);
                     }
-                    [cite_start]button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; cursor: pointer; z-index: 999;`; [cite: 28, 29]
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; cursor: pointer; z-index: 999;`;
                     button.textContent = 'START AR';
-                    [cite_start]button.onclick = () => currentSession ? currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted); [cite: 30]
+                    button.onclick = () => currentSession ? currentSession.end() : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
                 }
                 function showARNotSupported() {
-                    [cite_start]button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`; [cite: 31, 32]
-                    [cite_start]button.textContent = 'AR NOT SUPPORTED'; [cite: 33]
+                    button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; z-index: 999;`;
+                    button.textContent = 'AR NOT SUPPORTED';
                 }
                 if ('xr' in navigator) {
                     navigator.xr.isSessionSupported('immersive-ar').then(supported => supported ? showStartAR() : showARNotSupported()).catch(showARNotSupported);
-                    [cite_start]return button; [cite: 34]
+                    return button;
                 } else {
                     const message = document.createElement('a');
-                    [cite_start]message.innerHTML = 'WEBXR NOT AVAILABLE'; [cite: 35]
-                    [cite_start]message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; text-decoration: none; z-index: 999;`; [cite: 36]
+                    message.innerHTML = 'WEBXR NOT AVAILABLE';
+                    message.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); padding: 12px 20px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,0.3); color: #fff; font: normal 13px sans-serif; text-decoration: none; z-index: 999;`;
                     return message;
                 }
             }
@@ -78,86 +78,86 @@
 
         // --- Core Three.js Setup ---
         let camera, scene, renderer;
-        [cite_start]let controller1, controller2, controllerGrip1, controllerGrip2; [cite: 38]
+        let controller1, controller2, controllerGrip1, controllerGrip2;
         let controllerModelFactory;
         let gameBoard;
         let gamepadGroup;
         let currentPiece;
-        [cite_start]let staticBlocks; [cite: 39]
-        [cite_start]let listener, lockSound, clearSound; [cite: 39]
-        [cite_start]let particleSystem; [cite: 40]
-        [cite_start]let particles = []; [cite: 41]
+        let staticBlocks;
+        let listener, lockSound, clearSound;
+        let particleSystem;
+        let particles = [];
 
         scene = new THREE.Scene();
-        [cite_start]camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20); [cite: 43]
+        camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
         renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
-        [cite_start]renderer.xr.enabled = true; [cite: 44]
+        renderer.xr.enabled = true;
         document.body.appendChild(renderer.domElement);
         document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
         // --- Audio Setup ---
         listener = new THREE.AudioListener();
-        [cite_start]camera.add(listener); [cite: 45]
+        camera.add(listener);
         const audioLoader = new THREE.AudioLoader();
         lockSound = new THREE.Audio(listener);
         clearSound = new THREE.Audio(listener);
-        [cite_start]audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', function(buffer) { lockSound.setBuffer(buffer); lockSound.setVolume(0.5); }); [cite: 46]
-        [cite_start]audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', function(buffer) { clearSound.setBuffer(buffer); clearSound.setVolume(0.7); }); [cite: 47]
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', function(buffer) { lockSound.setBuffer(buffer); lockSound.setVolume(0.5); });
+        audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', function(buffer) { clearSound.setBuffer(buffer); clearSound.setVolume(0.7); });
 
         // --- Enhanced Lighting for Realistic Materials ---
-        [cite_start]const ambientLight = new THREE.AmbientLight(0x404040, 0.4); [cite: 48]
+        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
         scene.add(ambientLight);
         const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        [cite_start]directionalLight.position.set(5, 10, 5); [cite: 50]
+        directionalLight.position.set(5, 10, 5);
         scene.add(directionalLight);
         const pointLight1 = new THREE.PointLight(0x00ffff, 0.8, 10);
         pointLight1.position.set(-2, 2, 0);
         scene.add(pointLight1);
-        [cite_start]const pointLight2 = new THREE.PointLight(0xff00ff, 0.8, 10); [cite: 51]
+        const pointLight2 = new THREE.PointLight(0xff00ff, 0.8, 10);
         pointLight2.position.set(2, 2, 0);
         scene.add(pointLight2);
 
         // --- Game Constants ---
-        [cite_start]const BOARD_WIDTH = 10; [cite: 52]
-        [cite_start]const BOARD_HEIGHT = 20; [cite: 52]
-        [cite_start]const CELL_SIZE = 0.1; [cite: 53]
+        const BOARD_WIDTH = 10;
+        const BOARD_HEIGHT = 20;
+        const CELL_SIZE = 0.1;
         const FALL_SPEED = 1000;
 
         // --- Enhanced Tetris Pieces with Glass/Metal Materials ---
         const PIECES = {
-            [cite_start]I: { shape: [[1,1,1,1]], color: 0x00ffff, material: 'glass' }, [cite: 54]
-            [cite_start]O: { shape: [[1,1],[1,1]], color: 0xffff00, material: 'metal' }, [cite: 54]
-            [cite_start]T: { shape: [[0,1,0],[1,1,1]], color: 0x800080, material: 'glass' }, [cite: 55]
-            [cite_start]S: { shape: [[0,1,1],[1,1,0]], color: 0x00ff00, material: 'crystal' }, [cite: 56]
-            [cite_start]Z: { shape: [[1,1,0],[0,1,1]], color: 0xff0000, material: 'metal' }, [cite: 57]
-            [cite_start]J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff, material: 'glass' }, [cite: 57]
-            [cite_start]L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500, material: 'crystal' } [cite: 58]
+            I: { shape: [[1,1,1,1]], color: 0x00ffff, material: 'glass' },
+            O: { shape: [[1,1],[1,1]], color: 0xffff00, material: 'metal' },
+            T: { shape: [[0,1,0],[1,1,1]], color: 0x800080, material: 'glass' },
+            S: { shape: [[0,1,1],[1,1,0]], color: 0x00ff00, material: 'crystal' },
+            Z: { shape: [[1,1,0],[0,1,1]], color: 0xff0000, material: 'metal' },
+            J: { shape: [[1,0,0],[1,1,1]], color: 0x0000ff, material: 'glass' },
+            L: { shape: [[0,0,1],[1,1,1]], color: 0xffa500, material: 'crystal' }
         };
 
         // --- Enhanced Material Creation ---
         function createEnhancedMaterial(color, materialType) {
             switch(materialType) {
-                [cite_start]case 'glass': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.8, roughness: 0.1, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.1, ior: 1.5, transparent: true, opacity: 0.8 }); [cite: 60, 61, 62]
-                [cite_start]case 'metal': return new THREE.MeshStandardMaterial({ color: color, metalness: 0.9, roughness: 0.2, emissive: new THREE.Color(color).multiplyScalar(0.1) }); [cite: 63, 64]
-                [cite_start]case 'crystal': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.5, roughness: 0.0, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.4, transparent: true, opacity: 0.9, emissive: new THREE.Color(color).multiplyScalar(0.05) }); [cite: 65, 66, 67]
-                [cite_start]default: return new THREE.MeshStandardMaterial({ color: color }); [cite: 68]
+                case 'glass': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.8, roughness: 0.1, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.1, ior: 1.5, transparent: true, opacity: 0.8 });
+                case 'metal': return new THREE.MeshStandardMaterial({ color: color, metalness: 0.9, roughness: 0.2, emissive: new THREE.Color(color).multiplyScalar(0.1) });
+                case 'crystal': return new THREE.MeshPhysicalMaterial({ color: color, transmission: 0.5, roughness: 0.0, metalness: 0.0, clearcoat: 1.0, clearcoatRoughness: 0.0, ior: 2.4, transparent: true, opacity: 0.9, emissive: new THREE.Color(color).multiplyScalar(0.05) });
+                default: return new THREE.MeshStandardMaterial({ color: color });
             }
         }
 
         // --- Particle System Setup ---
         function initParticleSystem() {
             particleSystem = new THREE.Group();
-            [cite_start]scene.add(particleSystem); [cite: 70]
+            scene.add(particleSystem);
         }
         function createParticleExplosion(position, color, count = 20) {
             for (let i = 0; i < count; i++) {
                 const particleGeometry = new THREE.SphereGeometry(0.01, 4, 4);
-                [cite_start]const particleMaterial = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1.0 }); [cite: 71]
-                [cite_start]const particle = new THREE.Mesh(particleGeometry, particleMaterial); [cite: 72]
+                const particleMaterial = new THREE.MeshBasicMaterial({ color: color, transparent: true, opacity: 1.0 });
+                const particle = new THREE.Mesh(particleGeometry, particleMaterial);
                 particle.position.copy(position);
-                [cite_start]const velocity = new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2); [cite: 73, 74]
-                [cite_start]particle.userData = { velocity: velocity, life: 1.0, decay: 0.02 + Math.random() * 0.02 }; [cite: 75, 76]
+                const velocity = new THREE.Vector3((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2);
+                particle.userData = { velocity: velocity, life: 1.0, decay: 0.02 + Math.random() * 0.02 };
                 particleSystem.add(particle);
                 particles.push(particle);
             }
@@ -165,14 +165,14 @@
         function updateParticles() {
             for (let i = particles.length - 1; i >= 0; i--) {
                 const particle = particles[i];
-                [cite_start]const userData = particle.userData; [cite: 77]
+                const userData = particle.userData;
                 particle.position.add(userData.velocity);
-                [cite_start]userData.velocity.y -= 0.01; [cite: 78]
-                [cite_start]userData.life -= userData.decay; [cite: 79]
-                [cite_start]particle.material.opacity = userData.life; [cite: 80]
+                userData.velocity.y -= 0.01;
+                userData.life -= userData.decay;
+                particle.material.opacity = userData.life;
                 if (userData.life <= 0) {
                     particleSystem.remove(particle);
-                    [cite_start]particles.splice(i, 1); [cite: 81]
+                    particles.splice(i, 1);
                     particle.geometry.dispose();
                     particle.material.dispose();
                 }
@@ -180,33 +180,33 @@
         }
 
         // --- Game State & Scoring System ---
-        [cite_start]let lastFallTime = 0, piecePosition = { row: 0, col: 0 }, isPieceActive = true, boardState = [], currentPieceType = null, currentPieceRotation = 0, currentShape = []; [cite: 82, 83]
-        [cite_start]let score = 0, level = 1, totalLinesCleared = 0, dropScore = 0; [cite: 84, 85]
-        [cite_start]const SCORING = { SINGLE_LINE: 40, DOUBLE_LINE: 100, TRIPLE_LINE: 300, TETRIS: 1200, SOFT_DROP: 1, HARD_DROP: 2 }; [cite: 86]
-        [cite_start]let uiPanel = null, scoreText = null, levelText = null, linesText = null; [cite: 87, 88]
+        let lastFallTime = 0, piecePosition = { row: 0, col: 0 }, isPieceActive = true, boardState = [], currentPieceType = null, currentPieceRotation = 0, currentShape = [];
+        let score = 0, level = 1, totalLinesCleared = 0, dropScore = 0;
+        const SCORING = { SINGLE_LINE: 40, DOUBLE_LINE: 100, TRIPLE_LINE: 300, TETRIS: 1200, SOFT_DROP: 1, HARD_DROP: 2 };
+        let uiPanel = null, scoreText = null, levelText = null, linesText = null;
 
         // --- 3D UI Creation ---
         function createUIPanel() {
             if (uiPanel) scene.remove(uiPanel);
-            [cite_start]uiPanel = new THREE.Group(); [cite: 89]
+            uiPanel = new THREE.Group();
             const panelGeometry = new THREE.PlaneGeometry(1.0, 1.2);
-            [cite_start]const panelMaterial = new THREE.MeshPhysicalMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.2 }); [cite: 90, 91]
-            [cite_start]const panelBackground = new THREE.Mesh(panelGeometry, panelMaterial); [cite: 92]
+            const panelMaterial = new THREE.MeshPhysicalMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.9, roughness: 0.3, metalness: 0.1, clearcoat: 0.8, clearcoatRoughness: 0.2 });
+            const panelBackground = new THREE.Mesh(panelGeometry, panelMaterial);
             uiPanel.add(panelBackground);
             
             const titleCanvas = createTextCanvas('TETRIS AR', 64, '#00ffff', 'rgba(0,0,0,0)');
-            [cite_start]const titleTexture = new THREE.CanvasTexture(titleCanvas); [cite: 93]
+            const titleTexture = new THREE.CanvasTexture(titleCanvas);
             const titleMaterial = new THREE.MeshBasicMaterial({ map: titleTexture, transparent: true });
-            [cite_start]const titleGeometry = new THREE.PlaneGeometry(0.8, 0.2); [cite: 94]
+            const titleGeometry = new THREE.PlaneGeometry(0.8, 0.2);
             const titleMesh = new THREE.Mesh(titleGeometry, titleMaterial);
             titleMesh.position.set(0, 0.45, 0.01);
             uiPanel.add(titleMesh);
             
-            [cite_start]scoreText = createTextDisplay('SCORE: 0', 0, 0.15, '#ffff00'); [cite: 95]
+            scoreText = createTextDisplay('SCORE: 0', 0, 0.15, '#ffff00');
             uiPanel.add(scoreText);
-            [cite_start]levelText = createTextDisplay('LEVEL: 1', 0, -0.1, '#ff6600'); [cite: 96, 97]
+            levelText = createTextDisplay('LEVEL: 1', 0, -0.1, '#ff6600');
             uiPanel.add(levelText);
-            [cite_start]linesText = createTextDisplay('LINES: 0', 0, -0.35, '#00ff00'); [cite: 97, 98]
+            linesText = createTextDisplay('LINES: 0', 0, -0.35, '#00ff00');
             uiPanel.add(linesText);
             
             // Position the UI panel to the right and vertically centered with the game board
@@ -215,46 +215,46 @@
             const boardWidth = BOARD_WIDTH * CELL_SIZE;
             uiPanel.position.set(boardWidth / 2 + 0.6, boardCenterY, -2);
             
-            [cite_start]scene.add(uiPanel); [cite: 99]
+            scene.add(uiPanel);
         }
         function createTextCanvas(text, fontSize, textColor, backgroundColor) {
-            [cite_start]const canvas = document.createElement('canvas'); [cite: 100]
+            const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
-            [cite_start]canvas.width = 512; canvas.height = 128; [cite: 101]
-            [cite_start]context.fillStyle = backgroundColor; [cite: 102]
+            canvas.width = 512; canvas.height = 128;
+            context.fillStyle = backgroundColor;
             context.fillRect(0, 0, canvas.width, canvas.height);
-            [cite_start]context.font = `bold ${fontSize}px Arial`; [cite: 103]
+            context.font = `bold ${fontSize}px Arial`;
             context.fillStyle = textColor;
             context.textAlign = 'center';
             context.textBaseline = 'middle';
-            [cite_start]context.shadowColor = 'rgba(0, 0, 0, 0.8)'; [cite: 104]
+            context.shadowColor = 'rgba(0, 0, 0, 0.8)';
             context.shadowOffsetX = 2; context.shadowOffsetY = 2; context.shadowBlur = 4;
-            [cite_start]context.fillText(text, canvas.width / 2, canvas.height / 2); [cite: 105]
+            context.fillText(text, canvas.width / 2, canvas.height / 2);
             return canvas;
         }
         function createTextDisplay(text, x, y, color) {
             const canvas = createTextCanvas(text, 48, color, 'rgba(0,0,0,0)');
-            [cite_start]const texture = new THREE.CanvasTexture(canvas); [cite: 106]
+            const texture = new THREE.CanvasTexture(canvas);
             const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true });
-            [cite_start]const geometry = new THREE.PlaneGeometry(0.9, 0.2); [cite: 107]
+            const geometry = new THREE.PlaneGeometry(0.9, 0.2);
             const mesh = new THREE.Mesh(geometry, material);
             mesh.position.set(x, y, 0.01);
-            [cite_start]return mesh; [cite: 108]
+            return mesh;
         }
         function updateUIDisplay() {
             if (scoreText) {
                 const canvas = createTextCanvas(`SCORE: ${score.toLocaleString()}`, 48, '#ffff00', 'rgba(0,0,0,0)');
-                [cite_start]scoreText.material.map.dispose(); [cite: 109]
+                scoreText.material.map.dispose();
                 scoreText.material.map = new THREE.CanvasTexture(canvas);
             }
             if (levelText) {
                 const canvas = createTextCanvas(`LEVEL: ${level}`, 48, '#ff6600', 'rgba(0,0,0,0)');
-                [cite_start]levelText.material.map.dispose(); [cite: 110]
+                levelText.material.map.dispose();
                 levelText.material.map = new THREE.CanvasTexture(canvas);
             }
             if (linesText) {
                 const canvas = createTextCanvas(`LINES: ${totalLinesCleared}`, 48, '#00ff00', 'rgba(0,0,0,0)');
-                [cite_start]linesText.material.map.dispose(); [cite: 111]
+                linesText.material.map.dispose();
                 linesText.material.map = new THREE.CanvasTexture(canvas);
             }
         }
@@ -263,41 +263,41 @@
         function calculateLineScore(linesCleared) {
             let baseScore = 0;
             switch(linesCleared) {
-                [cite_start]case 1: baseScore = SCORING.SINGLE_LINE; break; [cite: 112, 113]
-                [cite_start]case 2: baseScore = SCORING.DOUBLE_LINE; break; [cite: 114]
-                [cite_start]case 3: baseScore = SCORING.TRIPLE_LINE; break; [cite: 115]
-                [cite_start]case 4: baseScore = SCORING.TETRIS; break; [cite: 116]
-                [cite_start]default: baseScore = 0; [cite: 117]
+                case 1: baseScore = SCORING.SINGLE_LINE; break;
+                case 2: baseScore = SCORING.DOUBLE_LINE; break;
+                case 3: baseScore = SCORING.TRIPLE_LINE; break;
+                case 4: baseScore = SCORING.TETRIS; break;
+                default: baseScore = 0;
             }
-            [cite_start]return baseScore * level; [cite: 118]
+            return baseScore * level;
         }
         function addScore(points) {
             score += points;
-            [cite_start]updateUIDisplay(); [cite: 119]
+            updateUIDisplay();
         }
         function updateLevel() {
             const newLevel = Math.floor(totalLinesCleared / 10) + 1;
-            [cite_start]if (newLevel !== level) { [cite: 120]
-                [cite_start]level = newLevel; [cite: 121]
+            if (newLevel !== level) {
+                level = newLevel;
             }
         }
         function getFallSpeed() {
-            [cite_start]return Math.max(50, 1000 - (level - 1) * 100); [cite: 123]
+            return Math.max(50, 1000 - (level - 1) * 100);
         }
 
         // --- Gamepad Elements ---
         let dpadUp, dpadDown, dpadLeft, dpadRight;
-        [cite_start]let buttonA, buttonB; [cite: 124]
+        let buttonA, buttonB;
         let gamepadElements = [];
 
         // --- Controller Setup ---
         function setupControllers() {
-            [cite_start]controller1 = renderer.xr.getController(0); scene.add(controller1); [cite: 125]
+            controller1 = renderer.xr.getController(0); scene.add(controller1);
             controller2 = renderer.xr.getController(1); scene.add(controller2);
             controllerGrip1 = renderer.xr.getControllerGrip(0); scene.add(controllerGrip1);
             controllerGrip2 = renderer.xr.getControllerGrip(1); scene.add(controllerGrip2);
             controllerModelFactory = new XRControllerModelFactory();
-            [cite_start]const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1); [cite: 126]
+            const controllerModel1 = controllerModelFactory.createControllerModel(controllerGrip1);
             controllerGrip1.add(controllerModel1);
             const controllerModel2 = controllerModelFactory.createControllerModel(controllerGrip2);
             controllerGrip2.add(controllerModel2);
@@ -308,115 +308,117 @@
             controller2.addEventListener('selectend', onControllerSelectEnd);
         }
         function setupLaserPointer(controller) {
-            [cite_start]const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3)); [cite: 128]
+            const geometry = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
             const material = new THREE.LineBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.7, linewidth: 2 });
-            [cite_start]const line = new THREE.Line(geometry, material); [cite: 129]
+            const line = new THREE.Line(geometry, material);
             line.scale.z = 5;
             line.visible = false;
             controller.add(line);
-            [cite_start]controller.addEventListener('connected', function () { line.visible = true; }); [cite: 130]
-            [cite_start]controller.addEventListener('disconnected', function () { line.visible = false; }); [cite: 130]
+            controller.addEventListener('connected', function () { line.visible = true; });
+            controller.addEventListener('disconnected', function () { line.visible = false; });
         }
 
         // --- Game Board Creation ---
         function createGameBoard() {
             if (gameBoard) scene.remove(gameBoard);
-            [cite_start]gameBoard = new THREE.Group(); [cite: 132]
+            gameBoard = new THREE.Group();
             staticBlocks = new THREE.Group();
             gameBoard.add(staticBlocks);
             const gridMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00, transparent: true, opacity: 0.3 });
-            [cite_start]for (let x = 0; x <= BOARD_WIDTH; x++) { [cite: 133]
-                [cite_start]const points = [new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, 0, 0), new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, -BOARD_HEIGHT*CELL_SIZE, 0)]; [cite: 134, 135]
-                [cite_start]const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial); [cite: 136]
-                gameBoard.add(line);
-            }
-            for (let y = 0; y <= BOARD_HEIGHT; y++) {
-                [cite_start]const points = [new THREE.Vector3(-(BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0), new THREE.Vector3((BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0)]; [cite: 137, 138]
+            for (let x = 0; x <= BOARD_WIDTH; x++) {
+                const points = [new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, 0, 0), new THREE.Vector3(x*CELL_SIZE - (BOARD_WIDTH*CELL_SIZE)/2, -BOARD_HEIGHT*CELL_SIZE, 0)];
                 const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial);
                 gameBoard.add(line);
             }
-            [cite_start]gameBoard.position.set(0, 1.6, -2); [cite: 139]
+            for (let y = 0; y <= BOARD_HEIGHT; y++) {
+                const points = [new THREE.Vector3(-(BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0), new THREE.Vector3((BOARD_WIDTH*CELL_SIZE)/2, -y*CELL_SIZE, 0)];
+                const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), gridMaterial);
+                gameBoard.add(line);
+            }
+            gameBoard.position.set(0, 1.6, -2);
             scene.add(gameBoard);
-            [cite_start]initParticleSystem(); [cite: 140]
-            [cite_start]createUIPanel(); [cite: 141]
+            initParticleSystem();
+            createUIPanel();
         }
-
-        // --- Stylized Gamepad Creation ---
+        
+        // --- Stylized Gamepad Creation (FIXED) ---
         function createGamepad() {
             if (gamepadGroup) scene.remove(gamepadGroup);
-            [cite_start]gamepadGroup = new THREE.Group(); [cite: 144]
+            gamepadGroup = new THREE.Group();
             gamepadElements = [];
-        
+
             const SCALE_FACTOR = 1.5;
             const gamepadZOffset = 0.02;
-        
-            // Base plate
-            const gamepadMaterial = new THREE.MeshPhysicalMaterial({ color: 0x222233, roughness: 0.4, metalness: 0.1, transmission: 0.5, transparent: true, opacity: 0.7 });
-            const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.15 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
-            [cite_start]const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial); [cite: 147]
-            gamepadGroup.add(gamepadBase);
-        
-            // --- Stylized Buttons ---
-            const baseIntensity = 0.6;
-            const highlightIntensity = 1.5;
 
+            // Base plate - Sleek but with simple geometry
+            const gamepadMaterial = new THREE.MeshPhysicalMaterial({
+                color: 0x222233,
+                roughness: 0.4,
+                metalness: 0.1,
+                transmission: 0.5,
+                transparent: true,
+                opacity: 0.7
+            });
+            const gamepadGeometry = new THREE.BoxGeometry(0.3 * SCALE_FACTOR, 0.15 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            const gamepadBase = new THREE.Mesh(gamepadGeometry, gamepadMaterial);
+            gamepadGroup.add(gamepadBase);
+
+            // --- Glowing Buttons ---
             const createButtonMaterial = (color) => new THREE.MeshStandardMaterial({
                 color: color,
                 emissive: color,
-                emissiveIntensity: baseIntensity,
-                roughness: 0.3,
-                metalness: 0.2
+                emissiveIntensity: 0.6,
+                roughness: 0.3
             });
-        
-            // D-Pad
-            const dpadGeom = new THREE.CapsuleGeometry(0.02 * SCALE_FACTOR, 0.04 * SCALE_FACTOR, 4, 16);
-            const dpadMat = createButtonMaterial(0x888888);
 
-            dpadUp = new THREE.Mesh(dpadGeom, dpadMat);
-            dpadUp.position.set(-0.08 * SCALE_FACTOR, 0.04 * SCALE_FACTOR, gamepadZOffset);
+            // D-Pad (using simple, reliable boxes)
+            const dpadGeomVert = new THREE.BoxGeometry(0.04 * SCALE_FACTOR, 0.05 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            const dpadGeomHoriz = new THREE.BoxGeometry(0.05 * SCALE_FACTOR, 0.04 * SCALE_FACTOR, 0.01 * SCALE_FACTOR);
+            const dpadMat = createButtonMaterial(0xcccccc);
+
+            dpadUp = new THREE.Mesh(dpadGeomVert, dpadMat);
+            dpadUp.position.set(-0.09 * SCALE_FACTOR, 0.035 * SCALE_FACTOR, gamepadZOffset);
             gamepadGroup.add(dpadUp);
             gamepadElements.push(dpadUp);
 
-            dpadDown = new THREE.Mesh(dpadGeom, dpadMat.clone());
-            dpadDown.position.set(-0.08 * SCALE_FACTOR, -0.04 * SCALE_FACTOR, gamepadZOffset);
+            dpadDown = new THREE.Mesh(dpadGeomVert, dpadMat.clone());
+            dpadDown.position.set(-0.09 * SCALE_FACTOR, -0.035 * SCALE_FACTOR, gamepadZOffset);
             gamepadGroup.add(dpadDown);
             gamepadElements.push(dpadDown);
 
-            dpadLeft = new THREE.Mesh(dpadGeom, dpadMat.clone());
-            dpadLeft.position.set(-0.12 * SCALE_FACTOR, 0, gamepadZOffset);
-            dpadLeft.rotation.z = Math.PI / 2;
+            dpadLeft = new THREE.Mesh(dpadGeomHoriz, dpadMat.clone());
+            dpadLeft.position.set(-0.13 * SCALE_FACTOR, 0, gamepadZOffset);
             gamepadGroup.add(dpadLeft);
             gamepadElements.push(dpadLeft);
 
-            dpadRight = new THREE.Mesh(dpadGeom, dpadMat.clone());
-            dpadRight.position.set(-0.04 * SCALE_FACTOR, 0, gamepadZOffset);
-            dpadRight.rotation.z = Math.PI / 2;
+            dpadRight = new THREE.Mesh(dpadGeomHoriz, dpadMat.clone());
+            dpadRight.position.set(-0.05 * SCALE_FACTOR, 0, gamepadZOffset);
             gamepadGroup.add(dpadRight);
             gamepadElements.push(dpadRight);
-        
-            // A & B Buttons
-            const buttonGeom = new THREE.CylinderGeometry(0.03 * SCALE_FACTOR, 0.03 * SCALE_FACTOR, 0.015 * SCALE_FACTOR, 24);
-            buttonGeom.rotateX(Math.PI / 2);
-            
+
+            // A & B Buttons (using cylinders for a rounded look)
+            const buttonGeom = new THREE.CylinderGeometry(0.025 * SCALE_FACTOR, 0.025 * SCALE_FACTOR, 0.015 * SCALE_FACTOR, 24);
+            buttonGeom.rotateX(Math.PI / 2); // Orient them to face the player
+
             buttonA = new THREE.Mesh(buttonGeom, createButtonMaterial(0x00ffff)); // Cyan
             buttonA.position.set(0.06 * SCALE_FACTOR, 0.025 * SCALE_FACTOR, gamepadZOffset);
             gamepadGroup.add(buttonA);
             gamepadElements.push(buttonA);
-            
+
             buttonB = new THREE.Mesh(buttonGeom, createButtonMaterial(0xff00ff)); // Magenta
             buttonB.position.set(0.11 * SCALE_FACTOR, -0.025 * SCALE_FACTOR, gamepadZOffset);
             gamepadGroup.add(buttonB);
             gamepadElements.push(buttonB);
-        
+
             // Position gamepad below the board
             gamepadGroup.position.set(0, 1.6 - (BOARD_HEIGHT * CELL_SIZE) - 0.2, -2);
-            [cite_start]scene.add(gamepadGroup); [cite: 164]
+            scene.add(gamepadGroup);
         }
 
         // --- Controller Interaction ---
         function onControllerSelectStart(event) {
             const controller = event.target;
-            [cite_start]const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld); [cite: 165]
+            const tempMatrix = new THREE.Matrix4().extractRotation(controller.matrixWorld);
             const raycaster = new THREE.Raycaster();
             raycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
             raycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
@@ -426,64 +428,67 @@
                 object.material.emissiveIntensity = 1.5; // Highlight selected button
                 
                 if (isPieceActive) {
-                    [cite_start]if (object === dpadLeft) movePieceHorizontally(-1); [cite: 171]
-                    [cite_start]else if (object === dpadRight) movePieceHorizontally(1); [cite: 172]
-                    [cite_start]else if (object === buttonA) rotatePiece(); [cite: 173]
-                    [cite_start]else if (object === dpadDown) fastDrop(); [cite: 174]
+                    if (object === dpadLeft) movePieceHorizontally(-1);
+                    else if (object === dpadRight) movePieceHorizontally(1);
+                    else if (object === buttonA) rotatePiece();
+                    else if (object === dpadDown) fastDrop();
+                    // Note: D-pad Up has no action in this game logic
                 }
             }
         }
         function onControllerSelectEnd(event) {
             // Reset all buttons to base intensity
             gamepadElements.forEach(btn => {
-                btn.material.emissiveIntensity = 0.6;
+                if(btn.material.emissiveIntensity !== 0.6) {
+                   btn.material.emissiveIntensity = 0.6;
+                }
             });
         }
 
         // --- Helper Functions ---
         function rotateMatrix(matrix) {
-            [cite_start]const rows = matrix.length, cols = matrix[0].length; [cite: 176]
+            const rows = matrix.length, cols = matrix[0].length;
             const rotated = Array.from({ length: cols }, () => Array(rows));
             for (let i = 0; i < cols; i++) {
                 for (let j = 0; j < rows; j++) {
-                    [cite_start]rotated[i][j] = matrix[rows - 1 - j][i]; [cite: 177, 178]
+                    rotated[i][j] = matrix[rows - 1 - j][i];
                 }
             }
-            [cite_start]return rotated; [cite: 179]
+            return rotated;
         }
         function getShapeBlocks(shape) {
             const blocks = [];
-            [cite_start]for (let row = 0; row < shape.length; row++) { [cite: 180]
+            for (let row = 0; row < shape.length; row++) {
                 for (let col = 0; col < shape[row].length; col++) {
-                    [cite_start]if (shape[row][col] === 1) blocks.push({ x: col, y: row }); [cite: 181]
+                    if (shape[row][col] === 1) blocks.push({ x: col, y: row });
                 }
             }
-            [cite_start]return blocks; [cite: 182]
+            return blocks;
         }
 
         // --- Piece Movement Logic ---
         function movePieceHorizontally(deltaCol) {
             if (!isPieceActive) return;
-            [cite_start]const newPosition = { row: piecePosition.row, col: piecePosition.col + deltaCol }; [cite: 183]
-            [cite_start]if (canMoveTo(newPosition, currentShape)) { [cite: 184]
+            const newPosition = { row: piecePosition.row, col: piecePosition.col + deltaCol };
+            if (canMoveTo(newPosition, currentShape)) {
                 piecePosition.col = newPosition.col;
-                [cite_start]updatePiecePosition(); [cite: 185]
+                updatePiecePosition();
             }
         }
         function rotatePiece() {
             if (!isPieceActive) return;
-            [cite_start]const rotatedShape = rotateMatrix(currentShape); [cite: 187]
+            const rotatedShape = rotateMatrix(currentShape);
             if (canMoveTo(piecePosition, rotatedShape)) {
                 currentShape = rotatedShape;
-                [cite_start]currentPieceRotation = (currentPieceRotation + 1) % 4; [cite: 188]
+                currentPieceRotation = (currentPieceRotation + 1) % 4;
                 updatePieceVisuals();
             } else {
-                [cite_start]const wallKicks = [-1, 1, -2, 2]; [cite: 189]
+                const wallKicks = [-1, 1, -2, 2];
                 for (let kick of wallKicks) {
-                    [cite_start]const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick }; [cite: 190]
-                    [cite_start]if (canMoveTo(kickPosition, rotatedShape)) { [cite: 191]
+                    const kickPosition = { row: piecePosition.row, col: piecePosition.col + kick };
+                    if (canMoveTo(kickPosition, rotatedShape)) {
                         piecePosition.col = kickPosition.col;
-                        [cite_start]currentShape = rotatedShape; [cite: 192]
+                        currentShape = rotatedShape;
                         currentPieceRotation = (currentPieceRotation + 1) % 4;
                         updatePieceVisuals();
                         updatePiecePosition();
@@ -494,64 +499,64 @@
         }
         function fastDrop() {
             if (!isPieceActive) return;
-            [cite_start]let dropDistance = 0; [cite: 195]
+            let dropDistance = 0;
             while (canMoveDown()) {
                 piecePosition.row++;
-                [cite_start]dropDistance++; [cite: 196]
+                dropDistance++;
             }
-            [cite_start]addScore(dropDistance * SCORING.HARD_DROP); [cite: 197]
+            addScore(dropDistance * SCORING.HARD_DROP);
             updatePiecePosition();
             lockPiece();
         }
         function canMoveTo(position, shape) {
-            [cite_start]const blocks = getShapeBlocks(shape); [cite: 198]
+            const blocks = getShapeBlocks(shape);
             for (let block of blocks) {
                 const newRow = position.row + block.y;
-                [cite_start]const newCol = position.col + block.x; [cite: 199]
-                [cite_start]if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) return false; [cite: 200, 201]
-                [cite_start]if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false; [cite: 202]
+                const newCol = position.col + block.x;
+                if (newCol < 0 || newCol >= BOARD_WIDTH || newRow >= BOARD_HEIGHT) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
             }
-            [cite_start]return true; [cite: 203]
+            return true;
         }
         function updatePiecePosition() {
             const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            [cite_start]currentPiece.position.set(boardOffsetX + piecePosition.col * CELL_SIZE, -piecePosition.row * CELL_SIZE, 0); [cite: 204]
+            currentPiece.position.set(boardOffsetX + piecePosition.col * CELL_SIZE, -piecePosition.row * CELL_SIZE, 0);
         }
         function updatePieceVisuals() {
-            [cite_start]while(currentPiece.children.length > 0) currentPiece.remove(currentPiece.children[0]); [cite: 205]
-            [cite_start]const material = createEnhancedMaterial(currentPieceType.color, currentPieceType.material); [cite: 206]
-            [cite_start]const blocks = getShapeBlocks(currentShape); [cite: 207]
+            while(currentPiece.children.length > 0) currentPiece.remove(currentPiece.children[0]);
+            const material = createEnhancedMaterial(currentPieceType.color, currentPieceType.material);
+            const blocks = getShapeBlocks(currentShape);
             blocks.forEach(block => {
                 const cube = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE), material);
-                [cite_start]cube.position.set(block.x * CELL_SIZE + (CELL_SIZE / 2), -block.y * CELL_SIZE - (CELL_SIZE / 2), 0); [cite: 208]
+                cube.position.set(block.x * CELL_SIZE + (CELL_SIZE / 2), -block.y * CELL_SIZE - (CELL_SIZE / 2), 0);
                 currentPiece.add(cube);
             });
         }
 
         // --- Game Initialization ---
         function initGame() {
-            [cite_start]boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0)); [cite: 209]
+            boardState = Array(BOARD_HEIGHT).fill().map(() => Array(BOARD_WIDTH).fill(0));
             if (staticBlocks) {
-                 [cite_start]while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]); [cite: 210]
+                 while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]);
             }
-            [cite_start]score = 0; level = 1; totalLinesCleared = 0; dropScore = 0; [cite: 212]
+            score = 0; level = 1; totalLinesCleared = 0; dropScore = 0;
             currentPieceRotation = 0;
             createPiece();
             lastFallTime = performance.now();
-            [cite_start]updateUIDisplay(); [cite: 213]
+            updateUIDisplay();
         }
 
         // --- Piece Creation ---
         function createPiece() {
             if (!canMoveTo({row: 0, col: Math.floor(BOARD_WIDTH/2) - 1}, PIECES.I.shape)) {
-                [cite_start]isPieceActive = false; [cite: 215]
+                isPieceActive = false;
                 return;
             }
-            [cite_start]const pieceTypes = Object.keys(PIECES); [cite: 216]
-            [cite_start]const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)]; [cite: 217]
+            const pieceTypes = Object.keys(PIECES);
+            const randomType = pieceTypes[Math.floor(Math.random() * pieceTypes.length)];
             currentPieceType = PIECES[randomType];
             currentShape = currentPieceType.shape;
-            [cite_start]piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2); [cite: 218]
+            piecePosition.col = Math.floor((BOARD_WIDTH - currentShape[0].length) / 2);
             piecePosition.row = 0;
             currentPieceRotation = 0;
             if (currentPiece) gameBoard.remove(currentPiece);
@@ -565,67 +570,67 @@
         // --- Game Logic ---
         function updateGame(timestamp) {
             if (!isPieceActive) return;
-            [cite_start]if (timestamp - lastFallTime > getFallSpeed()) { [cite: 220]
+            if (timestamp - lastFallTime > getFallSpeed()) {
                 movePieceDown();
-                [cite_start]lastFallTime = timestamp; [cite: 221]
+                lastFallTime = timestamp;
             }
         }
         function movePieceDown() {
             if (canMoveDown()) {
                 piecePosition.row++;
-                [cite_start]addScore(SCORING.SOFT_DROP); [cite: 222]
-                [cite_start]dropScore += SCORING.SOFT_DROP; [cite: 223]
+                addScore(SCORING.SOFT_DROP);
+                dropScore += SCORING.SOFT_DROP;
                 updatePiecePosition();
             } else {
-                [cite_start]lockPiece(); [cite: 224]
+                lockPiece();
             }
         }
         function canMoveDown() {
-            [cite_start]const blocks = getShapeBlocks(currentShape); [cite: 225]
+            const blocks = getShapeBlocks(currentShape);
             for (let block of blocks) {
                 const newRow = piecePosition.row + 1 + block.y;
-                [cite_start]const newCol = piecePosition.col + block.x; [cite: 226]
-                [cite_start]if (newRow >= BOARD_HEIGHT) return false; [cite: 227]
-                [cite_start]if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false; [cite: 228]
+                const newCol = piecePosition.col + block.x;
+                if (newRow >= BOARD_HEIGHT) return false;
+                if (newRow >= 0 && boardState[newRow][newCol] !== 0) return false;
             }
-            [cite_start]return true; [cite: 229]
+            return true;
         }
         function lockPiece() {
-            [cite_start]isPieceActive = false; [cite: 230]
-            [cite_start]if (lockSound && lockSound.buffer && !lockSound.isPlaying) lockSound.play(); [cite: 231]
-            [cite_start]const blocks = getShapeBlocks(currentShape); [cite: 232]
+            isPieceActive = false;
+            if (lockSound && lockSound.buffer && !lockSound.isPlaying) lockSound.play();
+            const blocks = getShapeBlocks(currentShape);
             for (let block of blocks) {
                 const row = piecePosition.row + block.y;
-                [cite_start]const col = piecePosition.col + block.x; [cite: 233]
-                [cite_start]if (row >= 0) boardState[row][col] = { color: currentPieceType.color, material: currentPieceType.material }; [cite: 234]
+                const col = piecePosition.col + block.x;
+                if (row >= 0) boardState[row][col] = { color: currentPieceType.color, material: currentPieceType.material };
             }
-            [cite_start]gameBoard.remove(currentPiece); [cite: 235]
+            gameBoard.remove(currentPiece);
             const clearedRows = checkLines();
-            [cite_start]if (clearedRows.length > 0) { [cite: 236]
+            if (clearedRows.length > 0) {
                 const lineScore = calculateLineScore(clearedRows.length);
-                [cite_start]addScore(lineScore); [cite: 237]
+                addScore(lineScore);
                 totalLinesCleared += clearedRows.length;
-                [cite_start]updateLevel(); [cite: 238]
+                updateLevel();
                 updateUIDisplay();
                 clearedRows.forEach(row => {
                     const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
                     const rowY = -row * CELL_SIZE;
-                    [cite_start]for (let col = 0; col < BOARD_WIDTH; col++) { [cite: 239]
-                        [cite_start]const explosionPos = new THREE.Vector3(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, rowY - CELL_SIZE/2, 0); [cite: 240]
-                        [cite_start]explosionPos.applyMatrix4(gameBoard.matrixWorld); [cite: 241]
+                    for (let col = 0; col < BOARD_WIDTH; col++) {
+                        const explosionPos = new THREE.Vector3(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, rowY - CELL_SIZE/2, 0);
+                        explosionPos.applyMatrix4(gameBoard.matrixWorld);
                         const blockData = boardState[row][col];
-                        [cite_start]const particleColor = blockData ? blockData.color : 0xffffff; [cite: 242]
-                        [cite_start]createParticleExplosion(explosionPos, particleColor, 8); [cite: 243]
+                        const particleColor = blockData ? blockData.color : 0xffffff;
+                        createParticleExplosion(explosionPos, particleColor, 8);
                     }
                 });
-                [cite_start]if (clearSound && clearSound.buffer && !clearSound.isPlaying) clearSound.play(); [cite: 244]
+                if (clearSound && clearSound.buffer && !clearSound.isPlaying) clearSound.play();
             }
-            [cite_start]redrawStaticBlocks(); [cite: 246]
-            [cite_start]setTimeout(() => { createPiece(); lastFallTime = performance.now(); }, 200); [cite: 247]
+            redrawStaticBlocks();
+            setTimeout(() => { createPiece(); lastFallTime = performance.now(); }, 200);
         }
         function checkLines() {
             let clearedRows = [];
-            [cite_start]for (let row = BOARD_HEIGHT - 1; row >= 0; row--) { [cite: 248]
+            for (let row = BOARD_HEIGHT - 1; row >= 0; row--) {
                 if (boardState[row].every(cell => cell !== 0)) {
                     clearedRows.push(row);
                     boardState.splice(row, 1);
@@ -633,19 +638,19 @@
                     row++;
                 }
             }
-            [cite_start]return clearedRows; [cite: 250]
+            return clearedRows;
         }
         function redrawStaticBlocks() {
-            [cite_start]while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]); [cite: 251]
+            while(staticBlocks.children.length > 0) staticBlocks.remove(staticBlocks.children[0]);
             const boardOffsetX = -(BOARD_WIDTH * CELL_SIZE) / 2;
-            [cite_start]for (let row = 0; row < BOARD_HEIGHT; row++) { [cite: 252]
+            for (let row = 0; row < BOARD_HEIGHT; row++) {
                 for (let col = 0; col < BOARD_WIDTH; col++) {
                     const blockData = boardState[row][col];
-                    [cite_start]if (blockData !== 0) { [cite: 253]
+                    if (blockData !== 0) {
                         const material = createEnhancedMaterial(blockData.color, blockData.material);
-                        [cite_start]const cube = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE), material); [cite: 254]
-                        [cite_start]cube.position.set(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, -row*CELL_SIZE - CELL_SIZE/2, 0); [cite: 255, 256]
-                        [cite_start]staticBlocks.add(cube); [cite: 257]
+                        const cube = new THREE.Mesh(new THREE.BoxGeometry(CELL_SIZE, CELL_SIZE, CELL_SIZE), material);
+                        cube.position.set(boardOffsetX + col*CELL_SIZE + CELL_SIZE/2, -row*CELL_SIZE - CELL_SIZE/2, 0);
+                        staticBlocks.add(cube);
                     }
                 }
             }
@@ -655,7 +660,7 @@
         renderer.setAnimationLoop((timestamp) => {
             updateGame(timestamp);
             updateParticles();
-            [cite_start]renderer.render(scene, camera); [cite: 258]
+            renderer.render(scene, camera);
         });
     </script>
 </body>
