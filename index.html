@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Stationary AR Wormhole Tunnel Grid - Exploding Objects</title>
+  <title>AR Matrix Code Rain</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   </style>
@@ -32,9 +32,7 @@
         button.textContent = 'STOP AR';
         currentSession = session;
         setupControllers();
-        setTimeout(() => { anchorTunnelToStart(); }, 350);
-        addTunnel();
-        addTunnelObjects();
+        addMatrixCodeRain();
       }
       function onSessionEnded() {
         currentSession.removeEventListener('end', onSessionEnded);
@@ -42,9 +40,7 @@
         currentSession = null;
         if (controllerGrip1) scene.remove(controllerGrip1);
         if (controllerGrip2) scene.remove(controllerGrip2);
-        if (tunnelGroup) scene.remove(tunnelGroup);
-        if (objectGroup) scene.remove(objectGroup);
-        if (particleGroup) scene.remove(particleGroup);
+        if (matrixGroup) scene.remove(matrixGroup);
       }
       button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -69,14 +65,9 @@
   let scene, camera, renderer;
   let controllerGrip1, controllerGrip2;
   let controllerModelFactory;
-  let tunnelGroup = null;
-  let objectGroup = null;
-  let particleGroup = null;
-  let saber1 = null, saber2 = null;
-  let saberGlow1 = null, saberGlow2 = null;
-  let tunnelScroll = 0;
-  let tunnelAnchorPos = null;
-  let tunnelAnchorQuat = null;
+  let matrixGroup = null;
+  let matrixColumns = [];
+  let lastMatrixUpdate = 0;
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -86,7 +77,7 @@
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-  // Ambient light
+  // Ambient light so controller models are visible
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 2);
   scene.add(light);
 
@@ -102,373 +93,124 @@
     controllerGrip1.add(model1);
     controllerGrip2.add(model2);
 
-    // ---- Lightsabers ----
-    if (saber1) controllerGrip1.remove(saber1);
-    if (saberGlow1) controllerGrip1.remove(saberGlow1);
-    if (saber2) controllerGrip2.remove(saber2);
-    if (saberGlow2) controllerGrip2.remove(saberGlow2);
-
-    const SABER_LENGTH = 1.5;
-    const SABER_RADIUS = 0.045;
-    // Left: Green
-    const greenColor = 0x22ff55;
-    const saberMat1 = new THREE.MeshPhysicalMaterial({
-      color: greenColor,
-      emissive: new THREE.Color(greenColor).multiplyScalar(0.5),
-      metalness: 0.2,
-      roughness: 0.15,
-      transmission: 0.70,
-      transparent: true,
-      opacity: 0.92,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08
-    });
-    saber1 = new THREE.Mesh(
-      new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
-      saberMat1
-    );
-    saber1.position.set(0, 0, -SABER_LENGTH/2);
-    saber1.rotation.x = Math.PI/2;
-    const saberGlowMat1 = new THREE.MeshBasicMaterial({
-      color: greenColor,
-      transparent: true,
-      opacity: 0.35,
-      depthWrite: false
-    });
-    saberGlow1 = new THREE.Mesh(
-      new THREE.CylinderGeometry(SABER_RADIUS*1.5, SABER_RADIUS*1.5, SABER_LENGTH, 32, 1, true),
-      saberGlowMat1
-    );
-    saberGlow1.position.copy(saber1.position);
-    saberGlow1.rotation.copy(saber1.rotation);
-    controllerGrip1.add(saber1);
-    controllerGrip1.add(saberGlow1);
-
-    // Right: Blue
-    const blueColor = 0x44aaff;
-    const saberMat2 = new THREE.MeshPhysicalMaterial({
-      color: blueColor,
-      emissive: new THREE.Color(blueColor).multiplyScalar(0.6),
-      metalness: 0.22,
-      roughness: 0.12,
-      transmission: 0.75,
-      transparent: true,
-      opacity: 0.93,
-      clearcoat: 1,
-      clearcoatRoughness: 0.09
-    });
-    saber2 = new THREE.Mesh(
-      new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
-      saberMat2
-    );
-    saber2.position.set(0, 0, -SABER_LENGTH/2);
-    saber2.rotation.x = Math.PI/2;
-    const saberGlowMat2 = new THREE.MeshBasicMaterial({
-      color: blueColor,
-      transparent: true,
-      opacity: 0.38,
-      depthWrite: false
-    });
-    saberGlow2 = new THREE.Mesh(
-      new THREE.CylinderGeometry(SABER_RADIUS*1.5, SABER_RADIUS*1.5, SABER_LENGTH, 32, 1, true),
-      saberGlowMat2
-    );
-    saberGlow2.position.copy(saber2.position);
-    saberGlow2.rotation.copy(saber2.rotation);
-    controllerGrip2.add(saber2);
-    controllerGrip2.add(saberGlow2);
-
     scene.add(controllerGrip1);
     scene.add(controllerGrip2);
   }
 
-  // Tunnel anchoring
-  function anchorTunnelToStart() {
-    camera.updateMatrixWorld(true);
-    tunnelAnchorPos = new THREE.Vector3();
-    tunnelAnchorQuat = new THREE.Quaternion();
-    camera.getWorldPosition(tunnelAnchorPos);
-    camera.getWorldQuaternion(tunnelAnchorQuat);
+  // --- Matrix code column helpers ---
+  function randomMatrixChar() {
+    // Katakana, numbers, symbols, letters
+    const chars = 'アカサタナハマヤラワ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz!@#$%^&*()-=+[]{};:?/\\|,.';
+    return chars[Math.floor(Math.random() * chars.length)];
   }
 
-  // Tunnel grid creation
-  function addTunnel() {
-    if (tunnelGroup) scene.remove(tunnelGroup);
+  function makeMatrixColumnTexture(lines = 16, glow = false) {
+    // Draw random symbols to a vertical canvas, neon green
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 32 * lines;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    tunnelGroup = new THREE.Group();
-
-    const TUNNEL_LENGTH = 30;
-    const RING_SEGMENTS = 40;
-    const LENGTHWISE_SEGMENTS = 12;
-    const RADIUS = 0.8;
-    const SPACING = 0.45;
-
-    // RINGS
-    for (let i = 0; i < TUNNEL_LENGTH; i++) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = [];
-      for (let j = 0; j <= RING_SEGMENTS; j++) {
-        const theta = (j / RING_SEGMENTS) * Math.PI * 2;
-        const x = Math.cos(theta) * RADIUS;
-        const y = Math.sin(theta) * RADIUS;
-        const z = -i * SPACING;
-        positions.push(x, y, z);
-      }
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const material = new THREE.LineBasicMaterial({
-        color: 0x00ffff,
-        transparent: true,
-        opacity: 0.48 + 0.45 * (1 - i / TUNNEL_LENGTH),
-        linewidth: 1
-      });
-      const ring = new THREE.Line(geometry, material);
-      tunnelGroup.add(ring);
-    }
-
-    // LENGTHWISE LINES
-    for (let l = 0; l < LENGTHWISE_SEGMENTS; l++) {
-      const geometry = new THREE.BufferGeometry();
-      const positions = [];
-      const angle = (l / LENGTHWISE_SEGMENTS) * Math.PI * 2;
-      const x = Math.cos(angle) * RADIUS;
-      const y = Math.sin(angle) * RADIUS;
-      for (let i = 0; i < TUNNEL_LENGTH; i++) {
-        const z = -i * SPACING;
-        positions.push(x, y, z);
-      }
-      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-      const material = new THREE.LineBasicMaterial({
-        color: 0x0099ff,
-        transparent: true,
-        opacity: 0.36,
-        linewidth: 1
-      });
-      const line = new THREE.Line(geometry, material);
-      tunnelGroup.add(line);
-    }
-
-    tunnelGroup.position.set(0, 0, 0);
-    scene.add(tunnelGroup);
-  }
-
-  // Add moving objects inside the tunnel
-  function addTunnelObjects() {
-    if (objectGroup) scene.remove(objectGroup);
-
-    objectGroup = new THREE.Group();
-
-    const OBJECTS_COUNT = 10;
-    const OBJECT_SPACING = 3;
-    const TUNNEL_RADIUS = 0.6;
-
-    for (let i = 0; i < OBJECTS_COUNT; i++) {
-      let mesh, color, type;
-      type = i % 3;
-      if (type === 0) {
-        mesh = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(0.25),
-          new THREE.MeshStandardMaterial({ color: 0xffa500, roughness: 0.4, metalness: 0.2 })
-        );
-        color = 0xffa500;
-      } else if (type === 1) {
-        mesh = new THREE.Mesh(
-          new THREE.SphereGeometry(0.17, 18, 18),
-          new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.3, metalness: 0.6 })
-        );
-        color = 0x0088ff;
+    for (let i = 0; i < lines; i++) {
+      // Different glow for the leading symbol
+      if (i === 0 && glow) {
+        ctx.shadowColor = "#adff2f";
+        ctx.shadowBlur = 18;
+        ctx.font = "bold 32px monospace";
+        ctx.fillStyle = "#caff95";
       } else {
-        mesh = new THREE.Mesh(
-          new THREE.BoxGeometry(0.23, 0.23, 0.23),
-          new THREE.MeshStandardMaterial({ color: 0x66ff44, roughness: 0.6, metalness: 0.2 })
-        );
-        color = 0x66ff44;
+        ctx.shadowBlur = 0;
+        ctx.font = "bold 28px monospace";
+        ctx.fillStyle = "#00ff66";
       }
+      ctx.textAlign = "center";
+      ctx.fillText(randomMatrixChar(), canvas.width/2, 26 + 32*i);
+    }
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  function addMatrixCodeRain() {
+    if (matrixGroup) scene.remove(matrixGroup);
+    matrixGroup = new THREE.Group();
+    matrixColumns = [];
+
+    const COLUMN_COUNT = 28; // How many code columns in 3D space
+    const RADIUS = 2.1; // How far from the camera the columns are, meters
+    const HEIGHT = 2.5; // How tall columns can be
+    const LINES = 15; // How many characters in a column
+
+    for (let i = 0; i < COLUMN_COUNT; i++) {
+      // Distribute columns in 3D ring, some randomness
       const angle = Math.random() * Math.PI * 2;
-      const x = Math.cos(angle) * TUNNEL_RADIUS;
-      const y = Math.sin(angle) * TUNNEL_RADIUS;
-      const z = -i * OBJECT_SPACING;
+      const dist = RADIUS * (0.88 + Math.random() * 0.24);
+      const x = Math.cos(angle) * dist + (Math.random() - 0.5) * 0.8;
+      const z = Math.sin(angle) * dist + (Math.random() - 0.5) * 0.8;
+      const y = (Math.random() - 0.2) * HEIGHT;
+
+      const texture = makeMatrixColumnTexture(LINES, true);
+      texture.needsUpdate = true;
+      const material = new THREE.MeshBasicMaterial({
+        map: texture,
+        transparent: true,
+        opacity: 0.97,
+        depthWrite: false,
+        side: THREE.DoubleSide
+      });
+
+      // Tall thin plane for the falling code
+      const geometry = new THREE.PlaneGeometry(0.19, LINES*0.13);
+      const mesh = new THREE.Mesh(geometry, material);
+
       mesh.position.set(x, y, z);
+      // Make sure code faces inward to center (the user)
+      mesh.lookAt(0, 1.3, 0);
+
+      // Give each column a speed and offset
       mesh.userData = {
-        baseZ: z,
-        angle: angle,
-        type: type,
-        color: color,
-        exploded: false // for collision
+        lines: LINES,
+        fall: Math.random() * LINES * 0.13,
+        speed: 0.25 + Math.random() * 0.22,
+        mat: material
       };
-      objectGroup.add(mesh);
-    }
-    objectGroup.position.set(0, 0, 0);
-    scene.add(objectGroup);
 
-    // Particle group for explosions
-    if (particleGroup) scene.remove(particleGroup);
-    particleGroup = new THREE.Group();
-    scene.add(particleGroup);
+      matrixColumns.push(mesh);
+      matrixGroup.add(mesh);
+    }
+
+    scene.add(matrixGroup);
   }
 
-  // ---- Particle explosion function ----
-  function spawnShapeParticles(type, color, pos, count = 12) {
-    for (let i = 0; i < count; i++) {
-      let mini;
-      if (type === 0) {
-        mini = new THREE.Mesh(
-          new THREE.TetrahedronGeometry(0.07),
-          new THREE.MeshStandardMaterial({ color: color, roughness: 0.38, metalness: 0.18, transparent: true, opacity: 1 })
-        );
-      } else if (type === 1) {
-        mini = new THREE.Mesh(
-          new THREE.SphereGeometry(0.05, 12, 12),
-          new THREE.MeshStandardMaterial({ color: color, roughness: 0.24, metalness: 0.4, transparent: true, opacity: 1 })
-        );
-      } else {
-        mini = new THREE.Mesh(
-          new THREE.BoxGeometry(0.075, 0.075, 0.075),
-          new THREE.MeshStandardMaterial({ color: color, roughness: 0.6, metalness: 0.16, transparent: true, opacity: 1 })
-        );
-      }
-      // Random direction
-      const dir = new THREE.Vector3(
-        (Math.random() - 0.5) * 1.7,
-        (Math.random() - 0.5) * 1.7,
-        (Math.random() - 0.5) * 1.7
-      ).normalize();
-      // Start at collision point
-      mini.position.copy(pos);
-      // Add simple custom "explosion" animation state
-      mini.userData = {
-        velocity: dir.multiplyScalar(0.04 + 0.09 * Math.random()),
-        time: 0,
-        fade: 1 + Math.random() * 0.5 // how long to fade
-      };
-      particleGroup.add(mini);
-    }
-  }
-
-  // ---- Animation loop ----
+  // --- Animate matrix rain ---
   renderer.setAnimationLoop(() => {
-    // Tunnel and objects are stationary at anchor point
-    if (tunnelGroup && tunnelAnchorPos && tunnelAnchorQuat) {
-      tunnelGroup.position.copy(tunnelAnchorPos);
-      tunnelGroup.quaternion.copy(tunnelAnchorQuat);
-    }
-    if (objectGroup && tunnelAnchorPos && tunnelAnchorQuat) {
-      objectGroup.position.copy(tunnelAnchorPos);
-      objectGroup.quaternion.copy(tunnelAnchorQuat);
-    }
-    if (particleGroup && tunnelAnchorPos && tunnelAnchorQuat) {
-      particleGroup.position.copy(tunnelAnchorPos);
-      particleGroup.quaternion.copy(tunnelAnchorQuat);
-    }
-
-    // Animate tunnel grid
-    if (tunnelGroup) {
-      tunnelScroll += 0.035;
-      const TUNNEL_LENGTH = 30;
-      const SPACING = 0.45;
-      let ringIndex = 0, lineIndex = 0;
-      for (let i = 0; i < tunnelGroup.children.length; i++) {
-        let obj = tunnelGroup.children[i];
-        if (ringIndex < TUNNEL_LENGTH) {
-          let z = ((-ringIndex * SPACING) + (tunnelScroll % (TUNNEL_LENGTH * SPACING)));
-          obj.position.z = z;
-          let wobble = Math.sin(Date.now()/800 + ringIndex) * 0.09;
-          obj.scale.setScalar(1 + wobble);
-          ringIndex++;
-        } else {
-          lineIndex++;
+    // Matrix rain animation
+    const now = performance.now();
+    if (matrixColumns.length) {
+      for (const mesh of matrixColumns) {
+        // Animate falling
+        mesh.position.y -= mesh.userData.speed * 0.01;
+        // When fully offscreen, reset above
+        if (mesh.position.y < -1.1) {
+          mesh.position.y = 1.7 + Math.random() * 0.4;
+          // Regenerate the code column texture for variety
+          const newTex = makeMatrixColumnTexture(mesh.userData.lines, true);
+          newTex.needsUpdate = true;
+          mesh.material.map.dispose();
+          mesh.material.map = newTex;
         }
       }
     }
 
-    // Animate objects & check for saber collision
-    if (objectGroup) {
-      const OBJECTS_COUNT = objectGroup.children.length;
-      const TOTAL_LENGTH = OBJECTS_COUNT * 3;
-      for (let i = OBJECTS_COUNT - 1; i >= 0; i--) {
-        const mesh = objectGroup.children[i];
-        if (mesh.userData.exploded) continue;
-
-        let newZ = mesh.userData.baseZ + (tunnelScroll % TOTAL_LENGTH);
-        if (newZ > 1.5) newZ -= TOTAL_LENGTH;
-        mesh.position.z = newZ;
-        let scale = 0.18 + Math.max(0, 0.7 * (1 - Math.abs(newZ) / (TOTAL_LENGTH/2)));
-        scale = Math.min(scale, 0.7);
-        mesh.scale.set(scale, scale, scale);
-        mesh.rotation.y += 0.018 + 0.005 * i;
-        mesh.rotation.x += 0.008 + 0.002 * i;
-
-        // ---- Collision detection with both sabers ----
-        if (saber1) {
-          if (checkSaberHit(saber1, mesh, scale)) {
-            explodeObject(mesh);
-            continue;
-          }
-        }
-        if (saber2) {
-          if (checkSaberHit(saber2, mesh, scale)) {
-            explodeObject(mesh);
-            continue;
-          }
-        }
-      }
-    }
-
-    // Animate explosion particles
-    if (particleGroup) {
-      for (let i = particleGroup.children.length - 1; i >= 0; i--) {
-        const mini = particleGroup.children[i];
-        mini.userData.time += 0.018;
-        mini.position.add(mini.userData.velocity);
-        mini.material.opacity = Math.max(0, 1 - mini.userData.time / mini.userData.fade);
-        if (mini.userData.time > mini.userData.fade) {
-          particleGroup.remove(mini);
-        }
-      }
-    }
-
-    // Saber glow pulse
-    let pulse = 0.9 + 0.12 * Math.sin(Date.now()/320);
-    if (saberGlow1) saberGlow1.material.opacity = 0.22 + 0.25 * pulse;
-    if (saberGlow2) saberGlow2.material.opacity = 0.22 + 0.25 * pulse;
-    if (saber1) saber1.material.emissiveIntensity = 0.85 + 0.25 * pulse;
-    if (saber2) saber2.material.emissiveIntensity = 0.85 + 0.25 * pulse;
-
+    // Update controller positions (in AR space)
     renderer.render(scene, camera);
   });
-
-  // ---- Simple collision: saber (cylinder) with mesh (sphere approx) ----
-  function checkSaberHit(saber, mesh, meshScale) {
-    // saber: Cylinder mesh in controller space
-    // mesh: scene mesh (center in tunnel space)
-    // meshScale: radius-ish for intersection
-    // Approach: get saber's world matrix, sample points along blade, check distance to mesh
-    let saberWorldPos = new THREE.Vector3();
-    let saberWorldDir = new THREE.Vector3(0, 0, -1).applyQuaternion(saber.getWorldQuaternion(new THREE.Quaternion()));
-
-    saber.getWorldPosition(saberWorldPos);
-
-    // Check points along the saber blade
-    for (let t = 0.25; t <= 1; t += 0.20) {
-      let point = saberWorldPos.clone().add(saberWorldDir.clone().multiplyScalar(t * 1.5));
-      if (point.distanceTo(mesh.getWorldPosition(new THREE.Vector3())) < (0.19 + meshScale)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  // ---- Explode object into mini-shapes ----
-  function explodeObject(mesh) {
-    mesh.userData.exploded = true;
-    spawnShapeParticles(mesh.userData.type, mesh.userData.color, mesh.getWorldPosition(new THREE.Vector3()));
-    objectGroup.remove(mesh);
-  }
 
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
+
 </script>
 </body>
 </html>
