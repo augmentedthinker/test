@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AR Tunnel with Moving Objects</title>
+  <title>AR Tunnel with Lightsabers</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   </style>
@@ -69,6 +69,8 @@
   let controllerModelFactory;
   let tunnelGroup = null;
   let objectGroup = null;
+  let saber1 = null, saber2 = null;
+  let saberGlow1 = null, saberGlow2 = null;
   let tunnelScroll = 0;
 
   scene = new THREE.Scene();
@@ -86,6 +88,7 @@
   function setupControllers() {
     if (controllerGrip1) scene.remove(controllerGrip1);
     if (controllerGrip2) scene.remove(controllerGrip2);
+
     controllerModelFactory = new XRControllerModelFactory();
     controllerGrip1 = renderer.xr.getControllerGrip(0);
     controllerGrip2 = renderer.xr.getControllerGrip(1);
@@ -93,6 +96,92 @@
     const model2 = controllerModelFactory.createControllerModel(controllerGrip2);
     controllerGrip1.add(model1);
     controllerGrip2.add(model2);
+
+    // ---- Lightsabers! ----
+
+    // Remove old sabers/glows if any
+    if (saber1) controllerGrip1.remove(saber1);
+    if (saberGlow1) controllerGrip1.remove(saberGlow1);
+    if (saber2) controllerGrip2.remove(saber2);
+    if (saberGlow2) controllerGrip2.remove(saberGlow2);
+
+    // Size based on tunnel width
+    const SABER_LENGTH = 1.5; // meters, covers tunnel
+    const SABER_RADIUS = 0.045; // thick blade
+
+    // --- Left: Green Saber ---
+    const greenColor = 0x22ff55;
+    const saberMat1 = new THREE.MeshPhysicalMaterial({
+      color: greenColor,
+      emissive: new THREE.Color(greenColor).multiplyScalar(0.5),
+      metalness: 0.2,
+      roughness: 0.15,
+      transmission: 0.70,
+      transparent: true,
+      opacity: 0.92,
+      clearcoat: 1,
+      clearcoatRoughness: 0.08
+    });
+    saber1 = new THREE.Mesh(
+      new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
+      saberMat1
+    );
+    saber1.position.set(0, 0, -SABER_LENGTH/2); // Stick out from controller
+    saber1.rotation.x = Math.PI/2;
+
+    // Glow "halo" (translucent outer cylinder, bigger & blurrier)
+    const saberGlowMat1 = new THREE.MeshBasicMaterial({
+      color: greenColor,
+      transparent: true,
+      opacity: 0.35,
+      depthWrite: false
+    });
+    saberGlow1 = new THREE.Mesh(
+      new THREE.CylinderGeometry(SABER_RADIUS*1.5, SABER_RADIUS*1.5, SABER_LENGTH, 32, 1, true),
+      saberGlowMat1
+    );
+    saberGlow1.position.copy(saber1.position);
+    saberGlow1.rotation.copy(saber1.rotation);
+
+    controllerGrip1.add(saber1);
+    controllerGrip1.add(saberGlow1);
+
+    // --- Right: Blue Saber ---
+    const blueColor = 0x44aaff;
+    const saberMat2 = new THREE.MeshPhysicalMaterial({
+      color: blueColor,
+      emissive: new THREE.Color(blueColor).multiplyScalar(0.6),
+      metalness: 0.22,
+      roughness: 0.12,
+      transmission: 0.75,
+      transparent: true,
+      opacity: 0.93,
+      clearcoat: 1,
+      clearcoatRoughness: 0.09
+    });
+    saber2 = new THREE.Mesh(
+      new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
+      saberMat2
+    );
+    saber2.position.set(0, 0, -SABER_LENGTH/2);
+    saber2.rotation.x = Math.PI/2;
+
+    const saberGlowMat2 = new THREE.MeshBasicMaterial({
+      color: blueColor,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false
+    });
+    saberGlow2 = new THREE.Mesh(
+      new THREE.CylinderGeometry(SABER_RADIUS*1.5, SABER_RADIUS*1.5, SABER_LENGTH, 32, 1, true),
+      saberGlowMat2
+    );
+    saberGlow2.position.copy(saber2.position);
+    saberGlow2.rotation.copy(saber2.rotation);
+
+    controllerGrip2.add(saber2);
+    controllerGrip2.add(saberGlow2);
+
     scene.add(controllerGrip1);
     scene.add(controllerGrip2);
   }
@@ -138,43 +227,37 @@
 
     objectGroup = new THREE.Group();
 
-    const OBJECTS_COUNT = 10; // How many moving objects
-    const OBJECT_SPACING = 3; // Space between them (in rings)
+    const OBJECTS_COUNT = 10;
+    const OBJECT_SPACING = 3;
     const TUNNEL_RADIUS = 0.6;
 
-    // Cycle through pyramid, sphere, cube
     for (let i = 0; i < OBJECTS_COUNT; i++) {
       let mesh;
       let color;
       let type = i % 3;
       if (type === 0) {
-        // Pyramid (tetrahedron)
         mesh = new THREE.Mesh(
           new THREE.TetrahedronGeometry(0.25),
           new THREE.MeshStandardMaterial({ color: 0xffa500, roughness: 0.4, metalness: 0.2 })
         );
         color = 0xffa500;
       } else if (type === 1) {
-        // Sphere
         mesh = new THREE.Mesh(
           new THREE.SphereGeometry(0.17, 18, 18),
           new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.3, metalness: 0.6 })
         );
         color = 0x0088ff;
       } else {
-        // Cube
         mesh = new THREE.Mesh(
           new THREE.BoxGeometry(0.23, 0.23, 0.23),
           new THREE.MeshStandardMaterial({ color: 0x66ff44, roughness: 0.6, metalness: 0.2 })
         );
         color = 0x66ff44;
       }
-      // Set random position around tunnel edge for more interest
       const angle = Math.random() * Math.PI * 2;
       const x = Math.cos(angle) * TUNNEL_RADIUS;
       const y = Math.sin(angle) * TUNNEL_RADIUS;
       const z = -i * OBJECT_SPACING;
-
       mesh.position.set(x, y, z);
       mesh.userData = {
         baseZ: z,
@@ -187,7 +270,7 @@
     scene.add(objectGroup);
   }
 
-  // ---- Animation loop for endless movement ----
+  // ---- Animation loop for everything ----
   renderer.setAnimationLoop(() => {
     // Sync tunnel and objects to camera
     if (renderer.xr.isPresenting) {
@@ -225,19 +308,23 @@
       const TOTAL_LENGTH = OBJECTS_COUNT * 3;
       for (let i = 0; i < OBJECTS_COUNT; i++) {
         const mesh = objectGroup.children[i];
-        // Move Z forward (like tunnel)
         let newZ = mesh.userData.baseZ + (tunnelScroll % TOTAL_LENGTH);
-        if (newZ > 1.5) newZ -= TOTAL_LENGTH; // Loop back when passed camera
+        if (newZ > 1.5) newZ -= TOTAL_LENGTH;
         mesh.position.z = newZ;
-        // Scale: smaller when far (z negative), bigger when near (z 0)
         let scale = 0.18 + Math.max(0, 0.7 * (1 - Math.abs(newZ) / (TOTAL_LENGTH/2)));
         scale = Math.min(scale, 0.7);
         mesh.scale.set(scale, scale, scale);
-        // Optionally rotate for a little flair
         mesh.rotation.y += 0.018 + 0.005 * i;
         mesh.rotation.x += 0.008 + 0.002 * i;
       }
     }
+
+    // Animate saber glows (pulse effect)
+    let pulse = 0.9 + 0.12 * Math.sin(Date.now()/320);
+    if (saberGlow1) saberGlow1.material.opacity = 0.22 + 0.25 * pulse;
+    if (saberGlow2) saberGlow2.material.opacity = 0.22 + 0.25 * pulse;
+    if (saber1) saber1.material.emissiveIntensity = 0.85 + 0.25 * pulse;
+    if (saber2) saber2.material.emissiveIntensity = 0.85 + 0.25 * pulse;
 
     renderer.render(scene, camera);
   });
