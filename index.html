@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AR Wormhole Tunnel Illusion (Centered)</title>
+  <title>AR Tunnel with Moving Objects</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   </style>
@@ -33,6 +33,7 @@
         currentSession = session;
         setupControllers();
         addTunnel();
+        addTunnelObjects();
       }
       function onSessionEnded() {
         currentSession.removeEventListener('end', onSessionEnded);
@@ -41,6 +42,7 @@
         if (controllerGrip1) scene.remove(controllerGrip1);
         if (controllerGrip2) scene.remove(controllerGrip2);
         if (tunnelGroup) scene.remove(tunnelGroup);
+        if (objectGroup) scene.remove(objectGroup);
       }
       button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -66,6 +68,8 @@
   let controllerGrip1, controllerGrip2;
   let controllerModelFactory;
   let tunnelGroup = null;
+  let objectGroup = null;
+  let tunnelScroll = 0;
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -75,7 +79,7 @@
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-  // Ambient light so controller models are visible
+  // Ambient light so controller models and objects are visible
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 2);
   scene.add(light);
 
@@ -124,29 +128,85 @@
       const ring = new THREE.Line(geometry, material);
       tunnelGroup.add(ring);
     }
-
-    // Start with tunnel at camera position
     tunnelGroup.position.set(0, 0, 0);
     scene.add(tunnelGroup);
   }
 
+  // ---- Add moving objects inside the tunnel ----
+  function addTunnelObjects() {
+    if (objectGroup) scene.remove(objectGroup);
+
+    objectGroup = new THREE.Group();
+
+    const OBJECTS_COUNT = 10; // How many moving objects
+    const OBJECT_SPACING = 3; // Space between them (in rings)
+    const TUNNEL_RADIUS = 0.6;
+
+    // Cycle through pyramid, sphere, cube
+    for (let i = 0; i < OBJECTS_COUNT; i++) {
+      let mesh;
+      let color;
+      let type = i % 3;
+      if (type === 0) {
+        // Pyramid (tetrahedron)
+        mesh = new THREE.Mesh(
+          new THREE.TetrahedronGeometry(0.25),
+          new THREE.MeshStandardMaterial({ color: 0xffa500, roughness: 0.4, metalness: 0.2 })
+        );
+        color = 0xffa500;
+      } else if (type === 1) {
+        // Sphere
+        mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.17, 18, 18),
+          new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.3, metalness: 0.6 })
+        );
+        color = 0x0088ff;
+      } else {
+        // Cube
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.23, 0.23, 0.23),
+          new THREE.MeshStandardMaterial({ color: 0x66ff44, roughness: 0.6, metalness: 0.2 })
+        );
+        color = 0x66ff44;
+      }
+      // Set random position around tunnel edge for more interest
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.cos(angle) * TUNNEL_RADIUS;
+      const y = Math.sin(angle) * TUNNEL_RADIUS;
+      const z = -i * OBJECT_SPACING;
+
+      mesh.position.set(x, y, z);
+      mesh.userData = {
+        baseZ: z,
+        angle: angle,
+        type: type
+      };
+      objectGroup.add(mesh);
+    }
+    objectGroup.position.set(0, 0, 0);
+    scene.add(objectGroup);
+  }
+
   // ---- Animation loop for endless movement ----
-  let tunnelScroll = 0;
   renderer.setAnimationLoop(() => {
-    // Sync tunnel to camera position and rotation every frame
-    if (tunnelGroup && renderer.xr.isPresenting) {
-      // Get AR camera world position and quaternion
+    // Sync tunnel and objects to camera
+    if (renderer.xr.isPresenting) {
       camera.updateMatrixWorld(true);
       let camPos = new THREE.Vector3();
       let camQuat = new THREE.Quaternion();
       camera.getWorldPosition(camPos);
       camera.getWorldQuaternion(camQuat);
-
-      tunnelGroup.position.copy(camPos);
-      tunnelGroup.quaternion.copy(camQuat);
+      if (tunnelGroup) {
+        tunnelGroup.position.copy(camPos);
+        tunnelGroup.quaternion.copy(camQuat);
+      }
+      if (objectGroup) {
+        objectGroup.position.copy(camPos);
+        objectGroup.quaternion.copy(camQuat);
+      }
     }
 
-    // Animate the tunnel moving towards the camera
+    // Animate tunnel rings
     if (tunnelGroup) {
       tunnelScroll += 0.035;
       const TUNNEL_LENGTH = tunnelGroup.children.length;
@@ -158,6 +218,27 @@
         tunnelGroup.children[i].scale.setScalar(1 + wobble);
       }
     }
+
+    // Animate objects
+    if (objectGroup) {
+      const OBJECTS_COUNT = objectGroup.children.length;
+      const TOTAL_LENGTH = OBJECTS_COUNT * 3;
+      for (let i = 0; i < OBJECTS_COUNT; i++) {
+        const mesh = objectGroup.children[i];
+        // Move Z forward (like tunnel)
+        let newZ = mesh.userData.baseZ + (tunnelScroll % TOTAL_LENGTH);
+        if (newZ > 1.5) newZ -= TOTAL_LENGTH; // Loop back when passed camera
+        mesh.position.z = newZ;
+        // Scale: smaller when far (z negative), bigger when near (z 0)
+        let scale = 0.18 + Math.max(0, 0.7 * (1 - Math.abs(newZ) / (TOTAL_LENGTH/2)));
+        scale = Math.min(scale, 0.7);
+        mesh.scale.set(scale, scale, scale);
+        // Optionally rotate for a little flair
+        mesh.rotation.y += 0.018 + 0.005 * i;
+        mesh.rotation.x += 0.008 + 0.002 * i;
+      }
+    }
+
     renderer.render(scene, camera);
   });
 
