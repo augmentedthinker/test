@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AR Skeleton - Quest 2 Controllers Only</title>
+  <title>AR Wormhole Tunnel Illusion</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   </style>
@@ -20,7 +20,7 @@
   import * as THREE from 'three';
   import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-  // AR Button setup (almost identical to your previous project)
+  // ---- AR Button setup (from your previous projects) ----
   class ARButton {
     static createButton(renderer, sessionInit = {}) {
       const button = document.createElement('button');
@@ -31,15 +31,17 @@
         await renderer.xr.setSession(session);
         button.textContent = 'STOP AR';
         currentSession = session;
-        setupControllers(); // Set up the controller models when AR starts
+        setupControllers();
+        addTunnel();
       }
       function onSessionEnded() {
         currentSession.removeEventListener('end', onSessionEnded);
         button.textContent = 'START AR';
         currentSession = null;
-        // Remove controllers from scene if AR ends
+        // Remove controllers & tunnel from scene if AR ends
         if (controllerGrip1) scene.remove(controllerGrip1);
         if (controllerGrip2) scene.remove(controllerGrip2);
+        if (tunnelGroup) scene.remove(tunnelGroup);
       }
       button.style.cssText = `position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
         padding: 12px 20px; border: 1px solid #fff; border-radius: 4px;
@@ -60,10 +62,11 @@
     }
   }
 
-  // Three.js scene setup
+  // ---- Three.js core setup ----
   let scene, camera, renderer;
   let controllerGrip1, controllerGrip2;
   let controllerModelFactory;
+  let tunnelGroup = null; // Holds the tunnel wireframe rings
 
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
@@ -73,13 +76,12 @@
   document.body.appendChild(renderer.domElement);
   document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['local'] }));
 
-  // Ambient lighting so controller models are visible
+  // Ambient light so controller models are visible
   const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 2);
   scene.add(light);
 
-  // Controller model setup
+  // ---- Controller models (same as before) ----
   function setupControllers() {
-    // Remove existing if re-entered AR
     if (controllerGrip1) scene.remove(controllerGrip1);
     if (controllerGrip2) scene.remove(controllerGrip2);
 
@@ -98,8 +100,61 @@
     scene.add(controllerGrip2);
   }
 
-  // Animation loop (basic)
+  // ---- Tunnel wireframe creation ----
+  function addTunnel() {
+    // Remove old tunnel if exists
+    if (tunnelGroup) scene.remove(tunnelGroup);
+
+    tunnelGroup = new THREE.Group();
+
+    const TUNNEL_LENGTH = 30;      // How many rings long the tunnel is
+    const SEGMENTS = 40;           // How many line segments per ring (circle resolution)
+    const RADIUS = 0.8;            // Radius of the tunnel (meters)
+    const SPACING = 0.45;          // Distance between rings
+
+    for (let i = 0; i < TUNNEL_LENGTH; i++) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      for (let j = 0; j <= SEGMENTS; j++) {
+        const theta = (j / SEGMENTS) * Math.PI * 2;
+        const x = Math.cos(theta) * RADIUS;
+        const y = Math.sin(theta) * RADIUS;
+        const z = -i * SPACING;
+        positions.push(x, y, z);
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.35 + 0.65 * (1 - i / TUNNEL_LENGTH), // Fade in distance
+        linewidth: 1
+      });
+      const ring = new THREE.Line(geometry, material);
+      tunnelGroup.add(ring);
+    }
+
+    // Position the tunnel straight ahead of the camera (user)
+    tunnelGroup.position.set(0, 1.6, -2);
+    scene.add(tunnelGroup);
+  }
+
+  // ---- Animation loop for endless movement ----
+  let tunnelScroll = 0;
   renderer.setAnimationLoop(() => {
+    // Animate the tunnel moving towards the camera
+    if (tunnelGroup) {
+      tunnelScroll += 0.035; // Speed of movement
+      const TUNNEL_LENGTH = tunnelGroup.children.length;
+      const SPACING = 0.45;
+      for (let i = 0; i < TUNNEL_LENGTH; i++) {
+        // Each ring moves forward, loops back when it reaches you
+        let z = ((-i * SPACING) + (tunnelScroll % (TUNNEL_LENGTH * SPACING)));
+        tunnelGroup.children[i].position.z = z;
+        // Optionally: animate radius for "wobble" (for wormhole feel)
+        let wobble = Math.sin(Date.now()/800 + i) * 0.09;
+        tunnelGroup.children[i].scale.setScalar(1 + wobble);
+      }
+    }
     renderer.render(scene, camera);
   });
 
