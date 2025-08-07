@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>AR Tunnel with Lightsabers</title>
+  <title>Stationary AR Wormhole Tunnel Grid</title>
   <style>
     body { margin: 0; padding: 0; overflow: hidden; background: #000; }
   </style>
@@ -32,6 +32,8 @@
         button.textContent = 'STOP AR';
         currentSession = session;
         setupControllers();
+        // Save camera starting position/rotation for tunnel
+        setTimeout(() => { anchorTunnelToStart(); }, 350); // Give camera a frame to settle
         addTunnel();
         addTunnelObjects();
       }
@@ -73,6 +75,10 @@
   let saberGlow1 = null, saberGlow2 = null;
   let tunnelScroll = 0;
 
+  // New: Tunnel anchor variables
+  let tunnelAnchorPos = null;
+  let tunnelAnchorQuat = null;
+
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -97,19 +103,17 @@
     controllerGrip1.add(model1);
     controllerGrip2.add(model2);
 
-    // ---- Lightsabers! ----
+    // ---- Lightsabers ----
 
-    // Remove old sabers/glows if any
     if (saber1) controllerGrip1.remove(saber1);
     if (saberGlow1) controllerGrip1.remove(saberGlow1);
     if (saber2) controllerGrip2.remove(saber2);
     if (saberGlow2) controllerGrip2.remove(saberGlow2);
 
-    // Size based on tunnel width
-    const SABER_LENGTH = 1.5; // meters, covers tunnel
-    const SABER_RADIUS = 0.045; // thick blade
+    const SABER_LENGTH = 1.5;
+    const SABER_RADIUS = 0.045;
 
-    // --- Left: Green Saber ---
+    // Left: Green
     const greenColor = 0x22ff55;
     const saberMat1 = new THREE.MeshPhysicalMaterial({
       color: greenColor,
@@ -126,10 +130,9 @@
       new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
       saberMat1
     );
-    saber1.position.set(0, 0, -SABER_LENGTH/2); // Stick out from controller
+    saber1.position.set(0, 0, -SABER_LENGTH/2);
     saber1.rotation.x = Math.PI/2;
 
-    // Glow "halo" (translucent outer cylinder, bigger & blurrier)
     const saberGlowMat1 = new THREE.MeshBasicMaterial({
       color: greenColor,
       transparent: true,
@@ -146,7 +149,7 @@
     controllerGrip1.add(saber1);
     controllerGrip1.add(saberGlow1);
 
-    // --- Right: Blue Saber ---
+    // Right: Blue
     const blueColor = 0x44aaff;
     const saberMat2 = new THREE.MeshPhysicalMaterial({
       color: blueColor,
@@ -186,22 +189,35 @@
     scene.add(controllerGrip2);
   }
 
-  // ---- Tunnel wireframe creation ----
+  // ---- Tunnel anchoring ----
+  function anchorTunnelToStart() {
+    // Called right after AR session begins
+    camera.updateMatrixWorld(true);
+    tunnelAnchorPos = new THREE.Vector3();
+    tunnelAnchorQuat = new THREE.Quaternion();
+    camera.getWorldPosition(tunnelAnchorPos);
+    camera.getWorldQuaternion(tunnelAnchorQuat);
+    // The tunnel's position/orientation are now locked in
+  }
+
+  // ---- Tunnel wireframe grid creation ----
   function addTunnel() {
     if (tunnelGroup) scene.remove(tunnelGroup);
 
     tunnelGroup = new THREE.Group();
 
     const TUNNEL_LENGTH = 30;
-    const SEGMENTS = 40;
+    const RING_SEGMENTS = 40;
+    const LENGTHWISE_SEGMENTS = 12;
     const RADIUS = 0.8;
     const SPACING = 0.45;
 
+    // RINGS (circles down the tunnel)
     for (let i = 0; i < TUNNEL_LENGTH; i++) {
       const geometry = new THREE.BufferGeometry();
       const positions = [];
-      for (let j = 0; j <= SEGMENTS; j++) {
-        const theta = (j / SEGMENTS) * Math.PI * 2;
+      for (let j = 0; j <= RING_SEGMENTS; j++) {
+        const theta = (j / RING_SEGMENTS) * Math.PI * 2;
         const x = Math.cos(theta) * RADIUS;
         const y = Math.sin(theta) * RADIUS;
         const z = -i * SPACING;
@@ -211,13 +227,36 @@
       const material = new THREE.LineBasicMaterial({
         color: 0x00ffff,
         transparent: true,
-        opacity: 0.4 + 0.6 * (1 - i / TUNNEL_LENGTH),
+        opacity: 0.48 + 0.45 * (1 - i / TUNNEL_LENGTH),
         linewidth: 1
       });
       const ring = new THREE.Line(geometry, material);
       tunnelGroup.add(ring);
     }
-    tunnelGroup.position.set(0, 0, 0);
+
+    // LENGTHWISE LINES (connect the rings along the tunnel)
+    for (let l = 0; l < LENGTHWISE_SEGMENTS; l++) {
+      const geometry = new THREE.BufferGeometry();
+      const positions = [];
+      const angle = (l / LENGTHWISE_SEGMENTS) * Math.PI * 2;
+      const x = Math.cos(angle) * RADIUS;
+      const y = Math.sin(angle) * RADIUS;
+      for (let i = 0; i < TUNNEL_LENGTH; i++) {
+        const z = -i * SPACING;
+        positions.push(x, y, z);
+      }
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      const material = new THREE.LineBasicMaterial({
+        color: 0x0099ff,
+        transparent: true,
+        opacity: 0.36,
+        linewidth: 1
+      });
+      const line = new THREE.Line(geometry, material);
+      tunnelGroup.add(line);
+    }
+
+    tunnelGroup.position.set(0, 0, 0); // Position will be set by anchor every frame
     scene.add(tunnelGroup);
   }
 
@@ -270,35 +309,37 @@
     scene.add(objectGroup);
   }
 
-  // ---- Animation loop for everything ----
+  // ---- Animation loop ----
   renderer.setAnimationLoop(() => {
-    // Sync tunnel and objects to camera
-    if (renderer.xr.isPresenting) {
-      camera.updateMatrixWorld(true);
-      let camPos = new THREE.Vector3();
-      let camQuat = new THREE.Quaternion();
-      camera.getWorldPosition(camPos);
-      camera.getWorldQuaternion(camQuat);
-      if (tunnelGroup) {
-        tunnelGroup.position.copy(camPos);
-        tunnelGroup.quaternion.copy(camQuat);
-      }
-      if (objectGroup) {
-        objectGroup.position.copy(camPos);
-        objectGroup.quaternion.copy(camQuat);
-      }
+    // Stationary tunnel: always at anchor point/rotation
+    if (tunnelGroup && tunnelAnchorPos && tunnelAnchorQuat) {
+      tunnelGroup.position.copy(tunnelAnchorPos);
+      tunnelGroup.quaternion.copy(tunnelAnchorQuat);
+    }
+    if (objectGroup && tunnelAnchorPos && tunnelAnchorQuat) {
+      objectGroup.position.copy(tunnelAnchorPos);
+      objectGroup.quaternion.copy(tunnelAnchorQuat);
     }
 
-    // Animate tunnel rings
+    // Animate tunnel grid
     if (tunnelGroup) {
       tunnelScroll += 0.035;
-      const TUNNEL_LENGTH = tunnelGroup.children.length;
+      const TUNNEL_LENGTH = 30;
       const SPACING = 0.45;
-      for (let i = 0; i < TUNNEL_LENGTH; i++) {
-        let z = ((-i * SPACING) + (tunnelScroll % (TUNNEL_LENGTH * SPACING)));
-        tunnelGroup.children[i].position.z = z;
-        let wobble = Math.sin(Date.now()/800 + i) * 0.09;
-        tunnelGroup.children[i].scale.setScalar(1 + wobble);
+      let ringIndex = 0, lineIndex = 0;
+      for (let i = 0; i < tunnelGroup.children.length; i++) {
+        let obj = tunnelGroup.children[i];
+        // First N children are rings
+        if (ringIndex < TUNNEL_LENGTH) {
+          let z = ((-ringIndex * SPACING) + (tunnelScroll % (TUNNEL_LENGTH * SPACING)));
+          obj.position.z = z;
+          let wobble = Math.sin(Date.now()/800 + ringIndex) * 0.09;
+          obj.scale.setScalar(1 + wobble);
+          ringIndex++;
+        } else {
+          // The rest are lengthwise lines (leave at original positions)
+          lineIndex++;
+        }
       }
     }
 
