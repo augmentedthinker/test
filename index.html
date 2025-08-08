@@ -15,7 +15,7 @@
   </style>
 </head>
 <body>
-  <div id="info">AR Entry Demo — Floor + Grid added. Enter AR and you should see a cyan ring ahead, with a matching grid on the floor.</div>
+  <div id="info">AR Entry Demo — Floor dropped ~3ft. Enter AR to see the cyan ring ahead and the grid below you.</div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.164.1/build/three.module.js';
@@ -42,15 +42,14 @@
 
     // --- Reference visuals ---
 
-    // Spinning ring (same as before, but we'll float it at eye height above the floor)
+    // Spinning ring (unchanged)
     const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
     const ringMat  = new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true });
     const ring     = new THREE.Mesh(ringGeom, ringMat);
-    // With 'local-floor' space, y=0 is the floor. Put ring ~eye height.
     ring.position.set(0, 1.5, -0.75);
     scene.add(ring);
 
-    // Floor plane (very subtle, transparent, matches accent color)
+    // Floor plane (same material, now 3ft lower)
     const floorSize = 10; // meters
     const floorGeom = new THREE.PlaneGeometry(floorSize, floorSize);
     const floorMat  = new THREE.MeshBasicMaterial({
@@ -60,17 +59,16 @@
       side: THREE.DoubleSide
     });
     const floor = new THREE.Mesh(floorGeom, floorMat);
-    floor.rotation.x = -Math.PI / 2; // lay flat (XZ)
-    floor.position.y = 0;            // at floor level (local-floor)
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.y = -0.9144; // CHANGED: ~3 feet below rig
     scene.add(floor);
 
-    // Grid helper (same color as ring)
+    // Grid helper (same color; tiny lift above the lowered floor)
     const divisions = 40;
     const grid = new THREE.GridHelper(floorSize, divisions, ACCENT, ACCENT);
-    // So lines aren’t too loud against pass-through, make them semi-transparent
     grid.material.transparent = true;
     grid.material.opacity = 0.35;
-    grid.position.y = 0.001; // tiny lift to avoid z-fighting with the plane
+    grid.position.y = -0.9134; // CHANGED: just above floor to avoid z-fighting
     scene.add(grid);
 
     // --- Render loop ---
