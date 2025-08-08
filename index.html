@@ -1,597 +1,95 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-<title>AR Tetris — Glass Blocks + NES Controller (Fallback safe)</title>
-<style>
-  html,body { margin:0;height:100%;background:#000;overflow:hidden; }
-  /* Big friendly AR button is injected; keep it readable over video passthrough */
-</style>
+  <meta charset="utf-8" />
+  <title>AR Entry Button • Three.js WebXR</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    What this does:
+    - Shows a button ("Enter AR") when AR is available.
+    - On tap, starts an immersive AR session.
+    - Renders a simple spinning ring so you know it's working.
+    - Nothing else. Clean, minimal doorway into AR.
+
+    Quest 2 tips:
+    - Must be opened over HTTPS (GitHub Pages is fine).
+    - Use the Meta (Quest) Browser.
+    - You’ll get a camera permission prompt the first time — allow it.
+  -->
+  <style>
+    html, body { margin:0; padding:0; height:100%; background:#000; }
+    #info {
+      position: fixed; left: 12px; bottom: 12px; z-index: 10;
+      font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #bbb; opacity: 0.9;
+      user-select: none;
+    }
+    a { color:#8cf; text-decoration:none; border-bottom:1px dashed #8cf; }
+  </style>
 </head>
 <body>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-  }
-}
-</script>
+  <div id="info">AR Entry Demo — Three.js WebXR • Minimal “doorway”<br/>When inside AR, you should see a spinning ring floating ahead.</div>
 
-<script type="module">
-import * as THREE from 'three';
-import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+  <script type="module">
+    // Import Three and ARButton (ES modules via CDN)
+    import * as THREE from 'https://unpkg.com/three@0.164.1/build/three.module.js';
+    import { ARButton } from 'https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js';
 
-/* ---------------- AR BUTTON (inline, no extra files) ---------------- */
-class ARButton {
-  static createButton(renderer, sessionInit = {}) {
-    const button = document.createElement('button');
-    let currentSession = null;
+    // --- Basic three.js setup ---
+    const scene = new THREE.Scene();
 
-    Object.assign(button.style, {
-      position:'absolute', left:'50%', transform:'translateX(-50%)',
-      bottom:'20px', padding:'12px 20px', color:'#fff',
-      background:'rgba(0,0,0,.35)', border:'1px solid #fff', borderRadius:'6px',
-      font:'600 14px system-ui, -apple-system, Segoe UI, Roboto, sans-serif', cursor:'pointer', zIndex:9999
+    // Keep background transparent so AR passthrough shows your real room
+    scene.background = null;
+
+    const camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 20 );
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio( Math.min(window.devicePixelRatio, 2) );
+    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.xr.enabled = true;
+    document.body.appendChild( renderer.domElement );
+
+    // Add a tiny bit of light for standard materials (not strictly needed for the wireframe ring)
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.8);
+    scene.add(hemi);
+
+    // A simple visual so you know AR is running: a wireframe torus ("ring")
+    const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
+    const ringMat  = new THREE.MeshBasicMaterial({ color: 0x66ccff, wireframe: true });
+    const ring     = new THREE.Mesh(ringGeom, ringMat);
+
+    // Place it about 0.75 meters in front of the viewer at eye height when session starts.
+    ring.position.set(0, 0, -0.75);
+    scene.add(ring);
+
+    // Render loop
+    renderer.setAnimationLoop((time, frame) => {
+      ring.rotation.y += 0.01;
+      renderer.render(scene, camera);
     });
 
-    async function onSessionStarted(session){
-      session.addEventListener('end', onSessionEnded);
-      renderer.xr.setReferenceSpaceType('local');
-      await renderer.xr.setSession(session);
-      button.textContent = 'STOP AR';
-      currentSession = session;
-      startApp(); // boot once AR is live
+    // Handle resize
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // --- AR Button ---
+    // No special requiredFeatures — we just want to enter AR.
+    // (We can add plane-detection, hit-test, hand-tracking later.)
+    const arButton = ARButton.createButton(renderer, {
+      optionalFeatures: [ 'local-floor', 'dom-overlay' ],
+      domOverlay: { root: document.body }
+    });
+    document.body.appendChild(arButton);
+
+    // Friendly fallback text if AR isn’t available
+    if (arButton.textContent === 'AR NOT SUPPORTED') {
+      document.getElementById('info').innerHTML =
+        'This browser/device doesn’t report WebXR AR support. ' +
+        'On Quest 2, open this page in the Meta Browser over HTTPS.';
     }
-    function onSessionEnded(){
-      currentSession?.removeEventListener('end', onSessionEnded);
-      currentSession = null;
-      button.textContent = 'START AR';
-      teardownApp();
-    }
-    function showStartAR(){
-      button.textContent = 'START AR';
-      button.onclick = ()=> currentSession ? currentSession.end()
-        : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
-    }
-    function showARNotSupported(){
-      button.textContent = 'AR NOT SUPPORTED';
-      button.disabled = true; button.style.opacity = .5;
-    }
-    if ('xr' in navigator) {
-      navigator.xr.isSessionSupported('immersive-ar')
-        .then(ok => ok ? showStartAR() : showARNotSupported())
-        .catch(showARNotSupported);
-    } else showARNotSupported();
-
-    return button;
-  }
-}
-
-/* ---------------- Core Three / XR ---------------- */
-let scene, camera, renderer, clock;
-let controller1, controller2, grip1, grip2;
-let controllerFactory;
-
-let gameBoard, staticBlocks, currentPiece;
-let particleSystem; const particles = [];
-let uiPanel, scoreText, levelText, linesText;
-
-let boardState = [];
-let isPieceActive = false;
-let piecePosition = {row:0, col:0};
-let currentShape = [], currentPieceType = null, currentRot = 0;
-
-const BOARD_W = 10, BOARD_H = 20, CELL = 0.1;
-let score = 0, level = 1, totalLines = 0;
-
-const SCORING = { SINGLE:40, DOUBLE:100, TRIPLE:300, TETRIS:1200, SOFT:1, HARD:2 };
-
-let gamepadGroup = null;
-let nesController = null;
-let dpadUp, dpadDown, dpadLeft, dpadRight, buttonA, buttonB;
-const gamepadTargets = [];
-const SHOW_HIT_ZONES = false; // set true if you want to see the zones (for alignment)
-
-/* pieces with “vibes” for materials */
-const PIECES = {
-  I:{shape:[[1,1,1,1]], color:0x00ffff, material:'glass'},
-  O:{shape:[[1,1],[1,1]], color:0xffff00, material:'metal'},
-  T:{shape:[[0,1,0],[1,1,1]], color:0x800080, material:'glass'},
-  S:{shape:[[0,1,1],[1,1,0]], color:0x00ff00, material:'crystal'},
-  Z:{shape:[[1,1,0],[0,1,1]], color:0xff0000, material:'metal'},
-  J:{shape:[[1,0,0],[1,1,1]], color:0x0000ff, material:'glass'},
-  L:{shape:[[0,0,1],[1,1,1]], color:0xffa500, material:'crystal'}
-};
-
-init();
-
-function init(){
-  scene = new THREE.Scene();
-  camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.01, 20);
-
-  renderer = new THREE.WebGLRenderer({alpha:true, antialias:true});
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.xr.enabled = true;
-  document.body.appendChild(renderer.domElement);
-  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures:['local'] }));
-
-  clock = new THREE.Clock();
-
-  // Lighting (needed for PBR materials)
-  scene.add(new THREE.AmbientLight(0x404040, .4));
-  const dir = new THREE.DirectionalLight(0xffffff, 1); dir.position.set(5,10,5); scene.add(dir);
-  const p1 = new THREE.PointLight(0x00ffff,.8,10); p1.position.set(-2,2,0); scene.add(p1);
-  const p2 = new THREE.PointLight(0xff00ff,.8,10); p2.position.set( 2,2,0); scene.add(p2);
-
-  // Controllers
-  controller1 = renderer.xr.getController(0);
-  controller2 = renderer.xr.getController(1);
-  grip1 = renderer.xr.getControllerGrip(0);
-  grip2 = renderer.xr.getControllerGrip(1);
-  scene.add(controller1, controller2, grip1, grip2);
-
-  controllerFactory = new XRControllerModelFactory();
-  grip1.add(controllerFactory.createControllerModel(grip1));
-  grip2.add(controllerFactory.createControllerModel(grip2));
-  [controller1, controller2].forEach(addLaserAndEvents);
-
-  // Resize
-  addEventListener('resize', ()=> {
-    camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();
-    renderer.setSize(innerWidth, innerHeight);
-  });
-}
-
-function startApp(){
-  createBoard();
-  createUIPanel();
-  createParticleSystem();
-  createGamepad(); // NES model with fallback
-  newGame();
-  renderer.setAnimationLoop(loop);
-}
-
-function teardownApp(){
-  renderer.setAnimationLoop(null);
-  // Brutal but simple cleanup for “vibe coder”
-  while(scene.children.length) scene.remove(scene.children[0]);
-}
-
-function addLaserAndEvents(ctrl){
-  // laser
-  const geo = new THREE.BufferGeometry();
-  geo.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,-1],3));
-  const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:0x00ffff, transparent:true, opacity:.7}));
-  line.scale.z = 5; line.visible = false;
-  ctrl.add(line);
-  ctrl.addEventListener('connected', ()=> line.visible = true);
-  ctrl.addEventListener('disconnected', ()=> line.visible = false);
-
-  ctrl.addEventListener('selectstart', onSelectStart);
-  ctrl.addEventListener('selectend', onSelectEnd);
-}
-
-function onSelectStart(e){
-  if (!gamepadTargets.length) return;
-  const ctrl = e.target;
-  const tmp = new THREE.Matrix4().extractRotation(ctrl.matrixWorld);
-  const ray = new THREE.Raycaster();
-  ray.ray.origin.setFromMatrixPosition(ctrl.matrixWorld);
-  ray.ray.direction.set(0,0,-1).applyMatrix4(tmp);
-
-  const hits = ray.intersectObjects(gamepadTargets, false);
-  if (!hits.length) return;
-
-  const o = hits[0].object;
-  if (!isPieceActive) return;
-
-  if (o === dpadLeft)  moveH(-1);
-  else if (o === dpadRight) moveH(1);
-  else if (o === dpadDown) hardDrop();
-  else if (o === buttonA) rotatePiece();
-}
-
-function onSelectEnd(){ /* no-op; zones are invisible so no color reset needed */ }
-
-/* ---------------- Board / UI / Particles ---------------- */
-function createBoard(){
-  gameBoard = new THREE.Group();
-  staticBlocks = new THREE.Group();
-  gameBoard.add(staticBlocks);
-
-  const gridMat = new THREE.LineBasicMaterial({color:0x00ff00, transparent:true, opacity:.45});
-  for (let x=0; x<=BOARD_W; x++){
-    const pts=[ new THREE.Vector3(x*CELL-(BOARD_W*CELL)/2, 0, 0),
-                new THREE.Vector3(x*CELL-(BOARD_W*CELL)/2, -BOARD_H*CELL, 0) ];
-    gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gridMat));
-  }
-  for (let y=0; y<=BOARD_H; y++){
-    const pts=[ new THREE.Vector3(-(BOARD_W*CELL)/2, -y*CELL, 0),
-                new THREE.Vector3( (BOARD_W*CELL)/2, -y*CELL, 0) ];
-    gameBoard.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), gridMat));
-  }
-
-  gameBoard.position.set(0, 1.6, -2);
-  scene.add(gameBoard);
-}
-
-function createUIPanel(){
-  uiPanel = new THREE.Group();
-
-  const bg = new THREE.Mesh(
-    new THREE.PlaneGeometry(1.2,1.5),
-    new THREE.MeshPhysicalMaterial({ color:0x111522, transparent:true, opacity:.9,
-      roughness:.35, metalness:.1, clearcoat:.8, clearcoatRoughness:.2 })
-  );
-  uiPanel.add(bg);
-
-  const title = makeText('TETRIS AR', 64, '#00ffff');
-  const titleMesh = new THREE.Mesh(new THREE.PlaneGeometry(.9,.2),
-    new THREE.MeshBasicMaterial({ map:new THREE.CanvasTexture(title), transparent:true }));
-  titleMesh.position.set(0,.6,.01);
-  uiPanel.add(titleMesh);
-
-  scoreText = label('SCORE: 0', 0,.3, '#ffff00');
-  levelText = label('LEVEL: 1', 0, 0, '#ff6600');
-  linesText = label('LINES: 0', 0,-.3, '#00ff00');
-  uiPanel.add(scoreText, levelText, linesText);
-
-  uiPanel.position.set(1.5, 1.6, -2);
-  scene.add(uiPanel);
-}
-
-function makeText(txt, fontSize, color){
-  const c = document.createElement('canvas'); c.width=512; c.height=128;
-  const ctx = c.getContext('2d');
-  ctx.fillStyle = '#111522'; ctx.fillRect(0,0,c.width,c.height);
-  ctx.font = `bold ${fontSize}px Arial`; ctx.fillStyle = color;
-  ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.shadowColor='rgba(0,0,0,.8)'; ctx.shadowBlur=6; ctx.shadowOffsetX=2; ctx.shadowOffsetY=2;
-  ctx.fillText(txt, c.width/2, c.height/2);
-  return c;
-}
-function label(txt, x,y, color){
-  const tex = new THREE.CanvasTexture(makeText(txt, 36, color));
-  const m = new THREE.MeshBasicMaterial({map:tex, transparent:true});
-  const g = new THREE.PlaneGeometry(.9,.17);
-  const mesh = new THREE.Mesh(g,m); mesh.position.set(x,y,.01);
-  mesh.userData.texture = tex;
-  return mesh;
-}
-function updateUI(){
-  function set(mesh, txt, color){
-    mesh.userData.texture.dispose();
-    mesh.material.map = new THREE.CanvasTexture(makeText(txt, 36, color));
-    mesh.material.needsUpdate = true;
-    mesh.userData.texture = mesh.material.map;
-  }
-  set(scoreText, `SCORE: ${score}`, '#ffff00');
-  set(levelText, `LEVEL: ${level}`, '#ff6600');
-  set(linesText, `LINES: ${totalLines}`, '#00ff00');
-}
-
-function createParticleSystem(){
-  particleSystem = new THREE.Group(); scene.add(particleSystem);
-}
-function explode(pos, color, count=18){
-  for(let i=0;i<count;i++){
-    const geo = new THREE.SphereGeometry(.01,4,4);
-    const mat = new THREE.MeshBasicMaterial({color, transparent:true, opacity:1});
-    const p = new THREE.Mesh(geo,mat);
-    p.position.copy(pos);
-    p.userData.vel = new THREE.Vector3((Math.random()-.5)*2,(Math.random()-.5)*2,(Math.random()-.5)*2);
-    p.userData.life = 1; p.userData.decay = .02 + Math.random()*.02;
-    particles.push(p); particleSystem.add(p);
-  }
-}
-function tickParticles(){
-  for(let i=particles.length-1;i>=0;i--){
-    const p=particles[i];
-    p.position.add(p.userData.vel);
-    p.userData.vel.y -= .01;
-    p.userData.life -= p.userData.decay;
-    p.material.opacity = p.userData.life;
-    if (p.userData.life<=0){
-      particleSystem.remove(p);
-      p.geometry.dispose(); p.material.dispose();
-      particles.splice(i,1);
-    }
-  }
-}
-
-/* ---------------- Gamepad (NES GLB with invisible colliders) ---------------- */
-function createGamepad(){
-  gamepadTargets.length = 0;
-  gamepadGroup = new THREE.Group();
-  // park the controller under the board
-  gamepadGroup.position.set(0, 1.6 - 2.2, -2);
-  scene.add(gamepadGroup);
-
-  const loader = new GLTFLoader();
-  loader.load(
-    'https://raw.githubusercontent.com/augmentedthinker/test/main/nintendo_nes_controller.glb',
-    (gltf)=>{
-      nesController = gltf.scene;
-      nesController.scale.set(.5,.5,.5);
-      gamepadGroup.add(nesController);
-      addNESHitZones();
-    },
-    undefined,
-    (err)=>{
-      console.warn('NES controller failed to load, using basic fallback.', err);
-      createBasicGamepad();
-    }
-  );
-}
-
-function zone(w,h,d, x,y,z){
-  const mat = new THREE.MeshBasicMaterial({ color:0x00ff88, transparent:true, opacity: SHOW_HIT_ZONES ? 0.25 : 0.001 });
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w,h,d), mat);
-  mesh.position.set(x,y,z);
-  mesh.renderOrder = -1; // never fight visuals
-  mesh.userData.hitZone = true;
-  gamepadGroup.add(mesh);
-  gamepadTargets.push(mesh);
-  return mesh;
-}
-
-/* Approx positions tuned for the public GLB; tweak if your model differs */
-function addNESHitZones(){
-  // All numbers are in meters in the controller's local space after scale(.5)
-  // D-pad cluster (left side)
-  dpadUp    = zone(0.05,0.05,0.02, -0.16,  0.05, 0.02);
-  dpadDown  = zone(0.05,0.05,0.02, -0.16, -0.03, 0.02);
-  dpadLeft  = zone(0.05,0.05,0.02, -0.205, 0.01, 0.02);
-  dpadRight = zone(0.05,0.05,0.02, -0.115, 0.01, 0.02);
-  // A/B (right side)
-  buttonA   = zone(0.06,0.06,0.03,  0.185, 0.0,  0.03);
-  buttonB   = zone(0.06,0.06,0.03,  0.12,  0.0,  0.03);
-}
-
-function createBasicGamepad(){
-  const plate = new THREE.Mesh(new THREE.BoxGeometry(.6,.26,.04),
-                               new THREE.MeshBasicMaterial({color:0x444444}));
-  gamepadGroup.add(plate);
-
-  // Simple cross D-pad
-  const dColor = 0x888888;
-  dpadUp    = zone(.06,.06,.02, -0.18,  .06, .03);
-  dpadDown  = zone(.06,.06,.02, -0.18, -.06, .03);
-  dpadLeft  = zone(.06,.06,.02, -0.24,  0.0, .03);
-  dpadRight = zone(.06,.06,.02, -0.12,  0.0, .03);
-
-  // A / B spheres
-  buttonA = zone(.07,.07,.03, 0.18,  0.02, .035);
-  buttonB = zone(.07,.07,.03, 0.10, -0.02, .035);
-}
-
-/* ---------------- Tetris core ---------------- */
-function newGame(){
-  boardState = Array.from({length:BOARD_H}, ()=> Array(BOARD_W).fill(0));
-  clearStatic();
-  score = 0; level = 1; totalLines = 0;
-  spawnPiece();
-  isPieceActive = true;
-  updateUI();
-}
-
-function getBlocks(shape){
-  const out=[];
-  for(let r=0;r<shape.length;r++)
-    for(let c=0;c<shape[r].length;c++)
-      if (shape[r][c]) out.push({x:c,y:r});
-  return out;
-}
-
-function materialFor(color, kind){
-  if (kind==='glass') return new THREE.MeshPhysicalMaterial({
-    color, transmission:.8, roughness:.1, metalness:0, clearcoat:1, clearcoatRoughness:.1,
-    ior:1.5, transparent:true, opacity:.85
-  });
-  if (kind==='metal') return new THREE.MeshStandardMaterial({
-    color, metalness:.9, roughness:.2, emissive:new THREE.Color(color).multiplyScalar(.1)
-  });
-  if (kind==='crystal') return new THREE.MeshPhysicalMaterial({
-    color, transmission:.5, roughness:0, metalness:0, clearcoat:1, clearcoatRoughness:0,
-    ior:2.4, transparent:true, opacity:.92, emissive:new THREE.Color(color).multiplyScalar(.05)
-  });
-  return new THREE.MeshStandardMaterial({color});
-}
-
-function spawnPiece(){
-  const keys = Object.keys(PIECES);
-  const type = PIECES[keys[(keys.length*Math.random())|0]];
-  currentPieceType = type;
-  currentShape = type.shape.map(r=>r.slice());
-  currentRot = 0;
-  piecePosition.col = Math.floor((BOARD_W - currentShape[0].length)/2);
-  piecePosition.row = 0;
-
-  if (currentPiece) gameBoard.remove(currentPiece);
-  currentPiece = new THREE.Group(); gameBoard.add(currentPiece);
-  drawActive();
-  updateActiveTransform();
-
-  if (!canPlace(piecePosition, currentShape)){
-    // game over vibe: little puff on top rows
-    explode(worldAtBoard(BOARD_W*CELL*.5, -CELL, 0), 0xff3355, 40);
-    isPieceActive = false;
-  } else {
-    isPieceActive = true;
-  }
-}
-
-function drawActive(){
-  // clear old
-  while(currentPiece.children.length) currentPiece.remove(currentPiece.children[0]);
-
-  const mat = materialFor(currentPieceType.color, currentPieceType.material);
-  for (const b of getBlocks(currentShape)){
-    const m = new THREE.Mesh(new THREE.BoxGeometry(CELL,CELL,CELL), mat);
-    m.position.set(b.x*CELL + CELL/2, -b.y*CELL - CELL/2, 0);
-    currentPiece.add(m);
-  }
-}
-
-function updateActiveTransform(){
-  const offsetX = -(BOARD_W*CELL)/2;
-  currentPiece.position.set(offsetX + piecePosition.col*CELL, -piecePosition.row*CELL, 0);
-}
-
-function canPlace(pos, shape){
-  for(const b of getBlocks(shape)){
-    const r = pos.row + b.y, c = pos.col + b.x;
-    if (c<0 || c>=BOARD_W) return false;
-    if (r>=BOARD_H) return false;
-    if (r>=0 && boardState[r][c] !== 0) return false;
-  }
-  return true;
-}
-
-function moveH(dx){
-  const pos = {row:piecePosition.row, col:piecePosition.col+dx};
-  if (canPlace(pos, currentShape)){ piecePosition.col = pos.col; updateActiveTransform(); }
-}
-
-function rotatePiece(){
-  const rot = rotateMatrix(currentShape);
-  if (canPlace(piecePosition, rot)){
-    currentShape = rot; currentRot = (currentRot+1)&3; drawActive(); updateActiveTransform();
-    return;
-  }
-  // simple wall kicks
-  for (const kick of [-1,1,-2,2]){
-    const pos = {row:piecePosition.row, col:piecePosition.col+kick};
-    if (canPlace(pos, rot)){ piecePosition.col=pos.col; currentShape=rot; drawActive(); updateActiveTransform(); return; }
-  }
-}
-
-function hardDrop(){
-  let dropped=0;
-  while (canDown()) { piecePosition.row++; dropped++; }
-  score += dropped*SCORING.HARD;
-  updateActiveTransform();
-  lockPiece();
-}
-
-function softStep(){
-  if (canDown()){ piecePosition.row++; score += SCORING.SOFT; updateActiveTransform(); }
-  else lockPiece();
-}
-
-function canDown(){
-  for(const b of getBlocks(currentShape)){
-    const r = piecePosition.row + b.y + 1;
-    const c = piecePosition.col + b.x;
-    if (r>=BOARD_H) return false;
-    if (r>=0 && boardState[r][c] !== 0) return false;
-  }
-  return true;
-}
-
-function lockPiece(){
-  isPieceActive = false;
-  for(const b of getBlocks(currentShape)){
-    const r = piecePosition.row + b.y, c = piecePosition.col + b.x;
-    if (r>=0) boardState[r][c] = { color: currentPieceType.color, material: currentPieceType.material };
-  }
-  gameBoard.remove(currentPiece);
-
-  const cleared = clearLines();
-  if (cleared.length){
-    const pts = baseScoreFor(cleared.length) * level;
-    score += pts; totalLines += cleared.length;
-    level = Math.floor(totalLines/10)+1;
-    // particles along each cleared row
-    for (const row of cleared){
-      for (let c=0;c<BOARD_W;c++){
-        const p = boardLocalToWorld(c*CELL + CELL/2, -row*CELL - CELL/2, 0);
-        explode(p, (boardState[row] && boardState[row][c]?.color) || 0xffffff, 8);
-      }
-    }
-  }
-  redrawStatic();
-  updateUI();
-  setTimeout(()=> { spawnPiece(); }, 140);
-}
-
-function baseScoreFor(n){
-  if (n===1) return SCORING.SINGLE;
-  if (n===2) return SCORING.DOUBLE;
-  if (n===3) return SCORING.TRIPLE;
-  if (n>=4)  return SCORING.TETRIS;
-  return 0;
-}
-
-function clearLines(){
-  const cleared=[];
-  for (let r=BOARD_H-1;r>=0;r--){
-    if (boardState[r].every(cell => cell!==0)){
-      cleared.push(r);
-      boardState.splice(r,1);
-      boardState.unshift(Array(BOARD_W).fill(0));
-      r++; // recheck same index after splice
-    }
-  }
-  return cleared;
-}
-
-function clearStatic(){
-  while(staticBlocks.children.length) {
-    const m = staticBlocks.children.pop();
-    m.geometry?.dispose(); m.material?.dispose();
-  }
-}
-
-function redrawStatic(){
-  clearStatic();
-  for(let r=0;r<BOARD_H;r++){
-    for(let c=0;c<BOARD_W;c++){
-      const cell = boardState[r][c];
-      if (!cell) continue;
-      const mat = materialFor(cell.color, cell.material);
-      const m = new THREE.Mesh(new THREE.BoxGeometry(CELL,CELL,CELL), mat);
-      m.position.set(-(BOARD_W*CELL)/2 + c*CELL + CELL/2, -r*CELL - CELL/2, 0);
-      staticBlocks.add(m);
-    }
-  }
-}
-
-function rotateMatrix(m){
-  const rows=m.length, cols=m[0].length;
-  const out = Array.from({length:cols}, ()=>Array(rows).fill(0));
-  for(let r=0;r<rows;r++) for(let c=0;c<cols;c++) out[c][rows-1-r] = m[r][c];
-  return out;
-}
-
-function boardLocalToWorld(x,y,z){
-  const v = new THREE.Vector3(x,y,z);
-  return v.applyMatrix4(gameBoard.matrixWorld);
-}
-function worldAtBoard(x,y,z){
-  // convenience wrapper
-  return boardLocalToWorld(x,y,z);
-}
-
-/* ---------------- Loop ---------------- */
-let lastFall = 0;
-function fallSpeedMs(){ return Math.max(50, 1000 - (level-1)*100); } // classic-ish curve
-
-function loop(ts){
-  // falling
-  if (isPieceActive){
-    if (ts - lastFall > fallSpeedMs()){
-      softStep();
-      lastFall = ts;
-    }
-  }
-  tickParticles();
-  renderer.render(scene, camera);
-}
-
-</script>
+  </script>
 </body>
 </html>
