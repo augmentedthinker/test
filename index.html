@@ -2,153 +2,157 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>AR Wireframe Tunnel — Vibe Coder</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <!-- A-Frame (WebXR AR ready). -->
+  <title>AR Wireframe Tunnel + Controllers</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- A-Frame (1.5.0 or newer is fine) -->
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <!-- Allow lasers to show even if nothing is hittable -->
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    html, body { margin: 0; height: 100%; background: #000; }
     #overlay {
-      position: fixed; inset: 0; pointer-events: none;
-      display: flex; align-items: flex-end; justify-content: center; padding: 16px;
-      background: transparent; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7);
-      font-size: 14px; line-height: 1.4;
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      justify-content: flex-end; align-items: center; pointer-events: none;
+      padding: 16px; font-family: system-ui, sans-serif; color: white;
+      background: linear-gradient(180deg, rgba(0,0,0,0.0) 0%, rgba(0,0,0,0.55) 100%);
     }
-    #tip {
-      pointer-events: auto;
-      background: rgba(0,0,0,.45); border-radius: 12px; padding: 12px 14px;
-      backdrop-filter: blur(4px);
-    }
+    #tips { font-size: 14px; opacity: 0.9; text-align: center; max-width: 720px; }
   </style>
 </head>
 <body>
-  <!-- Simple on-screen tip (also used as DOM overlay in AR if supported). -->
-  <div id="overlay"><div id="tip">
-    Tap <b>Enter AR</b>. In AR, you’ll see controller models and lasers. Walk or turn as the wireframe rings rush toward you.
-  </div></div>
+  <!-- Simple non-blocking overlay for hints -->
+  <div id="overlay">
+    <div id="tips">
+      <div><strong>AR Wireframe Tunnel</strong> — press the AR button to enter.</div>
+      <div>Look forward: rings stream toward your center. Turn your head to steer the flow.</div>
+      <div>Controllers + laser pointers are visible in AR.</div>
+    </div>
+  </div>
 
   <a-scene
-    renderer="alpha:true; physicallyCorrectLights:true; colorManagement:true"
-    background="color: #000; transparent:true"
-    webxr="optionalFeatures: local-floor, bounded-floor, dom-overlay; overlayElement: #overlay"
-    xr-mode-ui="enabled: true; enterVRButton: false; enterARButton: true"
-    vr-mode-ui="enabled: false"
+    renderer="alpha: true; physicallyCorrectLights: true; colorManagement: true"
+    background="color: #000000"
+    xr-mode-ui="enterARButton: true"
+    webxr="optionalFeatures: hit-test, dom-overlay; overlayElement: #overlay"
     embedded
   >
-    <!-- Light just to ensure controller models shade nicely in AR. -->
-    <a-entity light="type: ambient; intensity: 0.9"></a-entity>
-    <a-entity light="type: directional; intensity: 0.6" position="0 3 2"></a-entity>
+    <!-- A little ambient light so controller models are visible -->
+    <a-entity light="type: ambient; intensity: 1.2"></a-entity>
 
-    <!-- Camera rig sits at origin; we keep rings aligned to come straight at the user. -->
-    <a-entity id="rig" position="0 0 0">
-      <a-entity id="camera" camera wasd-controls-enabled="false" look-controls="pointerLockEnabled: false" position="0 1.6 0"></a-entity>
-
-      <!-- Controller models + lasers (left/right). -->
-      <!-- laser-controls adds a visible ray; oculus-touch-controls loads the hand model on Quest. -->
-      <a-entity id="leftHand"
-                oculus-touch-controls="hand: left; model: true"
-                laser-controls="hand: left"
-                raycaster="objects: .ring; far: 10"
-                line="opacity: 0.9"></a-entity>
-
-      <a-entity id="rightHand"
-                oculus-touch-controls="hand: right; model: true"
-                laser-controls="hand: right"
-                raycaster="objects: .ring; far: 10"
-                line="opacity: 0.9"></a-entity>
+    <!-- Camera rig with user head + reference node for orientation -->
+    <a-entity id="rig">
+      <a-entity id="head" camera wasd-controls="enabled:false" look-controls="enabled:true"></a-entity>
     </a-entity>
 
-    <!-- Tunnel spawner/animator -->
-    <a-entity id="tunnel" tunnel="ringCount: 36; startZ: -50; endZ: 0.6; gap: 1.4; speed: 3.0; diameterMeters: 3.048; thickness: 0.10; color: #00ff88"></a-entity>
+    <!-- Controllers with visible models and laser beams -->
+    <a-entity laser-controls="hand: left"></a-entity>
+    <a-entity laser-controls="hand: right"></a-entity>
+
+    <!-- Tunnel system spawns and animates rings -->
+    <a-entity id="tunnel" tunnel-rings="ringCount: 24; near: 2.5; far: 30; speed: 2.0; diameterMeters: 3.05; tube: 0.04;"></a-entity>
 
     <script>
-      // "tunnel" component creates and recycles wireframe rings that move toward the camera.
-      AFRAME.registerComponent('tunnel', {
+      // tunnel-rings component:
+      // Creates a pool of torus "wireframe circle" rings centered on the user's forward direction.
+      // Rings move toward the head and recycle ahead when they pass the user, giving an endless tunnel effect.
+      AFRAME.registerComponent('tunnel-rings', {
         schema: {
-          ringCount:      {type: 'int', default: 32},   // how many rings alive at once
-          startZ:         {type: 'number', default: -40}, // far start (negative Z)
-          endZ:           {type: 'number', default: 0.6}, // when to recycle (just past camera)
-          gap:            {type: 'number', default: 1.5}, // spacing between rings in meters
-          speed:          {type: 'number', default: 2.5}, // meters per second toward the camera
-          diameterMeters: {type: 'number', default: 3.048}, // ~10 feet
-          thickness:      {type: 'number', default: 0.08},  // ring band thickness
-          color:          {type: 'color',  default: '#00ff88'}
+          ringCount: {type: 'int', default: 24},
+          near: {type: 'number', default: 2.5},      // closest spawn distance in meters
+          far: {type: 'number', default: 30},        // farthest spawn distance in meters
+          speed: {type: 'number', default: 2.0},     // meters per second toward the user
+          diameterMeters: {type: 'number', default: 3.05}, // ~10 feet
+          tube: {type: 'number', default: 0.04}      // thickness of the torus tube
         },
         init: function () {
-          const s = this.data;
           this.rings = [];
-          // Compute radii from desired diameter and thickness.
-          const outerR = s.diameterMeters / 2;
-          const innerR = Math.max(0.01, outerR - s.thickness);
+          this.tmpForward = new THREE.Vector3();
+          this.tmpPos = new THREE.Vector3();
+          this.tmpHead = null;
+          this._ensureHead();
 
-          for (let i = 0; i < s.ringCount; i++) {
-            const z = s.startZ - i * s.gap; // stagger them deeper into the distance
+          // Build ring pool spaced from near..far
+          for (let i = 0; i < this.data.ringCount; i++) {
+            const t = i / (this.data.ringCount - 1);
+            const dist = this.data.near + t * (this.data.far - this.data.near);
             const ring = document.createElement('a-entity');
-            ring.setAttribute('class', 'ring');
 
-            // Geometry as a flat ring, facing the camera (XY plane), moving along +Z.
-            ring.setAttribute('geometry', {
-              primitive: 'ring',
-              radiusInner: innerR,
-              radiusOuter: outerR,
-              segmentsTheta: 64,
-              segmentsPhi: 1
-            });
+            // Torus sized so its outer diameter ~ diameterMeters
+            const radius = this.data.diameterMeters / 2; // main radius
+            ring.setAttribute('geometry', `primitive: torus; radius: ${radius}; radiusTubular: ${this.data.tube}; segmentsRadial: 48; segmentsTubular: 8`);
+            ring.setAttribute('material', 'wireframe: true; color: #FFFFFF; opacity: 0.95; transparent: true; metalness: 0; roughness: 1');
 
-            // Wireframe look; double-sided so it remains visible.
-            ring.setAttribute('material', {
-              color: s.color,
-              wireframe: true,
-              side: 'double',
-              opacity: 0.95,
-              transparent: true
-            });
+            // Slight random lateral offset to feel organic but still passable
+            const lateral = 0.15;
+            ring.setAttribute('position', `0 0 -${dist}`);
+            ring.setAttribute('tunnel-ring-offset', {x: (Math.random()*2-1)*lateral, y: (Math.random()*2-1)*lateral});
 
-            // Slight faint glow line to help visibility (optional aesthetic).
-            // Commented out for simplicity; wireframe usually reads well in AR.
-            // ring.setAttribute('outline', 'enabled: true; color: #aaffcc; thickness: 0.001');
-
-            // Keep centered so we pass through the middle.
-            ring.object3D.position.set(0, 1.6, z);
-            ring.object3D.rotation.set(0, 0, 0);
-            this.el.sceneEl.appendChild(ring);
-            this.rings.push(ring);
+            this.el.appendChild(ring);
+            this.rings.push({el: ring, dist});
           }
-          this.lastTime = null;
-
-          // If AR session starts, keep rings aligned with current head height.
-          this.onEnterXR = () => {
-            const cam = this.el.sceneEl.camera.el;
-            this.headY = cam.object3D.position.y || 1.6;
-            this.rings.forEach(r => r.object3D.position.y = this.headY);
-          };
-          this.el.sceneEl.renderer.xr.addEventListener?.('sessionstart', this.onEnterXR);
         },
-        tick: function (time, dt) {
-          if (!this.lastTime) { this.lastTime = time; return; }
-          const s = this.data;
-          const deltaSec = dt / 1000;
-          const move = s.speed * deltaSec;
+        _ensureHead: function () {
+          if (!this.tmpHead) {
+            const sceneEl = this.el.sceneEl;
+            this.tmpHead = sceneEl.querySelector('#head');
+          }
+        },
+        tick: function (time, delta) {
+          const dsec = Math.min(delta / 1000, 0.05); // cap delta for stability
+          this._ensureHead();
+          if (!this.tmpHead) return;
+
+          const headObj = this.tmpHead.object3D;
+          const headPos = headObj.getWorldPosition(this.tmpPos);
+
+          // Forward = -Z of head in world space
+          headObj.getWorldDirection(this.tmpForward); // this points -Z forward in Three, but returns -camera forward; invert
+          this.tmpForward.multiplyScalar(-1).normalize();
+
+          const speed = this.data.speed;
+          const near = this.data.near;
+          const far = this.data.far;
 
           for (let i = 0; i < this.rings.length; i++) {
-            const o3d = this.rings[i].object3D;
-            o3d.position.z += move;
-            if (o3d.position.z > s.endZ) {
-              // recycle to the far end; tiny jitter keeps the tunnel alive without breaking center pass-through
-              o3d.position.z = s.startZ;
-              o3d.position.x = 0;
-              // Keep vertical centered on head height if available
-              if (this.headY) o3d.position.y = this.headY;
+            const ring = this.rings[i];
+
+            // Move ring toward head by reducing its distance
+            ring.dist -= speed * dsec;
+
+            // If it passed the head, recycle to the far end
+            if (ring.dist < 0.2) {
+              ring.dist = far;
             }
+
+            // Compute world position = headPos + forward * (-dist)
+            const worldPos = new THREE.Vector3().copy(headPos).addScaledVector(this.tmpForward, ring.dist);
+
+            // Apply stored small lateral offset in head-oriented right/up basis
+            const up = new THREE.Vector3(0,1,0);
+            // Right = forward x up
+            const right = new THREE.Vector3().copy(this.tmpForward).cross(up).normalize();
+            const trueUp = new THREE.Vector3().copy(right).cross(this.tmpForward).normalize();
+
+            const offs = ring.el.getAttribute('tunnel-ring-offset') || {x:0, y:0};
+            worldPos.addScaledVector(right, offs.x);
+            worldPos.addScaledVector(trueUp, offs.y);
+
+            // Update ring transform
+            ring.el.object3D.position.copy(worldPos);
+
+            // Face the head so the ring stays "vertical" to you
+            ring.el.object3D.lookAt(headPos);
+
+            // Optional: subtle pulsing of opacity as it nears, purely cosmetic
+            const nearFactor = Math.min(1, (far - ring.dist) / (far - near));
+            const opacity = 0.5 + 0.5 * nearFactor;
+            ring.el.setAttribute('material', 'opacity', opacity);
           }
-        },
-        remove: function () {
-          if (this.onEnterXR) {
-            this.el.sceneEl?.renderer?.xr?.removeEventListener?.('sessionstart', this.onEnterXR);
-          }
-          this.rings.forEach(r => r.parentNode && r.parentNode.removeChild(r));
-          this.rings = [];
         }
+      });
+
+      // Simple helper to store lateral offsets per ring
+      AFRAME.registerComponent('tunnel-ring-offset', {
+        schema: { x: {type:'number', default:0}, y: {type:'number', default:0} }
       });
     </script>
   </a-scene>
