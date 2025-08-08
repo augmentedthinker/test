@@ -1,173 +1,436 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
-  <title>AR Starter • Controllers + Lasers + Grid Floor</title>
+  <meta charset="UTF-8" />
+  <title>AR Checkered Neon Tunnel + Sabers</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    html, body { margin:0; height:100%; overflow:hidden; background:#000; }
-    #info {
-      position: fixed; top: 10px; left: 10px; right: 10px;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      color: #fff; background: rgba(0,0,0,0.35);
-      padding: 10px 12px; border-radius: 10px; line-height: 1.3; font-size: 14px;
-      z-index: 10; pointer-events: none;
-    }
-    /* ARButton injects a button; make it a bit nicer */
-    .ar-button { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
-      padding: 12px 18px; border-radius: 10px; border: none; font-size: 16px; }
+    html, body { margin:0; padding:0; height:100%; background:#000; overflow:hidden; }
   </style>
+
+  <!-- three.js via import map (single-file, no build tools) -->
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-  <div id="info">
-    AR Starter: Tap “Enter AR”. You should see your Oculus controllers and laser pointers.
-    Aim at the test cube and pull the trigger to toggle its color.
-    A grid floor sits ~4 ft (1.22 m) below your rig (seated).
-  </div>
+<script type="module">
+  import * as THREE from 'three';
+  import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
 
-  <script type="module">
-    // === Imports (CDN) ===
-    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
-    import { ARButton } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/webxr/ARButton.js";
-    import { XRControllerModelFactory } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/webxr/XRControllerModelFactory.js";
+  // ---------- Minimal AR button ----------
+  class ARButton {
+    static createButton(renderer, sessionInit = {}) {
+      const btn = document.createElement('button');
+      let session = null;
 
-    // === Basic three.js setup ===
-    const scene = new THREE.Scene();
+      async function onSessionStarted(s) {
+        session = s;
+        session.addEventListener('end', onSessionEnded);
+        renderer.xr.setReferenceSpaceType('local');
+        await renderer.xr.setSession(session);
+        btn.textContent = 'STOP AR';
+        setupControllers();
+        setTimeout(anchorTunnelToStart, 300);
+        addCheckeredTunnel();
+        addTunnelObjects();
+      }
+      function onSessionEnded() {
+        session.removeEventListener('end', onSessionEnded);
+        session = null;
+        btn.textContent = 'START AR';
+        // cleanup
+        if (controllerGrip1) scene.remove(controllerGrip1);
+        if (controllerGrip2) scene.remove(controllerGrip2);
+        if (tunnelGroup) scene.remove(tunnelGroup);
+        if (objectGroup) scene.remove(objectGroup);
+        if (particleGroup) scene.remove(particleGroup);
+        neonPanels.length = 0;
+      }
 
-    // Transparent AR background; subtle ambient lighting for controller models
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x444455, 0.6);
-    scene.add(hemi);
+      Object.assign(btn.style, {
+        position:'absolute', left:'50%', bottom:'20px', transform:'translateX(-50%)',
+        padding:'12px 20px', border:'1px solid #fff', borderRadius:'6px',
+        background:'rgba(0,0,0,0.35)', color:'#fff', font:'14px system-ui, sans-serif',
+        cursor:'pointer', zIndex:999
+      });
+      btn.textContent = 'START AR';
+      btn.onclick = () => session
+        ? session.end()
+        : navigator.xr.requestSession('immersive-ar', sessionInit).then(onSessionStarted);
 
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    // 'local' is safest for AR; you’ll physically sit, so the floor is placed relative to your head pose.
-    renderer.xr.setReferenceSpaceType('local');
-    document.body.appendChild(renderer.domElement);
-
-    // === AR Button ===
-    const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ['local'],   // minimal and widely supported on Quest
-      optionalFeatures: ['dom-overlay', 'local-floor'],
-      domOverlay: { root: document.body }
-    });
-    arButton.classList.add('ar-button');
-    document.body.appendChild(arButton);
-
-    // === Grid "floor" ~ 4 ft below the rig ===
-    // 4 ft ≈ 1.22 m
-    const GRID_DROP_M = 1.22;
-    const gridSize = 10;        // meters across
-    const gridDivisions = 20;
-    const grid = new THREE.GridHelper(gridSize, gridDivisions, 0x00ffd5, 0x003b37);
-    grid.position.set(0, -GRID_DROP_M, 0);
-    grid.material.opacity = 0.6;
-    grid.material.transparent = true;
-    scene.add(grid);
-
-    // Optional: a faint ground plane for ray intersections (invisible)
-    const groundGeo = new THREE.PlaneGeometry(gridSize, gridSize);
-    const groundMat = new THREE.MeshBasicMaterial({ visible: false });
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -GRID_DROP_M;
-    scene.add(ground);
-
-    // === Simple interactive test object ===
-    const interactables = [];
-    {
-      const boxGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
-      const boxMat = new THREE.MeshStandardMaterial({ color: 0x00ffd5, roughness: 0.4, metalness: 0.2 });
-      const cube = new THREE.Mesh(boxGeo, boxMat);
-      cube.position.set(0, -0.3, -1.0); // a little below head-height, one meter forward
-      cube.userData.toggle = true;
-      scene.add(cube);
-      interactables.push(cube);
+      if ('xr' in navigator) {
+        navigator.xr.isSessionSupported('immersive-ar').then(supported => {
+          if (!supported) btn.textContent = 'AR NOT SUPPORTED';
+        });
+      } else {
+        btn.textContent = 'WEBXR NOT AVAILABLE';
+      }
+      return btn;
     }
+  }
 
-    // === Controllers + Laser pointers ===
-    const raycaster = new THREE.Raycaster();
-    const tempMatrix = new THREE.Matrix4();
+  // ---------- Three.js core ----------
+  let scene, camera, renderer;
+  let controllerGrip1, controllerGrip2, controllerModelFactory;
+  let tunnelGroup = null, objectGroup = null, particleGroup = null;
+  let saber1 = null, saber2 = null, saberGlow1 = null, saberGlow2 = null;
 
-    function buildLaser() {
-      const geometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, -1)
-      ]);
-      const material = new THREE.LineBasicMaterial({ color: 0xffffff });
-      const line = new THREE.Line(geometry, material);
-      line.name = 'laser';
-      line.scale.z = 3.0; // 3 meters reach
-      return line;
-    }
+  let tunnelScroll = 0;
+  let tunnelAnchorPos = null;
+  let tunnelAnchorQuat = null;
 
-    // Controller 1 (right hand usually)
-    const controller1 = renderer.xr.getController(0);
-    controller1.addEventListener('selectstart', onSelectStart);
-    controller1.addEventListener('selectend', onSelectEnd);
-    controller1.add(buildLaser());
-    scene.add(controller1);
+  const neonPanels = []; // keep references to pulse emissive
 
-    // Controller 2 (left hand)
-    const controller2 = renderer.xr.getController(1);
-    controller2.addEventListener('selectstart', onSelectStart);
-    controller2.addEventListener('selectend', onSelectEnd);
-    controller2.add(buildLaser());
-    scene.add(controller2);
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
+  document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures:['local'] }));
 
-    // Controller grips with real models
-    const controllerModelFactory = new XRControllerModelFactory();
-    const controllerGrip1 = renderer.xr.getControllerGrip(0);
+  // soft ambient
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x99aaff, 1.8));
+
+  // ---------- Controllers + Sabers ----------
+  function setupControllers() {
+    if (controllerGrip1) scene.remove(controllerGrip1);
+    if (controllerGrip2) scene.remove(controllerGrip2);
+
+    controllerModelFactory = new XRControllerModelFactory();
+    controllerGrip1 = renderer.xr.getControllerGrip(0);
+    controllerGrip2 = renderer.xr.getControllerGrip(1);
+
     controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-    scene.add(controllerGrip1);
-
-    const controllerGrip2 = renderer.xr.getControllerGrip(1);
     controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-    scene.add(controllerGrip2);
 
-    // === Controller interaction (raycast on trigger) ===
-    function intersectObjects(controller) {
-      tempMatrix.identity().extractRotation(controller.matrixWorld);
-      const rayOrigin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
-      const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).normalize();
-      raycaster.set(rayOrigin, rayDirection);
-      return raycaster.intersectObjects(interactables, false);
+    // Build glowing sabers (left green, right blue)
+    const SABER_LENGTH = 1.5, SABER_RADIUS = 0.045;
+
+    const makeSaber = (colorHex) => {
+      const coreMat = new THREE.MeshPhysicalMaterial({
+        color: colorHex,
+        emissive: new THREE.Color(colorHex).multiplyScalar(0.55),
+        metalness: 0.22,
+        roughness: 0.12,
+        transmission: 0.75,
+        transparent: true,
+        opacity: 0.93,
+        clearcoat: 1,
+        clearcoatRoughness: 0.08
+      });
+      const core = new THREE.Mesh(
+        new THREE.CylinderGeometry(SABER_RADIUS, SABER_RADIUS, SABER_LENGTH, 24, 1, true),
+        coreMat
+      );
+      core.position.set(0, 0, -SABER_LENGTH/2);
+      core.rotation.x = Math.PI/2;
+
+      const glow = new THREE.Mesh(
+        new THREE.CylinderGeometry(SABER_RADIUS*1.5, SABER_RADIUS*1.5, SABER_LENGTH, 32, 1, true),
+        new THREE.MeshBasicMaterial({ color: colorHex, transparent:true, opacity:0.35, depthWrite:false })
+      );
+      glow.position.copy(core.position);
+      glow.rotation.copy(core.rotation);
+
+      return { core, glow };
+    };
+
+    const left = makeSaber(0x22ff55);
+    const right = makeSaber(0x44aaff);
+
+    saber1 = left.core;  saberGlow1 = left.glow;
+    saber2 = right.core; saberGlow2 = right.glow;
+
+    controllerGrip1.add(saber1); controllerGrip1.add(saberGlow1);
+    controllerGrip2.add(saber2); controllerGrip2.add(saberGlow2);
+
+    scene.add(controllerGrip1, controllerGrip2);
+  }
+
+  // ---------- Anchor tunnel to camera start ----------
+  function anchorTunnelToStart() {
+    camera.updateMatrixWorld(true);
+    tunnelAnchorPos = new THREE.Vector3();
+    tunnelAnchorQuat = new THREE.Quaternion();
+    camera.getWorldPosition(tunnelAnchorPos);
+    camera.getWorldQuaternion(tunnelAnchorQuat);
+  }
+
+  // ---------- NEW: Checkered Neon Tunnel ----------
+  function addCheckeredTunnel() {
+    if (tunnelGroup) scene.remove(tunnelGroup);
+    neonPanels.length = 0;
+
+    tunnelGroup = new THREE.Group();
+
+    // Tunable look
+    const TUNNEL_LENGTH = 28;      // number of rings
+    const SEGMENTS_AROUND = 24;    // panels per ring
+    const RADIUS = 0.85;
+    const RING_SPACING = 0.48;     // distance between rings
+    const PANEL_HEIGHT = 0.42;     // size along z between rings
+    const PANEL_ARC = (Math.PI * 2) / SEGMENTS_AROUND;   // radians per panel
+    const PANEL_WIDTH = 2 * Math.sin(PANEL_ARC / 2) * RADIUS * 0.98; // chord, slightly inset
+
+    // Reuse geometry + materials
+    const panelGeom = new THREE.PlaneGeometry(PANEL_WIDTH, PANEL_HEIGHT);
+
+    // Clear (transparent) panel
+    const clearMat = new THREE.MeshPhysicalMaterial({
+      color: 0xffffff,
+      metalness: 0.1,
+      roughness: 0.05,
+      transmission: 0.98,   // glassy see-through
+      transparent: true,
+      opacity: 0.95,
+      clearcoat: 1,
+      clearcoatRoughness: 0.05,
+      side: THREE.DoubleSide
+    });
+
+    // Neon blue panel (glowing)
+    const neonMat = new THREE.MeshStandardMaterial({
+      color: 0x0a4cff,
+      emissive: 0x2a7cff,
+      emissiveIntensity: 1.25,
+      metalness: 0.35,
+      roughness: 0.25,
+      transparent: true,
+      opacity: 0.97,
+      side: THREE.DoubleSide
+    });
+
+    // Build rings of panels
+    for (let i = 0; i < TUNNEL_LENGTH; i++) {
+      const ring = new THREE.Group();
+      const z = -i * RING_SPACING;
+
+      for (let s = 0; s < SEGMENTS_AROUND; s++) {
+        const theta = s * PANEL_ARC;
+        const isNeon = ((s + i) % 2 === 0); // <-- checker: alternate around + along
+
+        const mat = isNeon ? neonMat : clearMat;
+        const panel = new THREE.Mesh(panelGeom, mat);
+
+        // Position panel on inner cylinder, face center
+        panel.position.set(Math.cos(theta) * RADIUS, Math.sin(theta) * RADIUS, z);
+        panel.lookAt(0, 0, z); // normal points inward
+        // Slight inward tilt for extra depth vibe
+        panel.rotateZ(PANEL_ARC * 0.02);
+
+        ring.add(panel);
+        if (isNeon) neonPanels.push(panel);
+      }
+      tunnelGroup.add(ring);
     }
 
-    function onSelectStart(event) {
-      const controller = event.target;
-      const hits = intersectObjects(controller);
-      if (hits.length > 0) {
-        const hit = hits[0].object;
-        hit.userData.selected = true;
+    scene.add(tunnelGroup);
+  }
+
+  // ---------- Moving objects inside tunnel (unchanged core behavior) ----------
+  function addTunnelObjects() {
+    if (objectGroup) scene.remove(objectGroup);
+    objectGroup = new THREE.Group();
+
+    const OBJECTS_COUNT = 10;
+    const OBJECT_SPACING = 3;
+    const TUNNEL_RADIUS = 0.6;
+
+    for (let i = 0; i < OBJECTS_COUNT; i++) {
+      let mesh, color, type;
+      type = i % 3;
+      if (type === 0) {
+        mesh = new THREE.Mesh(
+          new THREE.TetrahedronGeometry(0.25),
+          new THREE.MeshStandardMaterial({ color: 0xffa500, roughness: 0.4, metalness: 0.2 })
+        );
+        color = 0xffa500;
+      } else if (type === 1) {
+        mesh = new THREE.Mesh(
+          new THREE.SphereGeometry(0.17, 18, 18),
+          new THREE.MeshStandardMaterial({ color: 0x0088ff, roughness: 0.3, metalness: 0.6 })
+        );
+        color = 0x0088ff;
+      } else {
+        mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(0.23, 0.23, 0.23),
+          new THREE.MeshStandardMaterial({ color: 0x66ff44, roughness: 0.6, metalness: 0.2 })
+        );
+        color = 0x66ff44;
+      }
+      const angle = Math.random() * Math.PI * 2;
+      const x = Math.cos(angle) * TUNNEL_RADIUS;
+      const y = Math.sin(angle) * TUNNEL_RADIUS;
+      const z = -i * OBJECT_SPACING;
+      mesh.position.set(x, y, z);
+      mesh.userData = { baseZ: z, angle, type, color, exploded: false };
+      objectGroup.add(mesh);
+    }
+    scene.add(objectGroup);
+
+    if (particleGroup) scene.remove(particleGroup);
+    particleGroup = new THREE.Group();
+    scene.add(particleGroup);
+  }
+
+  // ---------- Particles on hit ----------
+  function spawnShapeParticles(type, color, pos, count = 12) {
+    for (let i = 0; i < count; i++) {
+      let mini;
+      if (type === 0) {
+        mini = new THREE.Mesh(
+          new THREE.TetrahedronGeometry(0.07),
+          new THREE.MeshStandardMaterial({ color, roughness:0.38, metalness:0.18, transparent:true, opacity:1 })
+        );
+      } else if (type === 1) {
+        mini = new THREE.Mesh(
+          new THREE.SphereGeometry(0.05, 12, 12),
+          new THREE.MeshStandardMaterial({ color, roughness:0.24, metalness:0.4, transparent:true, opacity:1 })
+        );
+      } else {
+        mini = new THREE.Mesh(
+          new THREE.BoxGeometry(0.075, 0.075, 0.075),
+          new THREE.MeshStandardMaterial({ color, roughness:0.6, metalness:0.16, transparent:true, opacity:1 })
+        );
+      }
+      const dir = new THREE.Vector3(
+        (Math.random()-0.5)*1.7, (Math.random()-0.5)*1.7, (Math.random()-0.5)*1.7
+      ).normalize();
+
+      mini.position.copy(pos);
+      mini.userData = {
+        velocity: dir.multiplyScalar(0.04 + 0.09 * Math.random()),
+        time: 0,
+        fade: 1 + Math.random() * 0.5
+      };
+      particleGroup.add(mini);
+    }
+  }
+
+  // ---------- Animation loop ----------
+  renderer.setAnimationLoop(() => {
+    // Keep tunnel anchored to start pose
+    if (tunnelGroup && tunnelAnchorPos && tunnelAnchorQuat) {
+      tunnelGroup.position.copy(tunnelAnchorPos);
+      tunnelGroup.quaternion.copy(tunnelAnchorQuat);
+    }
+    if (objectGroup && tunnelAnchorPos && tunnelAnchorQuat) {
+      objectGroup.position.copy(tunnelAnchorPos);
+      objectGroup.quaternion.copy(tunnelAnchorQuat);
+    }
+    if (particleGroup && tunnelAnchorPos && tunnelAnchorQuat) {
+      particleGroup.position.copy(tunnelAnchorPos);
+      particleGroup.quaternion.copy(tunnelAnchorQuat);
+    }
+
+    // Scroll tunnel forward + subtle wobble
+    if (tunnelGroup) {
+      const TUNNEL_LENGTH = tunnelGroup.children.length;
+      const RING_SPACING = 0.48;
+      tunnelScroll += 0.035;
+
+      for (let ringIndex = 0; ringIndex < TUNNEL_LENGTH; ringIndex++) {
+        const ring = tunnelGroup.children[ringIndex];
+        // move ring forward, wrap
+        let z = ((-ringIndex * RING_SPACING) + (tunnelScroll % (TUNNEL_LENGTH * RING_SPACING)));
+        ring.position.z = z;
+
+        // breathing scale wobble
+        const wobble = Math.sin(Date.now()/900 + ringIndex) * 0.06;
+        ring.scale.setScalar(1 + wobble);
       }
     }
 
-    function onSelectEnd(event) {
-      const controller = event.target;
-      const hits = intersectObjects(controller);
-      if (hits.length > 0) {
-        const hit = hits[0].object;
-        // Simple feedback: toggle color
-        const c = hit.material.color.getHex();
-        hit.material.color.setHex((c === 0x00ffd5) ? 0xff4d7e : 0x00ffd5);
-        hit.userData.selected = false;
+    // Pulse neon emissive to feel alive
+    const pulse = 1.0 + 0.35 * Math.sin(Date.now() / 320);
+    for (let i = 0; i < neonPanels.length; i++) {
+      const m = neonPanels[i].material;
+      // Base 1.25 in material; modulate smoothly
+      m.emissiveIntensity = 0.9 + 0.6 * pulse;
+      // optional slight opacity throb for extra vibe
+      m.opacity = 0.94 + 0.03 * Math.sin((Date.now()+i*37)/700);
+    }
+
+    // Animate objects + collision with sabers
+    if (objectGroup) {
+      const OBJECTS_COUNT = objectGroup.children.length;
+      const TOTAL_LENGTH = OBJECTS_COUNT * 3;
+      for (let i = OBJECTS_COUNT - 1; i >= 0; i--) {
+        const mesh = objectGroup.children[i];
+        if (mesh.userData.exploded) continue;
+
+        let newZ = mesh.userData.baseZ + (tunnelScroll % TOTAL_LENGTH);
+        if (newZ > 1.5) newZ -= TOTAL_LENGTH;
+        mesh.position.z = newZ;
+
+        let scale = 0.18 + Math.max(0, 0.7 * (1 - Math.abs(newZ) / (TOTAL_LENGTH/2)));
+        scale = Math.min(scale, 0.7);
+        mesh.scale.set(scale, scale, scale);
+
+        mesh.rotation.y += 0.018 + 0.005 * i;
+        mesh.rotation.x += 0.008 + 0.002 * i;
+
+        if (saber1 && checkSaberHit(saber1, mesh, scale)) { explodeObject(mesh); continue; }
+        if (saber2 && checkSaberHit(saber2, mesh, scale)) { explodeObject(mesh); continue; }
       }
     }
 
-    // === Resize handling ===
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    // Update particles
+    if (particleGroup) {
+      for (let i = particleGroup.children.length - 1; i >= 0; i--) {
+        const mini = particleGroup.children[i];
+        mini.userData.time += 0.018;
+        mini.position.add(mini.userData.velocity);
+        mini.material.opacity = Math.max(0, 1 - mini.userData.time / mini.userData.fade);
+        if (mini.userData.time > mini.userData.fade) particleGroup.remove(mini);
+      }
+    }
 
-    // === Render loop ===
-    renderer.setAnimationLoop(() => {
-      renderer.render(scene, camera);
-    });
-  </script>
+    // Saber glow pulse
+    let sPulse = 0.9 + 0.12 * Math.sin(Date.now()/320);
+    if (saberGlow1) saberGlow1.material.opacity = 0.22 + 0.25 * sPulse;
+    if (saberGlow2) saberGlow2.material.opacity = 0.22 + 0.25 * sPulse;
+    if (saber1) saber1.material.emissiveIntensity = 0.85 + 0.25 * sPulse;
+    if (saber2) saber2.material.emissiveIntensity = 0.85 + 0.25 * sPulse;
+
+    renderer.render(scene, camera);
+  });
+
+  // ---------- Saber collision helper ----------
+  function checkSaberHit(saber, mesh, meshScale) {
+    const saberWorldPos = new THREE.Vector3();
+    const saberWorldQuat = new THREE.Quaternion();
+    saber.getWorldPosition(saberWorldPos);
+    saber.getWorldQuaternion(saberWorldQuat);
+
+    const saberWorldDir = new THREE.Vector3(0, 0, -1).applyQuaternion(saberWorldQuat);
+    // sample along blade
+    for (let t = 0.25; t <= 1; t += 0.20) {
+      const point = saberWorldPos.clone().add(saberWorldDir.clone().multiplyScalar(t * 1.5));
+      if (point.distanceTo(mesh.getWorldPosition(new THREE.Vector3())) < (0.19 + meshScale)) return true;
+    }
+    return false;
+  }
+
+  function explodeObject(mesh) {
+    mesh.userData.exploded = true;
+    spawnShapeParticles(mesh.userData.type, mesh.userData.color, mesh.getWorldPosition(new THREE.Vector3()));
+    objectGroup.remove(mesh);
+  }
+
+  // ---------- Resize ----------
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
 </body>
 </html>
