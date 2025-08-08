@@ -2,20 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>AR Entry Button • Three.js WebXR</title>
+  <title>AR Entry + Floor Grid • Three.js WebXR</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!--
-    What this does:
-    - Shows a button ("Enter AR") when AR is available.
-    - On tap, starts an immersive AR session.
-    - Renders a simple spinning ring so you know it's working.
-    - Nothing else. Clean, minimal doorway into AR.
-
-    Quest 2 tips:
-    - Must be opened over HTTPS (GitHub Pages is fine).
-    - Use the Meta (Quest) Browser.
-    - You’ll get a camera permission prompt the first time — allow it.
-  -->
   <style>
     html, body { margin:0; padding:0; height:100%; background:#000; }
     #info {
@@ -24,51 +12,74 @@
       color: #bbb; opacity: 0.9;
       user-select: none;
     }
-    a { color:#8cf; text-decoration:none; border-bottom:1px dashed #8cf; }
   </style>
 </head>
 <body>
-  <div id="info">AR Entry Demo — Three.js WebXR • Minimal “doorway”<br/>When inside AR, you should see a spinning ring floating ahead.</div>
+  <div id="info">AR Entry Demo — Floor + Grid added. Enter AR and you should see a cyan ring ahead, with a matching grid on the floor.</div>
 
   <script type="module">
-    // Import Three and ARButton (ES modules via CDN)
     import * as THREE from 'https://unpkg.com/three@0.164.1/build/three.module.js';
     import { ARButton } from 'https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js';
 
-    // --- Basic three.js setup ---
-    const scene = new THREE.Scene();
+    // --- Accent color used for ring + grid ---
+    const ACCENT = 0x66ccff;
 
-    // Keep background transparent so AR passthrough shows your real room
+    // --- Scene / Camera / Renderer ---
+    const scene = new THREE.Scene();
     scene.background = null;
 
-    const camera = new THREE.PerspectiveCamera( 70, window.innerWidth / window.innerHeight, 0.01, 20 );
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio( Math.min(window.devicePixelRatio, 2) );
-    renderer.setSize( window.innerWidth, window.innerHeight );
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
-    document.body.appendChild( renderer.domElement );
+    document.body.appendChild(renderer.domElement);
 
-    // Add a tiny bit of light for standard materials (not strictly needed for the wireframe ring)
+    // Light (minimal)
     const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.8);
     scene.add(hemi);
 
-    // A simple visual so you know AR is running: a wireframe torus ("ring")
-    const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
-    const ringMat  = new THREE.MeshBasicMaterial({ color: 0x66ccff, wireframe: true });
-    const ring     = new THREE.Mesh(ringGeom, ringMat);
+    // --- Reference visuals ---
 
-    // Place it about 0.75 meters in front of the viewer at eye height when session starts.
-    ring.position.set(0, 0, -0.75);
+    // Spinning ring (same as before, but we'll float it at eye height above the floor)
+    const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
+    const ringMat  = new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true });
+    const ring     = new THREE.Mesh(ringGeom, ringMat);
+    // With 'local-floor' space, y=0 is the floor. Put ring ~eye height.
+    ring.position.set(0, 1.5, -0.75);
     scene.add(ring);
 
-    // Render loop
-    renderer.setAnimationLoop((time, frame) => {
+    // Floor plane (very subtle, transparent, matches accent color)
+    const floorSize = 10; // meters
+    const floorGeom = new THREE.PlaneGeometry(floorSize, floorSize);
+    const floorMat  = new THREE.MeshBasicMaterial({
+      color: ACCENT,
+      transparent: true,
+      opacity: 0.08,
+      side: THREE.DoubleSide
+    });
+    const floor = new THREE.Mesh(floorGeom, floorMat);
+    floor.rotation.x = -Math.PI / 2; // lay flat (XZ)
+    floor.position.y = 0;            // at floor level (local-floor)
+    scene.add(floor);
+
+    // Grid helper (same color as ring)
+    const divisions = 40;
+    const grid = new THREE.GridHelper(floorSize, divisions, ACCENT, ACCENT);
+    // So lines aren’t too loud against pass-through, make them semi-transparent
+    grid.material.transparent = true;
+    grid.material.opacity = 0.35;
+    grid.position.y = 0.001; // tiny lift to avoid z-fighting with the plane
+    scene.add(grid);
+
+    // --- Render loop ---
+    renderer.setAnimationLoop(() => {
       ring.rotation.y += 0.01;
       renderer.render(scene, camera);
     });
 
-    // Handle resize
+    // --- Resize ---
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
@@ -76,19 +87,15 @@
     });
 
     // --- AR Button ---
-    // No special requiredFeatures — we just want to enter AR.
-    // (We can add plane-detection, hit-test, hand-tracking later.)
     const arButton = ARButton.createButton(renderer, {
-      optionalFeatures: [ 'local-floor', 'dom-overlay' ],
+      optionalFeatures: ['local-floor', 'dom-overlay'],
       domOverlay: { root: document.body }
     });
     document.body.appendChild(arButton);
 
-    // Friendly fallback text if AR isn’t available
     if (arButton.textContent === 'AR NOT SUPPORTED') {
-      document.getElementById('info').innerHTML =
-        'This browser/device doesn’t report WebXR AR support. ' +
-        'On Quest 2, open this page in the Meta Browser over HTTPS.';
+      document.getElementById('info').textContent =
+        'This browser/device does not report WebXR AR support. On Quest 2, open this over HTTPS in the Meta Browser.';
     }
   </script>
 </body>
