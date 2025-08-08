@@ -2,279 +2,155 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>AR Tunnel Flight – Quest Controllers + Lasers</title>
+  <title>AR Wireframe Tunnel — Vibe Coder</title>
   <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <!-- A-Frame (WebXR AR ready). -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    html, body { margin:0; height:100%; background:#000; }
-    /* Simple on-page AR button */
-    .xr-btn {
-      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-      padding: 12px 18px; border: 1px solid #fff; border-radius: 6px;
-      background: rgba(0,0,0,.4); color: #fff; font: 14px system-ui, sans-serif;
-      letter-spacing:.3px; cursor: pointer; z-index: 9999;
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    #overlay {
+      position: fixed; inset: 0; pointer-events: none;
+      display: flex; align-items: flex-end; justify-content: center; padding: 16px;
+      background: transparent; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7);
+      font-size: 14px; line-height: 1.4;
     }
-    .hint {
-      position: fixed; left:50%; top:16px; transform: translateX(-50%);
-      color:#9ef; font:12px system-ui,sans-serif; opacity:.9; text-align:center;
-      background: rgba(0,0,0,.35); padding:6px 10px; border-radius:6px;
+    #tip {
+      pointer-events: auto;
+      background: rgba(0,0,0,.45); border-radius: 12px; padding: 12px 14px;
+      backdrop-filter: blur(4px);
     }
   </style>
 </head>
 <body>
-  <div class="hint">GitHub Pages + Quest Browser → tap START AR<br/>Pull trigger for haptics</div>
+  <!-- Simple on-screen tip (also used as DOM overlay in AR if supported). -->
+  <div id="overlay"><div id="tip">
+    Tap <b>Enter AR</b>. In AR, you’ll see controller models and lasers. Walk or turn as the wireframe rings rush toward you.
+  </div></div>
 
-  <!-- three.js via import maps -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-      }
-    }
-  </script>
+  <a-scene
+    renderer="alpha:true; physicallyCorrectLights:true; colorManagement:true"
+    background="color: #000; transparent:true"
+    webxr="optionalFeatures: local-floor, bounded-floor, dom-overlay; overlayElement: #overlay"
+    xr-mode-ui="enabled: true; enterVRButton: false; enterARButton: true"
+    vr-mode-ui="enabled: false"
+    embedded
+  >
+    <!-- Light just to ensure controller models shade nicely in AR. -->
+    <a-entity light="type: ambient; intensity: 0.9"></a-entity>
+    <a-entity light="type: directional; intensity: 0.6" position="0 3 2"></a-entity>
 
-  <script type="module">
-    import * as THREE from 'three';
-    import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+    <!-- Camera rig sits at origin; we keep rings aligned to come straight at the user. -->
+    <a-entity id="rig" position="0 0 0">
+      <a-entity id="camera" camera wasd-controls-enabled="false" look-controls="pointerLockEnabled: false" position="0 1.6 0"></a-entity>
 
-    // ---------- Basic scene ----------
-    const scene = new THREE.Scene();               // AR = passthrough background
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 30);
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
+      <!-- Controller models + lasers (left/right). -->
+      <!-- laser-controls adds a visible ray; oculus-touch-controls loads the hand model on Quest. -->
+      <a-entity id="leftHand"
+                oculus-touch-controls="hand: left; model: true"
+                laser-controls="hand: left"
+                raycaster="objects: .ring; far: 10"
+                line="opacity: 0.9"></a-entity>
 
-    // Soft light to help wireframe edges in some conditions
-    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+      <a-entity id="rightHand"
+                oculus-touch-controls="hand: right; model: true"
+                laser-controls="hand: right"
+                raycaster="objects: .ring; far: 10"
+                line="opacity: 0.9"></a-entity>
+    </a-entity>
 
-    // ---------- AR button ----------
-    const xrBtn = document.createElement('button');
-    xrBtn.className = 'xr-btn';
-    xrBtn.textContent = 'START AR';
-    document.body.appendChild(xrBtn);
+    <!-- Tunnel spawner/animator -->
+    <a-entity id="tunnel" tunnel="ringCount: 36; startZ: -50; endZ: 0.6; gap: 1.4; speed: 3.0; diameterMeters: 3.048; thickness: 0.10; color: #00ff88"></a-entity>
 
-    let xrSession = null;
-    xrBtn.onclick = async () => {
-      if (!navigator.xr) return xrBtn.textContent = 'WEBXR NOT AVAILABLE';
-      if (xrSession) { xrSession.end(); return; }
-      try {
-        const session = await navigator.xr.requestSession('immersive-ar', { requiredFeatures:['local'] });
-        xrSession = session;
-        xrSession.addEventListener('end', () => { xrSession = null; xrBtn.textContent = 'START AR'; });
-        renderer.xr.setReferenceSpaceType('local');
-        await renderer.xr.setSession(xrSession);
-        xrBtn.textContent = 'STOP AR';
-        // kick off once session starts
-        setupControllers();
-        makeCockpit();
-        buildTunnel();
-      } catch (e) {
-        xrBtn.textContent = 'AR NOT SUPPORTED';
-        console.warn(e);
-      }
-    };
+    <script>
+      // "tunnel" component creates and recycles wireframe rings that move toward the camera.
+      AFRAME.registerComponent('tunnel', {
+        schema: {
+          ringCount:      {type: 'int', default: 32},   // how many rings alive at once
+          startZ:         {type: 'number', default: -40}, // far start (negative Z)
+          endZ:           {type: 'number', default: 0.6}, // when to recycle (just past camera)
+          gap:            {type: 'number', default: 1.5}, // spacing between rings in meters
+          speed:          {type: 'number', default: 2.5}, // meters per second toward the camera
+          diameterMeters: {type: 'number', default: 3.048}, // ~10 feet
+          thickness:      {type: 'number', default: 0.08},  // ring band thickness
+          color:          {type: 'color',  default: '#00ff88'}
+        },
+        init: function () {
+          const s = this.data;
+          this.rings = [];
+          // Compute radii from desired diameter and thickness.
+          const outerR = s.diameterMeters / 2;
+          const innerR = Math.max(0.01, outerR - s.thickness);
 
-    // ---------- Controllers + Lasers ----------
-    let controllerL, controllerR, gripL, gripR;
-    const controllerModelFactory = new XRControllerModelFactory();
+          for (let i = 0; i < s.ringCount; i++) {
+            const z = s.startZ - i * s.gap; // stagger them deeper into the distance
+            const ring = document.createElement('a-entity');
+            ring.setAttribute('class', 'ring');
 
-    function setupControllers() {
-      // Raw controllers (events originate here)
-      controllerL = renderer.xr.getController(0);
-      controllerR = renderer.xr.getController(1);
-      scene.add(controllerL, controllerR);
+            // Geometry as a flat ring, facing the camera (XY plane), moving along +Z.
+            ring.setAttribute('geometry', {
+              primitive: 'ring',
+              radiusInner: innerR,
+              radiusOuter: outerR,
+              segmentsTheta: 64,
+              segmentsPhi: 1
+            });
 
-      // 3D controller models (grips)
-      gripL = renderer.xr.getControllerGrip(0);
-      gripR = renderer.xr.getControllerGrip(1);
-      gripL.add(controllerModelFactory.createControllerModel(gripL));
-      gripR.add(controllerModelFactory.createControllerModel(gripR));
-      scene.add(gripL, gripR);
+            // Wireframe look; double-sided so it remains visible.
+            ring.setAttribute('material', {
+              color: s.color,
+              wireframe: true,
+              side: 'double',
+              opacity: 0.95,
+              transparent: true
+            });
 
-      // Add slim laser lines on both
-      addLaser(controllerL, 0x00ffff);
-      addLaser(controllerR, 0xff66ff);
+            // Slight faint glow line to help visibility (optional aesthetic).
+            // Commented out for simplicity; wireframe usually reads well in AR.
+            // ring.setAttribute('outline', 'enabled: true; color: #aaffcc; thickness: 0.001');
 
-      // Button events: primary trigger = selectstart/selectend
-      const onSelectStart = (ev) => {
-        pulseLaser(ev.target, 1.0);
-        tryHaptics(ev.target, 0.5, 40); // mild buzz
-      };
-      const onSelectEnd = (ev) => pulseLaser(ev.target, 0.5);
+            // Keep centered so we pass through the middle.
+            ring.object3D.position.set(0, 1.6, z);
+            ring.object3D.rotation.set(0, 0, 0);
+            this.el.sceneEl.appendChild(ring);
+            this.rings.push(ring);
+          }
+          this.lastTime = null;
 
-      controllerL.addEventListener('selectstart', onSelectStart);
-      controllerR.addEventListener('selectstart', onSelectStart);
-      controllerL.addEventListener('selectend', onSelectEnd);
-      controllerR.addEventListener('selectend', onSelectEnd);
-    }
+          // If AR session starts, keep rings aligned with current head height.
+          this.onEnterXR = () => {
+            const cam = this.el.sceneEl.camera.el;
+            this.headY = cam.object3D.position.y || 1.6;
+            this.rings.forEach(r => r.object3D.position.y = this.headY);
+          };
+          this.el.sceneEl.renderer.xr.addEventListener?.('sessionstart', this.onEnterXR);
+        },
+        tick: function (time, dt) {
+          if (!this.lastTime) { this.lastTime = time; return; }
+          const s = this.data;
+          const deltaSec = dt / 1000;
+          const move = s.speed * deltaSec;
 
-    // Make a visible “laser” line from controller forward (-Z)
-    function addLaser(controller, color) {
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.Float32BufferAttribute([0,0,0, 0,0,-1], 3));
-      const mat = new THREE.LineBasicMaterial({ color, transparent:true, opacity:0.6 });
-      const line = new THREE.Line(geom, mat);
-      line.name = 'laser';
-      line.scale.z = 6;   // length
-      line.visible = true;
-      controller.add(line);
-
-      // A tiny reticle at the laser tip (helps depth perception)
-      const tip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.01, 8, 8),
-        new THREE.MeshBasicMaterial({ color, transparent:true, opacity:0.9 })
-      );
-      tip.position.z = -6;
-      tip.name = 'laserTip';
-      controller.add(tip);
-    }
-
-    function pulseLaser(controller, strongOpacity) {
-      const line = controller.getObjectByName('laser');
-      const tip  = controller.getObjectByName('laserTip');
-      if (!line || !tip) return;
-      line.material.opacity = strongOpacity;
-      tip.material.opacity  = strongOpacity;
-      // fade back down over ~150ms
-      setTimeout(() => {
-        if (line.material) line.material.opacity = 0.6;
-        if (tip.material)  tip.material.opacity = 0.9;
-      }, 150);
-    }
-
-    // Try to vibrate controller if available
-    function tryHaptics(controller, intensity = 0.5, durationMs = 30) {
-      const inputSource = renderer.xr.getSession()?.inputSources?.find(s => s.targetRayMode && s.handedness &&
-        (controller === controllerL || controller === controllerR));
-      const gamepad = inputSource && inputSource.gamepad;
-      const actuator = gamepad && gamepad.hapticActuators && gamepad.hapticActuators[0];
-      if (actuator && actuator.pulse) {
-        actuator.pulse(intensity, durationMs).catch(()=>{});
-      }
-    }
-
-    // ---------- Cockpit “nose” under the view ----------
-    let cockpit;
-    function makeCockpit() {
-      cockpit = new THREE.Group();
-      // A simple low-poly nose: wedge + rim
-      const nose = new THREE.Mesh(
-        new THREE.ConeGeometry(0.12, 0.4, 4),
-        new THREE.MeshBasicMaterial({ color: 0x88ccff, wireframe: true, transparent:true, opacity: 0.9 })
-      );
-      nose.rotation.x = Math.PI/2;   // point forward
-      nose.position.set(0, -0.22, -0.65);
-
-      const rim = new THREE.Mesh(
-        new THREE.TorusGeometry(0.22, 0.01, 8, 40),
-        new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent:true, opacity: 0.5 })
-      );
-      rim.position.set(0, -0.25, -0.72);
-
-      cockpit.add(nose, rim);
-      // Parent to the camera so it follows head motion
-      camera.add(cockpit);
-      scene.add(camera);
-    }
-
-    // ---------- Wireframe tunnel ----------
-    const tunnelGroup = new THREE.Group();
-    scene.add(tunnelGroup);
-
-    const RINGS = 40;            // number of rings
-    const RING_SPACING = 0.25;   // distance between rings
-    const TUNNEL_RADIUS = 1.2;   // radius of tunnel
-    const STRUTS = 8;            // number of longitudinal lines
-
-    const ringMeshes = [];
-    const strutLines = [];
-
-    function buildTunnel() {
-      // Rings
-      for (let i = 0; i < RINGS; i++) {
-        const ring = new THREE.Mesh(
-          new THREE.TorusGeometry(TUNNEL_RADIUS, 0.01, 6, 64),
-          new THREE.MeshBasicMaterial({ color: 0x00ffcc, wireframe: true, transparent: true, opacity: 0.5 })
-        );
-        ring.rotation.x = Math.PI / 2;
-        ring.position.z = -i * RING_SPACING - 1.0; // start a bit in front
-        tunnelGroup.add(ring);
-        ringMeshes.push(ring);
-      }
-
-      // Longitudinal “struts” (lines along the tunnel)
-      for (let s = 0; s < STRUTS; s++) {
-        const angle = (s / STRUTS) * Math.PI * 2;
-        const x = Math.cos(angle) * TUNNEL_RADIUS;
-        const y = Math.sin(angle) * TUNNEL_RADIUS;
-
-        const points = [];
-        for (let i = 0; i < RINGS; i++) {
-          points.push(new THREE.Vector3(x, y, -i * RING_SPACING - 1.0));
+          for (let i = 0; i < this.rings.length; i++) {
+            const o3d = this.rings[i].object3D;
+            o3d.position.z += move;
+            if (o3d.position.z > s.endZ) {
+              // recycle to the far end; tiny jitter keeps the tunnel alive without breaking center pass-through
+              o3d.position.z = s.startZ;
+              o3d.position.x = 0;
+              // Keep vertical centered on head height if available
+              if (this.headY) o3d.position.y = this.headY;
+            }
+          }
+        },
+        remove: function () {
+          if (this.onEnterXR) {
+            this.el.sceneEl?.renderer?.xr?.removeEventListener?.('sessionstart', this.onEnterXR);
+          }
+          this.rings.forEach(r => r.parentNode && r.parentNode.removeChild(r));
+          this.rings = [];
         }
-        const geom = new THREE.BufferGeometry().setFromPoints(points);
-        const mat  = new THREE.LineBasicMaterial({ color: 0x00ffaa, transparent:true, opacity:0.25 });
-        const line = new THREE.Line(geom, mat);
-        tunnelGroup.add(line);
-        strutLines.push({ line, angle });
-      }
-    }
-
-    // ---------- Animation loop ----------
-    const tmpVec = new THREE.Vector3();
-    let t = 0;
-
-    renderer.setAnimationLoop((time, frame) => {
-      const dt = Math.min(33, renderer.info.render.frame ? 16 : 16); // rough dt
-      t += dt * 0.001;
-
-      // Move rings toward the user to fake forward motion
-      const speed = 0.9; // meters/second
-      for (let i = 0; i < ringMeshes.length; i++) {
-        const ring = ringMeshes[i];
-        ring.position.z += speed * dt * 0.001;
-        if (ring.position.z > -0.4) {
-          // wrap to back
-          ring.position.z = -((RINGS-1) * RING_SPACING) - 1.0;
-        }
-        // tiny shimmer on radius for life
-        const swell = Math.sin((t + i*0.2)) * 0.02;
-        ring.scale.setScalar(1 + swell);
-      }
-
-      // Update struts to new Z positions (regenerate their points)
-      for (let s = 0; s < STRUTS; s++) {
-        const { line, angle } = strutLines[s];
-        const x = Math.cos(angle) * TUNNEL_RADIUS;
-        const y = Math.sin(angle) * TUNNEL_RADIUS;
-        const positions = line.geometry.attributes.position.array;
-        let idx = 0;
-        for (let i = 0; i < RINGS; i++) {
-          // match ring i Z
-          const z = ringMeshes[i].position.z;
-          positions[idx++] = x;
-          positions[idx++] = y;
-          positions[idx++] = z;
-        }
-        line.geometry.attributes.position.needsUpdate = true;
-      }
-
-      // Subtle cockpit bob (feels like engine rumble)
-      if (cockpit) {
-        cockpit.position.y = -0.24 + Math.sin(t * 6.0) * 0.005;
-        cockpit.position.x = Math.sin(t * 2.5) * 0.004;
-      }
-
-      renderer.render(scene, camera);
-    });
-
-    // ---------- Resize ----------
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-  </script>
+      });
+    </script>
+  </a-scene>
 </body>
 </html>
