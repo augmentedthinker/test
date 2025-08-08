@@ -2,91 +2,172 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>AR Entry + Floor Grid • Three.js WebXR</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+  <title>AR Starter • Controllers + Lasers + Grid Floor</title>
   <style>
-    html, body { margin:0; padding:0; height:100%; background:#000; }
+    html, body { margin:0; height:100%; overflow:hidden; background:#000; }
     #info {
-      position: fixed; left: 12px; bottom: 12px; z-index: 10;
-      font: 12px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: #bbb; opacity: 0.9;
-      user-select: none;
+      position: fixed; top: 10px; left: 10px; right: 10px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      color: #fff; background: rgba(0,0,0,0.35);
+      padding: 10px 12px; border-radius: 10px; line-height: 1.3; font-size: 14px;
+      z-index: 10; pointer-events: none;
     }
+    /* ARButton injects a button; make it a bit nicer */
+    .ar-button { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      padding: 12px 18px; border-radius: 10px; border: none; font-size: 16px; }
   </style>
 </head>
 <body>
-  <div id="info">Floor lowered to ~4ft below rig. Ring at ~3ft high & ~3ft in front.</div>
+  <div id="info">
+    AR Starter: Tap “Enter AR”. You should see your Oculus controllers and laser pointers.
+    Aim at the test cube and pull the trigger to toggle its color.
+    A grid floor sits ~4 ft (1.22 m) below your rig (seated).
+  </div>
 
   <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.164.1/build/three.module.js';
-    import { ARButton } from 'https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js';
+    // === Imports (CDN) ===
+    import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js";
+    import { ARButton } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/webxr/ARButton.js";
+    import { XRControllerModelFactory } from "https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/webxr/XRControllerModelFactory.js";
 
-    const ACCENT = 0x66ccff;
-
+    // === Basic three.js setup ===
     const scene = new THREE.Scene();
-    scene.background = null;
 
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+    // Transparent AR background; subtle ambient lighting for controller models
+    const hemi = new THREE.HemisphereLight(0xffffff, 0x444455, 0.6);
+    scene.add(hemi);
 
+    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.xr.enabled = true;
+    // 'local' is safest for AR; you’ll physically sit, so the floor is placed relative to your head pose.
+    renderer.xr.setReferenceSpaceType('local');
     document.body.appendChild(renderer.domElement);
 
-    const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.8);
-    scene.add(hemi);
-
-    // Ring — moved to 3ft high, 3ft in front
-    const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
-    const ringMat  = new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true });
-    const ring     = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(0, 0.9144, -0.9144); // CHANGED
-    scene.add(ring);
-
-    // Floor — lowered to ~4ft below rig
-    const floorSize = 10;
-    const floorGeom = new THREE.PlaneGeometry(floorSize, floorSize);
-    const floorMat  = new THREE.MeshBasicMaterial({
-      color: ACCENT,
-      transparent: true,
-      opacity: 0.08,
-      side: THREE.DoubleSide
+    // === AR Button ===
+    const arButton = ARButton.createButton(renderer, {
+      requiredFeatures: ['local'],   // minimal and widely supported on Quest
+      optionalFeatures: ['dom-overlay', 'local-floor'],
+      domOverlay: { root: document.body }
     });
-    const floor = new THREE.Mesh(floorGeom, floorMat);
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -1.2192; // CHANGED
-    scene.add(floor);
+    arButton.classList.add('ar-button');
+    document.body.appendChild(arButton);
 
-    // Grid — matches accent color, slightly above floor
-    const divisions = 40;
-    const grid = new THREE.GridHelper(floorSize, divisions, ACCENT, ACCENT);
+    // === Grid "floor" ~ 4 ft below the rig ===
+    // 4 ft ≈ 1.22 m
+    const GRID_DROP_M = 1.22;
+    const gridSize = 10;        // meters across
+    const gridDivisions = 20;
+    const grid = new THREE.GridHelper(gridSize, gridDivisions, 0x00ffd5, 0x003b37);
+    grid.position.set(0, -GRID_DROP_M, 0);
+    grid.material.opacity = 0.6;
     grid.material.transparent = true;
-    grid.material.opacity = 0.35;
-    grid.position.y = -1.2182; // CHANGED
     scene.add(grid);
 
-    renderer.setAnimationLoop(() => {
-      ring.rotation.y += 0.01;
-      renderer.render(scene, camera);
-    });
+    // Optional: a faint ground plane for ray intersections (invisible)
+    const groundGeo = new THREE.PlaneGeometry(gridSize, gridSize);
+    const groundMat = new THREE.MeshBasicMaterial({ visible: false });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -GRID_DROP_M;
+    scene.add(ground);
 
+    // === Simple interactive test object ===
+    const interactables = [];
+    {
+      const boxGeo = new THREE.BoxGeometry(0.15, 0.15, 0.15);
+      const boxMat = new THREE.MeshStandardMaterial({ color: 0x00ffd5, roughness: 0.4, metalness: 0.2 });
+      const cube = new THREE.Mesh(boxGeo, boxMat);
+      cube.position.set(0, -0.3, -1.0); // a little below head-height, one meter forward
+      cube.userData.toggle = true;
+      scene.add(cube);
+      interactables.push(cube);
+    }
+
+    // === Controllers + Laser pointers ===
+    const raycaster = new THREE.Raycaster();
+    const tempMatrix = new THREE.Matrix4();
+
+    function buildLaser() {
+      const geometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, -1)
+      ]);
+      const material = new THREE.LineBasicMaterial({ color: 0xffffff });
+      const line = new THREE.Line(geometry, material);
+      line.name = 'laser';
+      line.scale.z = 3.0; // 3 meters reach
+      return line;
+    }
+
+    // Controller 1 (right hand usually)
+    const controller1 = renderer.xr.getController(0);
+    controller1.addEventListener('selectstart', onSelectStart);
+    controller1.addEventListener('selectend', onSelectEnd);
+    controller1.add(buildLaser());
+    scene.add(controller1);
+
+    // Controller 2 (left hand)
+    const controller2 = renderer.xr.getController(1);
+    controller2.addEventListener('selectstart', onSelectStart);
+    controller2.addEventListener('selectend', onSelectEnd);
+    controller2.add(buildLaser());
+    scene.add(controller2);
+
+    // Controller grips with real models
+    const controllerModelFactory = new XRControllerModelFactory();
+    const controllerGrip1 = renderer.xr.getControllerGrip(0);
+    controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+    scene.add(controllerGrip1);
+
+    const controllerGrip2 = renderer.xr.getControllerGrip(1);
+    controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+    scene.add(controllerGrip2);
+
+    // === Controller interaction (raycast on trigger) ===
+    function intersectObjects(controller) {
+      tempMatrix.identity().extractRotation(controller.matrixWorld);
+      const rayOrigin = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
+      const rayDirection = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix).normalize();
+      raycaster.set(rayOrigin, rayDirection);
+      return raycaster.intersectObjects(interactables, false);
+    }
+
+    function onSelectStart(event) {
+      const controller = event.target;
+      const hits = intersectObjects(controller);
+      if (hits.length > 0) {
+        const hit = hits[0].object;
+        hit.userData.selected = true;
+      }
+    }
+
+    function onSelectEnd(event) {
+      const controller = event.target;
+      const hits = intersectObjects(controller);
+      if (hits.length > 0) {
+        const hit = hits[0].object;
+        // Simple feedback: toggle color
+        const c = hit.material.color.getHex();
+        hit.material.color.setHex((c === 0x00ffd5) ? 0xff4d7e : 0x00ffd5);
+        hit.userData.selected = false;
+      }
+    }
+
+    // === Resize handling ===
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    const arButton = ARButton.createButton(renderer, {
-      optionalFeatures: ['local-floor', 'dom-overlay'],
-      domOverlay: { root: document.body }
+    // === Render loop ===
+    renderer.setAnimationLoop(() => {
+      renderer.render(scene, camera);
     });
-    document.body.appendChild(arButton);
-
-    if (arButton.textContent === 'AR NOT SUPPORTED') {
-      document.getElementById('info').textContent =
-        'This browser/device does not report WebXR AR support. On Quest 2, open this over HTTPS in the Meta Browser.';
-    }
   </script>
 </body>
 </html>
