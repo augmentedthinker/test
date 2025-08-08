@@ -15,16 +15,14 @@
   </style>
 </head>
 <body>
-  <div id="info">AR Entry Demo — Floor dropped ~3ft. Enter AR to see the cyan ring ahead and the grid below you.</div>
+  <div id="info">Floor lowered to ~4ft below rig. Ring at ~3ft high & ~3ft in front.</div>
 
   <script type="module">
     import * as THREE from 'https://unpkg.com/three@0.164.1/build/three.module.js';
     import { ARButton } from 'https://unpkg.com/three@0.164.1/examples/jsm/webxr/ARButton.js';
 
-    // --- Accent color used for ring + grid ---
     const ACCENT = 0x66ccff;
 
-    // --- Scene / Camera / Renderer ---
     const scene = new THREE.Scene();
     scene.background = null;
 
@@ -36,21 +34,18 @@
     renderer.xr.enabled = true;
     document.body.appendChild(renderer.domElement);
 
-    // Light (minimal)
     const hemi = new THREE.HemisphereLight(0xffffff, 0x222222, 0.8);
     scene.add(hemi);
 
-    // --- Reference visuals ---
-
-    // Spinning ring (unchanged)
+    // Ring — moved to 3ft high, 3ft in front
     const ringGeom = new THREE.TorusGeometry(0.15, 0.03, 16, 64);
     const ringMat  = new THREE.MeshBasicMaterial({ color: ACCENT, wireframe: true });
     const ring     = new THREE.Mesh(ringGeom, ringMat);
-    ring.position.set(0, 1.5, -0.75);
+    ring.position.set(0, 0.9144, -0.9144); // CHANGED
     scene.add(ring);
 
-    // Floor plane (same material, now 3ft lower)
-    const floorSize = 10; // meters
+    // Floor — lowered to ~4ft below rig
+    const floorSize = 10;
     const floorGeom = new THREE.PlaneGeometry(floorSize, floorSize);
     const floorMat  = new THREE.MeshBasicMaterial({
       color: ACCENT,
@@ -60,31 +55,28 @@
     });
     const floor = new THREE.Mesh(floorGeom, floorMat);
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.9144; // CHANGED: ~3 feet below rig
+    floor.position.y = -1.2192; // CHANGED
     scene.add(floor);
 
-    // Grid helper (same color; tiny lift above the lowered floor)
+    // Grid — matches accent color, slightly above floor
     const divisions = 40;
     const grid = new THREE.GridHelper(floorSize, divisions, ACCENT, ACCENT);
     grid.material.transparent = true;
     grid.material.opacity = 0.35;
-    grid.position.y = -0.9134; // CHANGED: just above floor to avoid z-fighting
+    grid.position.y = -1.2182; // CHANGED
     scene.add(grid);
 
-    // --- Render loop ---
     renderer.setAnimationLoop(() => {
       ring.rotation.y += 0.01;
       renderer.render(scene, camera);
     });
 
-    // --- Resize ---
     window.addEventListener('resize', () => {
       camera.aspect = window.innerWidth / window.innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(window.innerWidth, window.innerHeight);
     });
 
-    // --- AR Button ---
     const arButton = ARButton.createButton(renderer, {
       optionalFeatures: ['local-floor', 'dom-overlay'],
       domOverlay: { root: document.body }
