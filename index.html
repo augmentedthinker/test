@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AR Tetris — Foundation + 3D Grid (Pixel 3)</title>
+<title>AR Tetris — Play on 3D Grid (Pixel 3)</title>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#000; }
   #hud {
@@ -12,22 +12,36 @@
     background: linear-gradient(to bottom, rgba(0,0,0,.6), rgba(0,0,0,0));
     pointer-events: none;
   }
-  #ui {
-    position: fixed; left:0; right:0; bottom:0; padding:12px;
-    display:flex; gap:8px; justify-content:center; pointer-events:none;
+  #uiTop, #uiBottom {
+    position: fixed; left:0; right:0; padding:10px; display:flex; gap:8px; justify-content:center;
+    pointer-events:none;
   }
+  #uiTop { top: 44px; }
+  #uiBottom { bottom: 0; }
   .btn {
     pointer-events:auto; border:1px solid #8af; color:#eaf;
-    background: rgba(15,20,40,.55); padding:8px 12px; border-radius:12px; font-weight:600;
-    backdrop-filter: blur(8px);
+    background: rgba(15,20,40,.55); padding:10px 14px; border-radius:12px; font-weight:700;
+    backdrop-filter: blur(8px); min-width:56px;
   }
+  .btn:active { transform: translateY(1px); }
+  .wide { min-width:92px; }
 </style>
 </head>
 <body>
-  <div id="hud">Find a surface (cyan ring). Tap to place the <b>foundation + 3D grid</b>.</div>
-  <div id="ui">
-    <button id="reposition" class="btn">Re-place</button>
+  <div id="hud">Find a surface (cyan ring). Tap to place. Then play Tetris on the 3D grid.</div>
+
+  <div id="uiTop">
+    <button id="reposition" class="btn wide">Re-place</button>
     <button id="reset" class="btn">Reset</button>
+    <button id="pause" class="btn">Pause</button>
+  </div>
+
+  <div id="uiBottom">
+    <button id="left" class="btn">◀︎</button>
+    <button id="rotate" class="btn">⟳</button>
+    <button id="right" class="btn">▶︎</button>
+    <button id="soft" class="btn">▽</button>
+    <button id="hard" class="btn">⤓</button>
   </div>
 
 <script type="module">
@@ -60,79 +74,57 @@
   reticle.visible = false;
   scene.add(reticle);
 
-  // ===== Parameters for board =====
-  const COLS = 10, ROWS = 20, CELL = 0.06;     // 6 cm cells
-  const boardW = COLS * CELL;                  // width in meters
-  const boardH = ROWS * CELL;                  // height in meters
+  // ===== Board + Grid dimensions =====
+  const COLS = 10, ROWS = 20, CELL = 0.06; // 6 cm cells
+  const boardW = COLS * CELL, boardH = ROWS * CELL;
 
-  const basePad = 0.02;                        // border around grid
-  const baseW = boardW + basePad*2;            // foundation width
-  const baseD = 0.18;                          // foundation depth front-to-back
-  const baseT = 0.02;                          // foundation thickness
+  const basePad = 0.02, baseW = boardW + basePad*2, baseD = 0.18, baseT = 0.02;
+  const barT = 0.006; // grid bar thickness
+  const blockDepth = CELL * 0.7; // how far blocks stick out toward player
 
-  const barT = 0.006;                          // thickness of grid bars
-
-  // ===== Group that holds the whole placed object =====
-  const rig = new THREE.Group();   // follows reticle/anchor
+  // ===== Rig (placed object root) =====
+  const rig = new THREE.Group();
   rig.visible = false;
   scene.add(rig);
 
-  // --- FOUNDATION (solid slab) ---
+  // Foundation slab
   const foundation = new THREE.Mesh(
     new THREE.BoxGeometry(baseW, baseT, baseD),
     new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness:0.95, metalness:0.05 })
   );
-  // sit the foundation on the plane (local Y-up)
   foundation.position.y = baseT/2;
   rig.add(foundation);
 
-  // --- 3D GRID rising from back edge of foundation ---
+  // Grid frame upright on back edge
   const gridGroup = new THREE.Group();
-  // Place grid flush with the back edge of the foundation and just above it
-  gridGroup.position.set(0, baseT + barT/2, -baseD/2 + barT/2); // back edge in -Z
+  gridGroup.position.set(0, baseT + barT/2, -baseD/2 + barT/2);
   rig.add(gridGroup);
 
-  // Build grid frame using instanced thin boxes (performant)
-  // The grid plane is X (width) by Y (height), very thin in Z.
-  const gridMaterial = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
-  const barGeoH = new THREE.BoxGeometry(boardW, barT, barT); // horizontal bars (along X)
-  const barGeoV = new THREE.BoxGeometry(barT, boardH, barT); // vertical bars (along Y)
-
-  // Vertical edge rails
-  const railL = new THREE.Mesh(new THREE.BoxGeometry(barT*2, boardH + barT*2, barT*2), gridMaterial);
+  const gridMat = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
+  // rails
+  const railL = new THREE.Mesh(new THREE.BoxGeometry(barT*2, boardH + barT*2, barT*2), gridMat);
   railL.position.set(-boardW/2 - barT, (boardH)/2, 0);
   const railR = railL.clone(); railR.position.x = boardW/2 + barT;
-  gridGroup.add(railL, railR);
-
-  // Bottom & top rails
-  const railB = new THREE.Mesh(new THREE.BoxGeometry(boardW + barT*2, barT*2, barT*2), gridMaterial);
+  const railB = new THREE.Mesh(new THREE.BoxGeometry(boardW + barT*2, barT*2, barT*2), gridMat);
   railB.position.set(0, 0, 0);
   const railT = railB.clone(); railT.position.y = boardH;
-  gridGroup.add(railB, railT);
+  gridGroup.add(railL, railR, railB, railT);
 
-  // Vertical internal bars (COLS-1)
-  const vCount = COLS - 1;
-  const vInst = new THREE.InstancedMesh(barGeoV, gridMaterial, vCount);
-  let i = 0;
-  for (let c = 1; c < COLS; c++) {
+  // internal bars
+  const barGeoH = new THREE.BoxGeometry(boardW, barT, barT);
+  const barGeoV = new THREE.BoxGeometry(barT, boardH, barT);
+  const vInst = new THREE.InstancedMesh(barGeoV, gridMat, COLS-1);
+  for (let c=1, i=0; c<COLS; c++, i++){
     const x = -boardW/2 + c*CELL;
-    const m = new THREE.Matrix4().makeTranslation(x, boardH/2, 0);
-    vInst.setMatrixAt(i++, m);
+    vInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, boardH/2, 0));
   }
-  gridGroup.add(vInst);
-
-  // Horizontal internal bars (ROWS-1)
-  const hCount = ROWS - 1;
-  const hInst = new THREE.InstancedMesh(barGeoH, gridMaterial, hCount);
-  i = 0;
-  for (let r = 1; r < ROWS; r++) {
-    const y = r*CELL;
-    const m = new THREE.Matrix4().makeTranslation(0, y, 0);
-    hInst.setMatrixAt(i++, m);
+  const hInst = new THREE.InstancedMesh(barGeoH, gridMat, ROWS-1);
+  for (let r=1, i=0; r<ROWS; r++, i++){
+    hInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(0, r*CELL, 0));
   }
-  gridGroup.add(hInst);
+  gridGroup.add(vInst, hInst);
 
-  // Slight glow header panel for future scoreboard
+  // Slight header bar
   const header = new THREE.Mesh(
     new THREE.BoxGeometry(boardW, barT*2, barT*2),
     new THREE.MeshStandardMaterial({ color: 0x142c55, emissive: 0x0b1e44, roughness: 1 })
@@ -140,7 +132,254 @@
   header.position.set(0, boardH + barT*1.5, 0);
   gridGroup.add(header);
 
-  // ===== AR button (hit-test required; anchors optional) =====
+  // ===== Playfield (blocks live slightly in front of the grid plane) =====
+  const playfield = new THREE.Group();
+  playfield.position.copy(gridGroup.position);
+  playfield.position.z += blockDepth/2 + barT; // pop blocks forward a bit
+  rig.add(playfield);
+
+  // Shadow-ish plate to ground blocks visually
+  const shadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(boardW, boardH),
+    new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.12 })
+  );
+  shadow.rotation.x = -Math.PI/2;
+  shadow.position.set(0, 0.001, 0.0001);
+  playfield.add(shadow);
+
+  // ===== Tetris logic =====
+  const board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
+  const colors = [0x00ffff,0x0000ff,0xffa500,0xffff00,0x00ff00,0x800080,0xff0000]; // I,J,L,O,S,T,Z
+
+  // Shapes with rotation states (matrix of 1s)
+  const SHAPES = {
+    I: [[[1,1,1,1]],
+        [[1],[1],[1],[1]]],
+    J: [[[1,0,0],[1,1,1]],
+        [[1,1],[1,0],[1,0]],
+        [[1,1,1],[0,0,1]],
+        [[0,1],[0,1],[1,1]]],
+    L: [[[0,0,1],[1,1,1]],
+        [[1,0],[1,0],[1,1]],
+        [[1,1,1],[1,0,0]],
+        [[1,1],[0,1],[0,1]]],
+    O: [[[1,1],[1,1]]],
+    S: [[[0,1,1],[1,1,0]],
+        [[1,0],[1,1],[0,1]]],
+    T: [[[0,1,0],[1,1,1]],
+        [[1,0],[1,1],[1,0]],
+        [[1,1,1],[0,1,0]],
+        [[0,1],[1,1],[0,1]]],
+    Z: [[[1,1,0],[0,1,1]],
+        [[0,1],[1,1],[1,0]]],
+  };
+  const KEYS = Object.keys(SHAPES);
+
+  // 3D block template
+  const blockGeo = new THREE.BoxGeometry(CELL, CELL, blockDepth);
+  function blockMat(hex) { return new THREE.MeshStandardMaterial({ color: hex, metalness:0.2, roughness:0.7 }); }
+
+  // Active piece object
+  let active = null;
+  let gameTimer = null;
+  let speedMs = 700;
+  let paused = false;
+
+  const $hud = document.getElementById('hud');
+  const $reposition = document.getElementById('reposition');
+  const $reset = document.getElementById('reset');
+  const $pause = document.getElementById('pause');
+
+  const $left = document.getElementById('left');
+  const $right = document.getElementById('right');
+  const $rotate = document.getElementById('rotate');
+  const $soft = document.getElementById('soft');
+  const $hard = document.getElementById('hard');
+
+  function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
+
+  function spawnPiece() {
+    const key = KEYS[(Math.random()*KEYS.length)|0];
+    const rots = SHAPES[key];
+    const color = colors[KEYS.indexOf(key)];
+    active = {
+      key, rots, r:0, x: (COLS>>1)-2, y: -2, // y < 0 = above top
+      meshes: []
+    };
+    // build meshes for visual
+    active.group = new THREE.Group();
+    const shape = rots[0];
+    for (let r=0; r<shape.length; r++){
+      for (let c=0; c<shape[0].length; c++){
+        if (!shape[r][c]) continue;
+        const m = new THREE.Mesh(blockGeo, blockMat(color));
+        m.position.set((c+active.x)*CELL - boardW/2 + CELL/2,
+                       (ROWS-1 - (r+active.y))*CELL - boardH/2 + CELL/2,
+                       0);
+        active.group.add(m);
+        active.meshes.push(m);
+      }
+    }
+    playfield.add(active.group);
+    updateActiveVisual(); // ensure alignment
+    if (!validMove(0,0,0)) { gameOver(); }
+  }
+
+  function shapeAt(rot){ return active.rots[(active.r + rot + active.rots.length)%active.rots.length]; }
+
+  function validMove(dx, dy, drot){
+    const shape = shapeAt(drot);
+    for (let r=0; r<shape.length; r++){
+      for (let c=0; c<shape[0].length; c++){
+        if (!shape[r][c]) continue;
+        const nx = active.x + dx + c;
+        const ny = active.y + dy + r;
+        if (nx < 0 || nx >= COLS) return false;
+        if (ny >= ROWS) return false;
+        if (ny >= 0 && board[ny][nx]) return false;
+      }
+    }
+    return true;
+  }
+
+  function commitMove(dx, dy, drot){
+    if (!validMove(dx,dy,drot)) return false;
+    active.x += dx; active.y += dy; active.r = (active.r + drot + shapeAt(0).length) % active.rots.length;
+    updateActiveVisual();
+    return true;
+  }
+
+  function updateActiveVisual(){
+    const shape = shapeAt(0);
+    let i=0;
+    for (let r=0; r<shape.length; r++){
+      for (let c=0; c<shape[0].length; c++){
+        if (!shape[r][c]) continue;
+        const m = active.meshes[i++];
+        const gx = active.x + c;
+        const gy = active.y + r;
+        m.position.set(gx*CELL - boardW/2 + CELL/2,
+                       (ROWS-1 - gy)*CELL - boardH/2 + CELL/2,
+                       0);
+      }
+    }
+  }
+
+  function lockPiece(){
+    const shape = shapeAt(0);
+    let i=0;
+    for (let r=0; r<shape.length; r++){
+      for (let c=0; c<shape[0].length; c++){
+        if (!shape[r][c]) continue;
+        const gx = active.x + c;
+        const gy = active.y + r;
+        if (gy >= 0) {
+          board[gy][gx] = active.meshes[i]; // keep the mesh as a settled block
+        } else {
+          // Locked above top -> game over
+        }
+        i++;
+      }
+    }
+    active = null;
+    vibrate(10);
+    clearLines();
+  }
+
+  function clearLines(){
+    let cleared = 0;
+    for (let r=ROWS-1; r>=0; r--){
+      if (board[r].every(v => v)){
+        // remove meshes in this row
+        for (let c=0;c<COLS;c++){
+          playfield.remove(board[r][c]);
+          board[r][c].geometry.dispose();
+          board[r][c].material.dispose();
+        }
+        // move all above down
+        for (let rr=r; rr>0; rr--){
+          for (let c=0;c<COLS;c++){
+            board[rr][c] = board[rr-1][c];
+            if (board[rr][c]){
+              board[rr][c].position.y -= CELL;
+            }
+          }
+        }
+        // clear top row
+        for (let c=0;c<COLS;c++) board[0][c]=0;
+        r++; // recheck same row after shifting
+        cleared++;
+      }
+    }
+    if (cleared>0) vibrate(40);
+  }
+
+  function step(){
+    if (paused || !rig.visible) return;
+    if (!active) { spawnPiece(); return; }
+    if (!commitMove(0,1,0)){
+      lockPiece();
+      spawnPiece();
+    }
+  }
+
+  function hardDrop(){
+    if (!active) return;
+    let moved = 0;
+    while (commitMove(0,1,0)) moved++;
+    lockPiece(); spawnPiece();
+    if (moved>0) vibrate(20);
+  }
+
+  function gameOver(){
+    $hud.textContent = "Game over — tap Reset or Re-place.";
+    pause(true);
+  }
+
+  function pause(p=true){
+    paused = p;
+    $pause.textContent = paused ? "Resume" : "Pause";
+  }
+
+  function resetGame(){
+    // remove all meshes in board
+    for (let r=0;r<ROWS;r++){
+      for (let c=0;c<COLS;c++){
+        if (board[r][c]){
+          playfield.remove(board[r][c]);
+          board[r][c].geometry.dispose();
+          board[r][c].material.dispose();
+          board[r][c] = 0;
+        }
+      }
+    }
+    // remove active group
+    if (active){
+      playfield.remove(active.group);
+      active = null;
+    }
+    $hud.textContent = "Placed. Playing…";
+    pause(false);
+    spawnPiece();
+  }
+
+  // Controls
+  function bindHold(el, onTap){
+    let hold;
+    el.addEventListener('touchstart', e => { e.preventDefault(); onTap(); hold = setInterval(onTap, 150); }, {passive:false});
+    el.addEventListener('touchend',   () => clearInterval(hold));
+    el.addEventListener('click', e => { e.preventDefault(); onTap(); });
+  }
+  bindHold($left,  ()=> commitMove(-1,0,0));
+  bindHold($right, ()=> commitMove( 1,0,0));
+  bindHold($soft,  ()=> commitMove( 0,1,0));
+  $rotate.addEventListener('click', () => { if (commitMove(0,0,1)) vibrate(5); });
+  $hard.addEventListener('click', hardDrop);
+
+  $pause.addEventListener('click', ()=> pause(!paused));
+  $reset.addEventListener('click', resetGame);
+
+  // ===== AR session / hit-test / optional anchors =====
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ["hit-test", "dom-overlay"],
     optionalFeatures: ["anchors"],
@@ -148,27 +387,13 @@
   });
   document.body.appendChild(arButton);
 
-  // ===== Session / hit-test / anchors =====
-  let xrSession = null;
-  let viewerSpace = null;
-  let hitTestSource = null;
-  let hasAnchors = false;
-  let anchor = null;
-  let anchorSpace = null;
-
-  const $hud = document.getElementById('hud');
-  const $reposition = document.getElementById('reposition');
-  const $reset = document.getElementById('reset');
+  let xrSession=null, viewerSpace=null, hitTestSource=null, hasAnchors=false, anchor=null, anchorSpace=null;
 
   $reposition.addEventListener('click', () => {
     rig.visible = false;
     anchor = null; anchorSpace = null;
-    $hud.textContent = "Move phone to find a surface. Tap to place the foundation.";
-  });
-
-  $reset.addEventListener('click', () => {
-    // later this will clear pieces; now it just gives a tiny pulse to confirm
-    gridGroup.scale.set(1,1,1);
+    pause(true);
+    $hud.textContent = "Move phone to find a surface. Tap to place.";
   });
 
   renderer.xr.addEventListener("sessionstart", async () => {
@@ -187,12 +412,10 @@
       if (!reticle.visible) return;
       const refSpace = renderer.xr.getReferenceSpace();
 
-      // Decompose reticle matrix
       const m = new THREE.Matrix4().copy(reticle.matrix);
       const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scl = new THREE.Vector3();
       m.decompose(pos, quat, scl);
 
-      // Create anchor if supported
       if (hasAnchors && ev.frame.createAnchor) {
         try {
           const transform = new XRRigidTransform(
@@ -201,7 +424,7 @@
           );
           anchor = await ev.frame.createAnchor(transform, refSpace);
           anchorSpace = anchor.anchorSpace;
-          $hud.textContent = "Anchored. Re-place to move it.";
+          $hud.textContent = "Anchored. Playing…";
         } catch {
           anchor = null; anchorSpace = null;
           $hud.textContent = "Placed. (Anchors not granted.)";
@@ -210,13 +433,14 @@
         $hud.textContent = "Placed. (No anchors on this browser.)";
       }
 
-      // Align the rig to the plane pose so the foundation lies flush on it
+      // align rig to plane
       rig.position.copy(pos);
       rig.quaternion.copy(quat);
-      // Lift slightly so slab isn’t z-fighting the plane
       rig.position.y += 0.001;
-
       rig.visible = true;
+
+      // start game loop
+      resetGame();
     });
   });
 
@@ -224,10 +448,12 @@
     xrSession = null; hitTestSource = null; reticle.visible = false;
     anchor = null; anchorSpace = null;
     rig.visible = false;
+    pause(true);
     $hud.textContent = "AR session ended.";
   });
 
-  // Per-frame updates
+  // Per-frame updates (hit-test + anchor follow + game step clock)
+  let lastStep = 0;
   renderer.setAnimationLoop((time, frame) => {
     if (frame && hitTestSource) {
       const refSpace = renderer.xr.getReferenceSpace();
@@ -240,24 +466,27 @@
         } else {
           reticle.visible = false;
         }
-      } else {
-        // keep following anchor if we have one
-        if (anchorSpace) {
-          const anchorPose = frame.getPose(anchorSpace, refSpace);
-          if (anchorPose) {
-            const mat = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
-            const p = new THREE.Vector3(); const q = new THREE.Quaternion(); const s = new THREE.Vector3();
-            mat.decompose(p,q,s);
-            rig.position.copy(p);
-            rig.quaternion.copy(q);
-          }
+      } else if (anchorSpace) {
+        const anchorPose = frame.getPose(anchorSpace, refSpace);
+        if (anchorPose) {
+          const mat = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
+          const p = new THREE.Vector3(); const q = new THREE.Quaternion(); const s = new THREE.Vector3();
+          mat.decompose(p,q,s);
+          rig.position.copy(p);
+          rig.quaternion.copy(q);
         }
       }
     }
+
+    // soft game clock tied to XR time
+    if (!paused && rig.visible) {
+      if (time - lastStep > speedMs) { step(); lastStep = time; }
+    }
+
     renderer.render(scene, camera);
   });
 
-  // Resize handling
+  // Resize
   window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
