@@ -1,137 +1,245 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>AR Hit Test — Pixel 3 Check</title>
-  <style>
-    html, body { margin:0; height:100%; overflow:hidden; background:#000; }
-    #ui {
-      position: fixed; left: 0; right: 0; bottom: 0; padding: 12px;
-      display: flex; gap: 8px; justify-content: center; align-items: center;
-      font-family: system-ui, sans-serif; color: #fff; pointer-events: none;
-    }
-    .btn {
-      pointer-events: auto; border: 1px solid #888; background: rgba(0,0,0,.5);
-      padding: 8px 12px; border-radius: 10px; font-weight: 600;
-      backdrop-filter: blur(6px);
-    }
-    #msg {
-      position: fixed; top: 0; left: 0; right: 0; padding: 10px 12px;
-      color: #fff; text-align: center; font-family: system-ui, sans-serif;
-      background: linear-gradient(to bottom, rgba(0,0,0,.65), rgba(0,0,0,0));
-      pointer-events: none;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>AR Tetris — Board Lock POC (Pixel 3)</title>
+<style>
+  html, body { margin:0; height:100%; overflow:hidden; background:#000; }
+  #hud {
+    position: fixed; left: 0; right: 0; top: 0; padding: 10px 12px;
+    text-align: center; color: #fff; font-family: system-ui, sans-serif;
+    background: linear-gradient(to bottom, rgba(0,0,0,.65), rgba(0,0,0,0));
+    pointer-events: none;
+  }
+  #ui {
+    position: fixed; left: 0; right: 0; bottom: 0; padding: 12px;
+    display: flex; gap: 8px; justify-content: center; align-items: center;
+    pointer-events: none;
+  }
+  .btn {
+    pointer-events: auto; border: 1px solid #8af; color:#eaf;
+    background: rgba(20,20,40,.55); padding: 8px 12px; border-radius: 12px;
+    font-weight: 600; backdrop-filter: blur(8px);
+  }
+</style>
 </head>
 <body>
-  <div id="msg">Tap to place a cube. If you never see the ring, hit-testing isn’t available.</div>
+  <div id="hud">Move phone to find a surface (cyan ring). Tap to place the board.</div>
   <div id="ui">
+    <button id="reposition" class="btn">Re-place</button>
     <button id="reset" class="btn">Reset</button>
   </div>
 
-  <!-- Three.js + ARButton (ES modules) -->
-  <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
-    import { ARButton } from "https://unpkg.com/three@0.161.0/examples/jsm/webxr/ARButton.js";
+<script type="module">
+  // Three.js + helpers
+  import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
+  import { ARButton } from "https://unpkg.com/three@0.161.0/examples/jsm/webxr/ARButton.js";
 
-    // --- Renderer & scene ---
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
+  // --- Renderer / scene / camera ---
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.xr.enabled = true;
+  document.body.appendChild(renderer.domElement);
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
 
-    // Subtle lighting so placed objects have shape
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dir = new THREE.DirectionalLight(0xffffff, 0.8);
-    dir.position.set(1, 2, 1);
-    scene.add(dir);
+  // Lighting so the board has shape
+  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  dir.position.set(1, 2, 1);
+  scene.add(dir);
 
-    // Reticle (a flat ring that sits on detected surfaces)
-    const reticle = new THREE.Mesh(
-      new THREE.RingGeometry(0.06, 0.075, 32),
-      new THREE.MeshBasicMaterial({ color: 0x00ffcc })
-    );
-    reticle.rotation.x = -Math.PI / 2;
-    reticle.matrixAutoUpdate = false;
-    reticle.visible = false;
-    scene.add(reticle);
+  // --- Reticle for hit-test ---
+  const reticle = new THREE.Mesh(
+    new THREE.RingGeometry(0.06, 0.075, 32),
+    new THREE.MeshBasicMaterial({ color: 0x00ffcc })
+  );
+  reticle.rotation.x = -Math.PI / 2;
+  reticle.matrixAutoUpdate = false;
+  reticle.visible = false;
+  scene.add(reticle);
 
-    // AR button with required features
-    const arButton = ARButton.createButton(renderer, {
-      requiredFeatures: ["hit-test", "dom-overlay"],
-      domOverlay: { root: document.body }
-    });
-    document.body.appendChild(arButton);
+  // --- Simple Tetris board (10x20 grid on a thin plane) ---
+  const COLS = 10, ROWS = 20, CELL = 0.06; // cell size in meters
+  const boardW = COLS * CELL, boardH = ROWS * CELL;
 
-    // Keep track of session + hit test source
-    let xrSession = null;
-    let viewerSpace = null;
-    let hitTestSource = null;
+  const boardGroup = new THREE.Group(); // whole board container
+  boardGroup.visible = false;           // appears after placement
+  scene.add(boardGroup);
 
-    // Objects container so we can reset easily
-    const placed = new THREE.Group();
-    scene.add(placed);
+  // Board base
+  const base = new THREE.Mesh(
+    new THREE.PlaneGeometry(boardW, boardH),
+    new THREE.MeshStandardMaterial({ color: 0x0b1020, metalness: 0.1, roughness: 0.9, transparent:true, opacity:0.85 })
+  );
+  base.receiveShadow = false;
+  base.rotation.x = -Math.PI/2; // board is vertical by default; we’ll orient it later
+  boardGroup.add(base);
 
-    function makeCube() {
-      const size = 0.08 + Math.random() * 0.05;
-      const geo = new THREE.BoxGeometry(size, size, size);
-      const mat = new THREE.MeshStandardMaterial({ metalness: 0.1, roughness: 0.8, color: new THREE.Color().setHSL(Math.random(), 0.6, 0.5) });
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      return mesh;
+  // Grid lines
+  const grid = new THREE.Group();
+  const gridMat = new THREE.LineBasicMaterial({ color: 0x66ccff, transparent:true, opacity:0.6 });
+  // Outer rect
+  grid.add(new THREE.LineLoop(
+    new THREE.BufferGeometry().setFromPoints([
+      new THREE.Vector3(-boardW/2, 0, -boardH/2),
+      new THREE.Vector3( boardW/2, 0, -boardH/2),
+      new THREE.Vector3( boardW/2, 0,  boardH/2),
+      new THREE.Vector3(-boardW/2, 0,  boardH/2),
+    ]),
+    gridMat
+  ));
+  // Vertical lines
+  for (let c = 1; c < COLS; c++) {
+    const x = -boardW/2 + c*CELL;
+    grid.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(x, 0, -boardH/2),
+        new THREE.Vector3(x, 0,  boardH/2),
+      ]),
+      gridMat
+    ));
+  }
+  // Horizontal lines
+  for (let r = 1; r < ROWS; r++) {
+    const z = -boardH/2 + r*CELL;
+    grid.add(new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-boardW/2, 0, z),
+        new THREE.Vector3( boardW/2, 0, z),
+      ]),
+      gridMat
+    ));
+  }
+  // Tilt the grid upright so the board is vertical like classic Tetris
+  grid.rotation.x = -Math.PI/2;
+  boardGroup.add(grid);
+
+  // Decorative header (future scoreboard spot)
+  const header = new THREE.Mesh(
+    new THREE.PlaneGeometry(boardW, CELL * 2),
+    new THREE.MeshStandardMaterial({ color: 0x142440, emissive: 0x112255, roughness: 1 })
+  );
+  header.position.set(0, 0.001, -boardH/2 - CELL); // just above top edge in board space
+  header.rotation.x = -Math.PI/2;
+  boardGroup.add(header);
+
+  // A placeholder “piece” so we see scale in AR (we'll add gameplay later)
+  const pieceMat = new THREE.MeshStandardMaterial({ color: 0xff5aa5, metalness: 0.2, roughness: 0.7 });
+  const piece = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), pieceMat);
+  piece.position.set(0, 0.02, -boardH/2 + CELL/2); // near top-center
+  boardGroup.add(piece);
+
+  // --- AR button (request hit-test; anchors optional) ---
+  const arButton = ARButton.createButton(renderer, {
+    requiredFeatures: ["hit-test", "dom-overlay"],
+    optionalFeatures: ["anchors"],
+    domOverlay: { root: document.body }
+  });
+  document.body.appendChild(arButton);
+
+  // Session state
+  let xrSession = null;
+  let viewerSpace = null;
+  let hitTestSource = null;
+
+  // Anchor state (if supported)
+  let anchor = null;          // XRAnchor
+  let anchorSpace = null;     // XRSpace from anchor
+  let hasAnchors = false;
+
+  // Controls
+  const $hud = document.getElementById('hud');
+  const $reposition = document.getElementById('reposition');
+  const $reset = document.getElementById('reset');
+
+  $reposition.addEventListener('click', () => {
+    // Let user re-place: hide board, show reticle again
+    boardGroup.visible = false;
+    anchor = null; anchorSpace = null;
+    $hud.textContent = "Move phone to find a surface. Tap to place the board.";
+  });
+
+  $reset.addEventListener('click', () => {
+    // Later this will clear pieces; for now just remove the placeholder and add a fresh one
+    boardGroup.remove(piece);
+    piece.position.set(0, 0.02, -boardH/2 + CELL/2);
+    boardGroup.add(piece);
+  });
+
+  // Session start/stop
+  renderer.xr.addEventListener("sessionstart", async () => {
+    xrSession = renderer.xr.getSession();
+    $hud.textContent = "Scanning… look for the cyan ring. Tap to place the board.";
+    try {
+      hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors");
+    } catch { hasAnchors = false; }
+
+    try {
+      viewerSpace = await xrSession.requestReferenceSpace("viewer");
+      hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
+    } catch (e) {
+      $hud.textContent = "Hit-test not available on this device/browser.";
     }
 
-    // Enter/exit handlers
-    renderer.xr.addEventListener("sessionstart", async () => {
-      xrSession = renderer.xr.getSession();
-      document.getElementById('msg').textContent = "Move phone slowly; look for the cyan ring. Tap to place cubes.";
-      try {
-        viewerSpace = await xrSession.requestReferenceSpace("viewer");
-        const source = await xrSession.requestHitTestSource({ space: viewerSpace });
-        hitTestSource = source;
-      } catch (e) {
-        document.getElementById('msg').textContent = "Hit-test not available on this device/browser.";
+    xrSession.addEventListener("select", async (ev) => {
+      if (!reticle.visible) return;
+
+      // Compute pose at tap time
+      const refSpace = renderer.xr.getReferenceSpace();
+      const pose = new XRRigidTransform();
+      // reticle.matrix holds the transform in refSpace
+      const m = new THREE.Matrix4().copy(reticle.matrix);
+      const pos = new THREE.Vector3(); const quat = new THREE.Quaternion();
+      const scale = new THREE.Vector3();
+      m.decompose(pos, quat, scale);
+
+      // If anchors supported, create one so the board is truly locked to the world
+      if (hasAnchors && ev.frame.createAnchor) {
+        try {
+          const transform = new XRRigidTransform(
+            { x: pos.x, y: pos.y, z: pos.z },
+            { x: quat.x, y: quat.y, z: quat.z, w: quat.w }
+          );
+          anchor = await ev.frame.createAnchor(transform, refSpace);
+          anchorSpace = anchor.anchorSpace;
+          $hud.textContent = "Board anchored. Tap Re-place to move it.";
+        } catch {
+          anchor = null; anchorSpace = null;
+          $hud.textContent = "Anchors not granted. Board placed without anchor.";
+        }
+      } else {
+        $hud.textContent = "Board placed. (No anchors on this browser.)";
       }
 
-      xrSession.addEventListener("select", () => {
-        if (!reticle.visible) return;
-        const cube = makeCube();
-        cube.position.setFromMatrixPosition(reticle.matrix);
-        cube.quaternion.setFromRotationMatrix(reticle.matrix);
-        placed.add(cube);
-      });
+      // Position/orient the board now (works with or without anchor)
+      boardGroup.matrix.fromArray(reticle.matrix.elements);
+      boardGroup.matrix.decompose(boardGroup.position, boardGroup.quaternion, boardGroup.scale);
+      // Rotate so the board is vertical facing the user
+      // The reticle is on a horizontal plane; make the board face you by tipping it up.
+      boardGroup.rotateX(-Math.PI/2);
+      boardGroup.visible = true;
     });
+  });
 
-    renderer.xr.addEventListener("sessionend", () => {
-      xrSession = null;
-      hitTestSource = null;
-      reticle.visible = false;
-      document.getElementById('msg').textContent = "AR session ended.";
-    });
+  renderer.xr.addEventListener("sessionend", () => {
+    xrSession = null;
+    hitTestSource = null;
+    anchor = null; anchorSpace = null;
+    reticle.visible = false;
+    boardGroup.visible = false;
+    $hud.textContent = "AR session ended.";
+  });
 
-    // Reset button
-    document.getElementById('reset').addEventListener('click', () => {
-      while (placed.children.length) placed.remove(placed.children[0]);
-    });
-
-    // Resize
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    // Animation loop with hit-testing
-    renderer.setAnimationLoop((timestamp, frame) => {
-      if (frame && hitTestSource) {
-        const refSpace = renderer.xr.getReferenceSpace();
-        const results = frame.getHitTestResults(hitTestSource);
+  // Hit-test + anchor updates each frame
+  renderer.setAnimationLoop((time, frame) => {
+    if (frame && hitTestSource) {
+      const refSpace = renderer.xr.getReferenceSpace();
+      const results = frame.getHitTestResults(hitTestSource);
+      if (!boardGroup.visible) {
         if (results.length > 0) {
           const pose = results[0].getPose(refSpace);
           reticle.visible = true;
@@ -139,15 +247,42 @@
         } else {
           reticle.visible = false;
         }
+      } else {
+        reticle.visible = false;
       }
-      renderer.render(scene, camera);
-    });
 
-    // Basic capability check (helpful message if WebXR not supported)
-    if (!navigator.xr) {
-      document.getElementById('msg').textContent =
-        "This browser doesn’t expose WebXR. Use Chrome on Android with ARCore installed, over HTTPS.";
+      // If we created an anchor, keep syncing the board to it
+      if (anchorSpace) {
+        const anchorPose = frame.getPose(anchorSpace, refSpace);
+        if (anchorPose) {
+          boardGroup.matrix.fromArray(anchorPose.transform.matrix);
+          boardGroup.matrix.decompose(boardGroup.position, boardGroup.quaternion, boardGroup.scale);
+          // Ensure vertical orientation
+          // The anchor is on the plane; rotate board upright to face the user.
+          // Compute once and keep — minimal extra math:
+          // (We do a small offset so the board isn't z-fighting the plane.)
+          boardGroup.rotation.x -= Math.PI/2;
+          boardGroup.position.y += 0.001;
+          // Remove the extra rotation from subsequent frames
+          anchorSpace = null; // lock orientation once; position stays stable via anchor
+        }
+      }
     }
-  </script>
+    renderer.render(scene, camera);
+  });
+
+  // Resize
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // Capability message if WebXR missing
+  if (!navigator.xr) {
+    document.getElementById('hud').textContent =
+      "This browser doesn’t expose WebXR. Use Chrome on Android with ARCore installed, over HTTPS.";
+  }
+</script>
 </body>
 </html>
