@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AR Tetris — Play on 3D Grid (Pixel 3)</title>
+<title>AR Tetris — Pixel 3 (Hit-Test + Anchors + Glass Blocks)</title>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#000; }
   #hud {
@@ -28,7 +28,7 @@
 </style>
 </head>
 <body>
-  <div id="hud">Find a surface (cyan ring). Tap to place. Then play Tetris on the 3D grid.</div>
+  <div id="hud">Scan for a surface (cyan ring). Tap to place. Then play Tetris on your slab.</div>
 
   <div id="uiTop">
     <button id="reposition" class="btn wide">Re-place</button>
@@ -59,10 +59,12 @@
   const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
 
   // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
   dir.position.set(1, 2, 1);
   scene.add(dir);
+  const p1 = new THREE.PointLight(0x00ffff, 0.6, 5); p1.position.set(-1.2, 1.6, 0.6); scene.add(p1);
+  const p2 = new THREE.PointLight(0xff00ff, 0.6, 5); p2.position.set( 1.2, 1.4,-0.6); scene.add(p2);
 
   // ===== Reticle =====
   const reticle = new THREE.Mesh(
@@ -74,20 +76,20 @@
   reticle.visible = false;
   scene.add(reticle);
 
-  // ===== Board + Grid dimensions =====
+  // ===== Dimensions =====
   const COLS = 10, ROWS = 20, CELL = 0.06; // 6 cm cells
   const boardW = COLS * CELL, boardH = ROWS * CELL;
 
   const basePad = 0.02, baseW = boardW + basePad*2, baseD = 0.18, baseT = 0.02;
-  const barT = 0.006; // grid bar thickness
-  const blockDepth = CELL * 0.7; // how far blocks stick out toward player
+  const barT = 0.006;
+  const blockDepth = CELL * 0.7; // blocks pop off grid a bit
 
   // ===== Rig (placed object root) =====
-  const rig = new THREE.Group();
+  const rig = new THREE.Group(); // moves with anchor/reticle
   rig.visible = false;
   scene.add(rig);
 
-  // Foundation slab
+  // Foundation slab (solid)
   const foundation = new THREE.Mesh(
     new THREE.BoxGeometry(baseW, baseT, baseD),
     new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness:0.95, metalness:0.05 })
@@ -95,13 +97,12 @@
   foundation.position.y = baseT/2;
   rig.add(foundation);
 
-  // Grid frame upright on back edge
+  // 3D grid frame on back edge
   const gridGroup = new THREE.Group();
   gridGroup.position.set(0, baseT + barT/2, -baseD/2 + barT/2);
   rig.add(gridGroup);
 
   const gridMat = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
-  // rails
   const railL = new THREE.Mesh(new THREE.BoxGeometry(barT*2, boardH + barT*2, barT*2), gridMat);
   railL.position.set(-boardW/2 - barT, (boardH)/2, 0);
   const railR = railL.clone(); railR.position.x = boardW/2 + barT;
@@ -110,13 +111,11 @@
   const railT = railB.clone(); railT.position.y = boardH;
   gridGroup.add(railL, railR, railB, railT);
 
-  // internal bars
   const barGeoH = new THREE.BoxGeometry(boardW, barT, barT);
   const barGeoV = new THREE.BoxGeometry(barT, boardH, barT);
   const vInst = new THREE.InstancedMesh(barGeoV, gridMat, COLS-1);
   for (let c=1, i=0; c<COLS; c++, i++){
-    const x = -boardW/2 + c*CELL;
-    vInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(x, boardH/2, 0));
+    vInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(-boardW/2 + c*CELL, boardH/2, 0));
   }
   const hInst = new THREE.InstancedMesh(barGeoH, gridMat, ROWS-1);
   for (let r=1, i=0; r<ROWS; r++, i++){
@@ -124,21 +123,13 @@
   }
   gridGroup.add(vInst, hInst);
 
-  // Slight header bar
-  const header = new THREE.Mesh(
-    new THREE.BoxGeometry(boardW, barT*2, barT*2),
-    new THREE.MeshStandardMaterial({ color: 0x142c55, emissive: 0x0b1e44, roughness: 1 })
-  );
-  header.position.set(0, boardH + barT*1.5, 0);
-  gridGroup.add(header);
-
-  // ===== Playfield (blocks live slightly in front of the grid plane) =====
+  // Playfield (blocks live slightly forward from grid plane)
   const playfield = new THREE.Group();
   playfield.position.copy(gridGroup.position);
-  playfield.position.z += blockDepth/2 + barT; // pop blocks forward a bit
+  playfield.position.z += blockDepth/2 + barT;
   rig.add(playfield);
 
-  // Shadow-ish plate to ground blocks visually
+  // Soft shadow plate for grounding
   const shadow = new THREE.Mesh(
     new THREE.PlaneGeometry(boardW, boardH),
     new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.12 })
@@ -147,106 +138,95 @@
   shadow.position.set(0, 0.001, 0.0001);
   playfield.add(shadow);
 
-  // ===== Tetris logic =====
-  const board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
-  const colors = [0x00ffff,0x0000ff,0xffa500,0xffff00,0x00ff00,0x800080,0xff0000]; // I,J,L,O,S,T,Z
+  // ===== Fancy materials (glass/metal/crystal) =====
+  function matGlass(color){
+    return new THREE.MeshPhysicalMaterial({
+      color, transmission:0.8, roughness:0.1, metalness:0.0, clearcoat:1.0, clearcoatRoughness:0.1,
+      ior:1.5, transparent:true, opacity:0.8
+    });
+  }
+  function matMetal(color){
+    return new THREE.MeshStandardMaterial({ color, metalness:0.9, roughness:0.25, emissive:new THREE.Color(color).multiplyScalar(0.08) });
+  }
+  function matCrystal(color){
+    return new THREE.MeshPhysicalMaterial({
+      color, transmission:0.5, roughness:0.0, metalness:0.0, clearcoat:1.0, clearcoatRoughness:0.0,
+      ior:2.2, transparent:true, opacity:0.9, emissive:new THREE.Color(color).multiplyScalar(0.05)
+    });
+  }
+  function materialFor(color, kind){
+    if (kind==='glass') return matGlass(color);
+    if (kind==='metal') return matMetal(color);
+    if (kind==='crystal') return matCrystal(color);
+    return new THREE.MeshStandardMaterial({ color });
+  }
 
-  // Shapes with rotation states (matrix of 1s)
+  // ===== Audio (optional; safe if blocked) =====
+  const listener = new THREE.AudioListener(); camera.add(listener);
+  const audioLoader = new THREE.AudioLoader();
+  const lockSound = new THREE.Audio(listener);
+  const clearSound = new THREE.Audio(listener);
+  audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/laser.mp3', b=>{ lockSound.setBuffer(b); lockSound.setVolume(0.5); });
+  audioLoader.load('https://raw.githubusercontent.com/augmentedthinker/test/main/explosion.mp3', b=>{ clearSound.setBuffer(b); clearSound.setVolume(0.7); });
+
+  // ===== Tetris state =====
+  const colors = [0x00ffff,0x0000ff,0xffa500,0xffff00,0x00ff00,0x800080,0xff0000]; // I,J,L,O,S,T,Z
+  const styles = ['glass','glass','crystal','metal','crystal','glass','metal'];
   const SHAPES = {
-    I: [[[1,1,1,1]],
-        [[1],[1],[1],[1]]],
-    J: [[[1,0,0],[1,1,1]],
-        [[1,1],[1,0],[1,0]],
-        [[1,1,1],[0,0,1]],
-        [[0,1],[0,1],[1,1]]],
-    L: [[[0,0,1],[1,1,1]],
-        [[1,0],[1,0],[1,1]],
-        [[1,1,1],[1,0,0]],
-        [[1,1],[0,1],[0,1]]],
+    I: [[[1,1,1,1]], [[1],[1],[1],[1]]],
+    J: [[[1,0,0],[1,1,1]], [[1,1],[1,0],[1,0]], [[1,1,1],[0,0,1]], [[0,1],[0,1],[1,1]]],
+    L: [[[0,0,1],[1,1,1]], [[1,0],[1,0],[1,1]], [[1,1,1],[1,0,0]], [[1,1],[0,1],[0,1]]],
     O: [[[1,1],[1,1]]],
-    S: [[[0,1,1],[1,1,0]],
-        [[1,0],[1,1],[0,1]]],
-    T: [[[0,1,0],[1,1,1]],
-        [[1,0],[1,1],[1,0]],
-        [[1,1,1],[0,1,0]],
-        [[0,1],[1,1],[0,1]]],
-    Z: [[[1,1,0],[0,1,1]],
-        [[0,1],[1,1],[1,0]]],
+    S: [[[0,1,1],[1,1,0]], [[1,0],[1,1],[0,1]]],
+    T: [[[0,1,0],[1,1,1]], [[1,0],[1,1],[1,0]], [[1,1,1],[0,1,0]], [[0,1],[1,1],[0,1]]],
+    Z: [[[1,1,0],[0,1,1]], [[0,1],[1,1],[1,0]]],
   };
   const KEYS = Object.keys(SHAPES);
 
-  // 3D block template
+  const board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
   const blockGeo = new THREE.BoxGeometry(CELL, CELL, blockDepth);
-  function blockMat(hex) { return new THREE.MeshStandardMaterial({ color: hex, metalness:0.2, roughness:0.7 }); }
 
-  // Active piece object
   let active = null;
-  let gameTimer = null;
-  let speedMs = 700;
   let paused = false;
+  let speedMs = 700;
+  let lastStep = 0;
 
-  const $hud = document.getElementById('hud');
-  const $reposition = document.getElementById('reposition');
-  const $reset = document.getElementById('reset');
-  const $pause = document.getElementById('pause');
-
-  const $left = document.getElementById('left');
-  const $right = document.getElementById('right');
-  const $rotate = document.getElementById('rotate');
-  const $soft = document.getElementById('soft');
-  const $hard = document.getElementById('hard');
+  // Score UI (simple, HUD text)
+  let score=0, level=1, lines=0;
+  function setHud(text){ document.getElementById('hud').textContent = text; }
+  function updateHud(){ setHud(`Score ${score} · Level ${level} · Lines ${lines} — Re-place to move board`); }
 
   function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
 
-  function spawnPiece() {
+  function spawnPiece(){
     const key = KEYS[(Math.random()*KEYS.length)|0];
     const rots = SHAPES[key];
-    const color = colors[KEYS.indexOf(key)];
-    active = {
-      key, rots, r:0, x: (COLS>>1)-2, y: -2, // y < 0 = above top
-      meshes: []
-    };
-    // build meshes for visual
+    const idx = KEYS.indexOf(key);
+    const color = colors[idx];
+    const style = styles[idx];
+    active = { key, rots, r:0, x:(COLS>>1)-2, y:-2, meshes:[], style, color };
     active.group = new THREE.Group();
-    const shape = rots[0];
+    playfield.add(active.group);
+    buildActiveVisual();
+    if (!validMove(0,0,0)) gameOver();
+  }
+  function shapeAt(dr){ return active.rots[(active.r + dr + active.rots.length)%active.rots.length]; }
+
+  function buildActiveVisual(){
+    // clear previous
+    while(active.group.children.length) active.group.remove(active.group.children[0]);
+    active.meshes = [];
+    const shape = shapeAt(0);
+    const mat = materialFor(active.color, active.style);
     for (let r=0; r<shape.length; r++){
       for (let c=0; c<shape[0].length; c++){
         if (!shape[r][c]) continue;
-        const m = new THREE.Mesh(blockGeo, blockMat(color));
-        m.position.set((c+active.x)*CELL - boardW/2 + CELL/2,
-                       (ROWS-1 - (r+active.y))*CELL - boardH/2 + CELL/2,
-                       0);
+        const m = new THREE.Mesh(blockGeo, mat);
         active.group.add(m);
         active.meshes.push(m);
       }
     }
-    playfield.add(active.group);
-    updateActiveVisual(); // ensure alignment
-    if (!validMove(0,0,0)) { gameOver(); }
-  }
-
-  function shapeAt(rot){ return active.rots[(active.r + rot + active.rots.length)%active.rots.length]; }
-
-  function validMove(dx, dy, drot){
-    const shape = shapeAt(drot);
-    for (let r=0; r<shape.length; r++){
-      for (let c=0; c<shape[0].length; c++){
-        if (!shape[r][c]) continue;
-        const nx = active.x + dx + c;
-        const ny = active.y + dy + r;
-        if (nx < 0 || nx >= COLS) return false;
-        if (ny >= ROWS) return false;
-        if (ny >= 0 && board[ny][nx]) return false;
-      }
-    }
-    return true;
-  }
-
-  function commitMove(dx, dy, drot){
-    if (!validMove(dx,dy,drot)) return false;
-    active.x += dx; active.y += dy; active.r = (active.r + drot + shapeAt(0).length) % active.rots.length;
     updateActiveVisual();
-    return true;
   }
 
   function updateActiveVisual(){
@@ -255,131 +235,176 @@
     for (let r=0; r<shape.length; r++){
       for (let c=0; c<shape[0].length; c++){
         if (!shape[r][c]) continue;
-        const m = active.meshes[i++];
         const gx = active.x + c;
         const gy = active.y + r;
-        m.position.set(gx*CELL - boardW/2 + CELL/2,
-                       (ROWS-1 - gy)*CELL - boardH/2 + CELL/2,
-                       0);
+        const m = active.meshes[i++];
+        m.position.set(
+          gx*CELL - boardW/2 + CELL/2,
+          (ROWS-1 - gy)*CELL - boardH/2 + CELL/2,
+          0
+        );
       }
     }
   }
 
+  function validMove(dx,dy,dr){
+    const s = shapeAt(dr);
+    for (let r=0;r<s.length;r++){
+      for (let c=0;c<s[0].length;c++){
+        if (!s[r][c]) continue;
+        const nx = active.x + dx + c;
+        const ny = active.y + dy + r;
+        if (nx<0 || nx>=COLS) return false;
+        if (ny>=ROWS) return false;
+        if (ny>=0 && board[ny][nx]) return false;
+      }
+    }
+    return true;
+  }
+  function commit(dx,dy,dr){
+    if (!validMove(dx,dy,dr)) return false;
+    active.x += dx; active.y += dy; active.r = (active.r + dr + active.rots.length)%active.rots.length;
+    buildActiveVisual();
+    return true;
+  }
+
   function lockPiece(){
-    const shape = shapeAt(0);
+    const s = shapeAt(0);
     let i=0;
-    for (let r=0; r<shape.length; r++){
-      for (let c=0; c<shape[0].length; c++){
-        if (!shape[r][c]) continue;
+    for (let r=0;r<s.length;r++){
+      for (let c=0;c<s[0].length;c++){
+        if (!s[r][c]) continue;
         const gx = active.x + c;
         const gy = active.y + r;
-        if (gy >= 0) {
-          board[gy][gx] = active.meshes[i]; // keep the mesh as a settled block
-        } else {
-          // Locked above top -> game over
+        if (gy>=0){
+          const mat = materialFor(active.color, active.style);
+          const settled = new THREE.Mesh(blockGeo, mat);
+          settled.position.set(
+            gx*CELL - boardW/2 + CELL/2,
+            (ROWS-1 - gy)*CELL - boardH/2 + CELL/2,
+            0
+          );
+          playfield.add(settled);
+          board[gy][gx] = settled;
         }
         i++;
       }
     }
+    playfield.remove(active.group);
     active = null;
+    if (lockSound && lockSound.buffer && !lockSound.isPlaying) lockSound.play();
     vibrate(10);
     clearLines();
   }
 
   function clearLines(){
-    let cleared = 0;
+    let cleared=0;
     for (let r=ROWS-1; r>=0; r--){
-      if (board[r].every(v => v)){
-        // remove meshes in this row
+      if (board[r].every(Boolean)){
+        // particle pops along the row
         for (let c=0;c<COLS;c++){
-          playfield.remove(board[r][c]);
-          board[r][c].geometry.dispose();
-          board[r][c].material.dispose();
+          const m = board[r][c];
+          if (m){ particleExplosion(m.getWorldPosition(new THREE.Vector3()), m.material.color.getHex()); playfield.remove(m); m.geometry.dispose(); m.material.dispose(); }
         }
-        // move all above down
+        // shift down
         for (let rr=r; rr>0; rr--){
           for (let c=0;c<COLS;c++){
             board[rr][c] = board[rr-1][c];
-            if (board[rr][c]){
-              board[rr][c].position.y -= CELL;
-            }
+            if (board[rr][c]) board[rr][c].position.y -= CELL;
           }
         }
-        // clear top row
         for (let c=0;c<COLS;c++) board[0][c]=0;
-        r++; // recheck same row after shifting
-        cleared++;
+        r++; cleared++;
       }
     }
-    if (cleared>0) vibrate(40);
+    if (cleared){
+      lines += cleared;
+      score += [0,40,100,300,1200][cleared] * level;
+      level = Math.floor(lines/10)+1;
+      speedMs = Math.max(90, 700 - (level-1)*60);
+      if (clearSound && clearSound.buffer && !clearSound.isPlaying) clearSound.play();
+      vibrate(40);
+      updateHud();
+    }
   }
 
   function step(){
     if (paused || !rig.visible) return;
-    if (!active) { spawnPiece(); return; }
-    if (!commitMove(0,1,0)){
-      lockPiece();
-      spawnPiece();
-    }
+    if (!active){ spawnPiece(); return; }
+    if (!commit(0,1,0)){ lockPiece(); spawnPiece(); }
   }
-
   function hardDrop(){
     if (!active) return;
-    let moved = 0;
-    while (commitMove(0,1,0)) moved++;
-    lockPiece(); spawnPiece();
-    if (moved>0) vibrate(20);
+    let moved=0;
+    while (commit(0,1,0)) moved++;
+    score += moved*2;
+    lockPiece(); spawnPiece(); updateHud();
   }
+  function gameOver(){ setHud("Game over — tap Reset or Re-place."); paused=true; }
 
-  function gameOver(){
-    $hud.textContent = "Game over — tap Reset or Re-place.";
-    pause(true);
-  }
-
-  function pause(p=true){
-    paused = p;
-    $pause.textContent = paused ? "Resume" : "Pause";
-  }
-
-  function resetGame(){
-    // remove all meshes in board
-    for (let r=0;r<ROWS;r++){
-      for (let c=0;c<COLS;c++){
-        if (board[r][c]){
-          playfield.remove(board[r][c]);
-          board[r][c].geometry.dispose();
-          board[r][c].material.dispose();
-          board[r][c] = 0;
-        }
-      }
+  // ===== Simple 3D particles =====
+  const particles = new THREE.Group(); playfield.add(particles);
+  function particleExplosion(worldPos, color){
+    for (let i=0;i<18;i++){
+      const g = new THREE.SphereGeometry(0.01, 6, 6);
+      const m = new THREE.MeshBasicMaterial({ color, transparent:true, opacity:1 });
+      const p = new THREE.Mesh(g,m);
+      p.position.copy(worldPos.clone().sub(rig.position)); // convert to rig-local roughly
+      p.userData = { v: new THREE.Vector3((Math.random()-0.5)*0.06, (Math.random())*0.08, (Math.random()-0.5)*0.06), life:1, decay:0.03+Math.random()*0.02 };
+      particles.add(p);
     }
-    // remove active group
-    if (active){
-      playfield.remove(active.group);
-      active = null;
+  }
+  function updateParticles(){
+    for (let i=particles.children.length-1; i>=0; i--){
+      const p = particles.children[i];
+      p.position.add(p.userData.v);
+      p.userData.v.y -= 0.004;
+      p.userData.life -= p.userData.decay;
+      p.material.opacity = Math.max(0, p.userData.life);
+      if (p.userData.life<=0){ particles.remove(p); p.geometry.dispose(); p.material.dispose(); }
     }
-    $hud.textContent = "Placed. Playing…";
-    pause(false);
-    spawnPiece();
   }
 
-  // Controls
-  function bindHold(el, onTap){
-    let hold;
-    el.addEventListener('touchstart', e => { e.preventDefault(); onTap(); hold = setInterval(onTap, 150); }, {passive:false});
-    el.addEventListener('touchend',   () => clearInterval(hold));
-    el.addEventListener('click', e => { e.preventDefault(); onTap(); });
+  // ===== Controls =====
+  const $hudEl = document.getElementById('hud');
+  const $reposition = document.getElementById('reposition');
+  const $reset = document.getElementById('reset');
+  const $pause = document.getElementById('pause');
+  const $left = document.getElementById('left');
+  const $right = document.getElementById('right');
+  const $rotate = document.getElementById('rotate');
+  const $soft = document.getElementById('soft');
+  const $hard = document.getElementById('hard');
+
+  function bindHold(el, fn){
+    let t=null; el.addEventListener('touchstart', e=>{ e.preventDefault(); fn(); t=setInterval(fn,150); }, {passive:false});
+    el.addEventListener('touchend', ()=> clearInterval(t));
+    el.addEventListener('click', e=>{ e.preventDefault(); fn(); });
   }
-  bindHold($left,  ()=> commitMove(-1,0,0));
-  bindHold($right, ()=> commitMove( 1,0,0));
-  bindHold($soft,  ()=> commitMove( 0,1,0));
-  $rotate.addEventListener('click', () => { if (commitMove(0,0,1)) vibrate(5); });
+  bindHold($left, ()=> commit(-1,0,0));
+  bindHold($right, ()=> commit( 1,0,0));
+  bindHold($soft, ()=> commit( 0,1,0));
+  $rotate.addEventListener('click', ()=> { if (commit(0,0,1)) vibrate(5); else {
+    // simple wall-kick attempts
+    if (commit(-1,0,1) || commit(1,0,1)) vibrate(5);
+  }});
   $hard.addEventListener('click', hardDrop);
 
-  $pause.addEventListener('click', ()=> pause(!paused));
-  $reset.addEventListener('click', resetGame);
+  $pause.addEventListener('click', ()=> { paused=!paused; $pause.textContent = paused? "Resume":"Pause"; });
 
-  // ===== AR session / hit-test / optional anchors =====
+  $reset.addEventListener('click', ()=>{
+    // clear board + pieces
+    for (let r=0;r<ROWS;r++){ for (let c=0;c<COLS;c++){ if (board[r][c]){ playfield.remove(board[r][c]); board[r][c].geometry.dispose(); board[r][c].material.dispose(); board[r][c]=0; } } }
+    if (active){ playfield.remove(active.group); active=null; }
+    score=0; level=1; lines=0; speedMs=700; paused=false; updateHud(); spawnPiece();
+  });
+
+  $reposition.addEventListener('click', ()=>{
+    rig.visible=false; anchor=null; anchorSpace=null; paused=true;
+    setHud("Move phone to find a surface. Tap to place.");
+  });
+
+  // ===== WebXR session with hit-test + optional anchors =====
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ["hit-test", "dom-overlay"],
     optionalFeatures: ["anchors"],
@@ -389,113 +414,87 @@
 
   let xrSession=null, viewerSpace=null, hitTestSource=null, hasAnchors=false, anchor=null, anchorSpace=null;
 
-  $reposition.addEventListener('click', () => {
-    rig.visible = false;
-    anchor = null; anchorSpace = null;
-    pause(true);
-    $hud.textContent = "Move phone to find a surface. Tap to place.";
-  });
-
-  renderer.xr.addEventListener("sessionstart", async () => {
+  renderer.xr.addEventListener("sessionstart", async ()=>{
     xrSession = renderer.xr.getSession();
-    $hud.textContent = "Scanning… look for the cyan ring. Tap to place.";
-    try { hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors"); }
-    catch { hasAnchors = false; }
+    setHud("Scanning… look for the cyan ring. Tap to place.");
+    try { hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors"); } catch { hasAnchors=false; }
     try {
       viewerSpace = await xrSession.requestReferenceSpace("viewer");
       hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
-    } catch {
-      $hud.textContent = "Hit-test not available here.";
-    }
+    } catch { setHud("Hit-test not available here."); }
 
-    xrSession.addEventListener("select", async (ev) => {
+    xrSession.addEventListener("select", async (ev)=>{
       if (!reticle.visible) return;
       const refSpace = renderer.xr.getReferenceSpace();
-
       const m = new THREE.Matrix4().copy(reticle.matrix);
       const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scl = new THREE.Vector3();
       m.decompose(pos, quat, scl);
 
-      if (hasAnchors && ev.frame.createAnchor) {
-        try {
-          const transform = new XRRigidTransform(
-            { x: pos.x, y: pos.y, z: pos.z },
-            { x: quat.x, y: quat.y, z: quat.z, w: quat.w }
-          );
-          anchor = await ev.frame.createAnchor(transform, refSpace);
+      if (hasAnchors && ev.frame.createAnchor){
+        try{
+          const tr = new XRRigidTransform({x:pos.x,y:pos.y,z:pos.z},{x:quat.x,y:quat.y,z:quat.z,w:quat.w});
+          anchor = await ev.frame.createAnchor(tr, refSpace);
           anchorSpace = anchor.anchorSpace;
-          $hud.textContent = "Anchored. Playing…";
-        } catch {
-          anchor = null; anchorSpace = null;
-          $hud.textContent = "Placed. (Anchors not granted.)";
-        }
+          setHud("Anchored. Playing…");
+        }catch{ anchor=null; anchorSpace=null; setHud("Placed. (Anchors not granted.)"); }
       } else {
-        $hud.textContent = "Placed. (No anchors on this browser.)";
+        setHud("Placed. (No anchors on this browser.)");
       }
 
-      // align rig to plane
       rig.position.copy(pos);
       rig.quaternion.copy(quat);
       rig.position.y += 0.001;
       rig.visible = true;
 
-      // start game loop
-      resetGame();
+      // start or resume game
+      paused=false; updateHud(); if (!active) spawnPiece();
     });
   });
 
-  renderer.xr.addEventListener("sessionend", () => {
-    xrSession = null; hitTestSource = null; reticle.visible = false;
-    anchor = null; anchorSpace = null;
-    rig.visible = false;
-    pause(true);
-    $hud.textContent = "AR session ended.";
+  renderer.xr.addEventListener("sessionend", ()=>{
+    xrSession=null; hitTestSource=null; reticle.visible=false; rig.visible=false; paused=true;
+    anchor=null; anchorSpace=null; setHud("AR session ended.");
   });
 
-  // Per-frame updates (hit-test + anchor follow + game step clock)
-  let lastStep = 0;
-  renderer.setAnimationLoop((time, frame) => {
-    if (frame && hitTestSource) {
+  // Animation loop: hit-test, anchor follow, game step, particles
+  renderer.setAnimationLoop((time, frame)=>{
+    if (frame && hitTestSource){
       const refSpace = renderer.xr.getReferenceSpace();
       const results = frame.getHitTestResults(hitTestSource);
-      if (!rig.visible) {
-        if (results.length > 0) {
+      if (!rig.visible){
+        if (results.length>0){
           const pose = results[0].getPose(refSpace);
           reticle.visible = true;
           reticle.matrix.fromArray(pose.transform.matrix);
-        } else {
-          reticle.visible = false;
-        }
-      } else if (anchorSpace) {
-        const anchorPose = frame.getPose(anchorSpace, refSpace);
-        if (anchorPose) {
-          const mat = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
-          const p = new THREE.Vector3(); const q = new THREE.Quaternion(); const s = new THREE.Vector3();
+        } else reticle.visible=false;
+      } else if (anchorSpace){
+        const ap = frame.getPose(anchorSpace, refSpace);
+        if (ap){
+          const mat = new THREE.Matrix4().fromArray(ap.transform.matrix);
+          const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
           mat.decompose(p,q,s);
-          rig.position.copy(p);
-          rig.quaternion.copy(q);
+          rig.position.copy(p); rig.quaternion.copy(q);
         }
       }
     }
 
-    // soft game clock tied to XR time
-    if (!paused && rig.visible) {
-      if (time - lastStep > speedMs) { step(); lastStep = time; }
+    if (!paused && rig.visible){
+      if (time - lastStep > speedMs){ step(); lastStep = time; }
     }
 
+    updateParticles();
     renderer.render(scene, camera);
   });
 
   // Resize
-  window.addEventListener('resize', () => {
+  window.addEventListener('resize', ()=>{
     camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  if (!navigator.xr) {
-    document.getElementById('hud').textContent =
-      "WebXR not exposed. Use Chrome on Android with ARCore over HTTPS.";
+  if (!navigator.xr){
+    setHud("WebXR not exposed. Use Chrome on Android with ARCore over HTTPS.");
   }
 </script>
 </body>
