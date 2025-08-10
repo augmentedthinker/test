@@ -3,137 +3,144 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AR Tetris — Board Lock POC (Pixel 3)</title>
+<title>AR Tetris — Foundation + 3D Grid (Pixel 3)</title>
 <style>
   html, body { margin:0; height:100%; overflow:hidden; background:#000; }
   #hud {
-    position: fixed; left: 0; right: 0; top: 0; padding: 10px 12px;
-    text-align: center; color: #fff; font-family: system-ui, sans-serif;
-    background: linear-gradient(to bottom, rgba(0,0,0,.65), rgba(0,0,0,0));
+    position: fixed; left:0; right:0; top:0; padding:10px 12px;
+    text-align:center; color:#fff; font-family: system-ui, sans-serif;
+    background: linear-gradient(to bottom, rgba(0,0,0,.6), rgba(0,0,0,0));
     pointer-events: none;
   }
   #ui {
-    position: fixed; left: 0; right: 0; bottom: 0; padding: 12px;
-    display: flex; gap: 8px; justify-content: center; align-items: center;
-    pointer-events: none;
+    position: fixed; left:0; right:0; bottom:0; padding:12px;
+    display:flex; gap:8px; justify-content:center; pointer-events:none;
   }
   .btn {
-    pointer-events: auto; border: 1px solid #8af; color:#eaf;
-    background: rgba(20,20,40,.55); padding: 8px 12px; border-radius: 12px;
-    font-weight: 600; backdrop-filter: blur(8px);
+    pointer-events:auto; border:1px solid #8af; color:#eaf;
+    background: rgba(15,20,40,.55); padding:8px 12px; border-radius:12px; font-weight:600;
+    backdrop-filter: blur(8px);
   }
 </style>
 </head>
 <body>
-  <div id="hud">Move phone to find a surface (cyan ring). Tap to place the board.</div>
+  <div id="hud">Find a surface (cyan ring). Tap to place the <b>foundation + 3D grid</b>.</div>
   <div id="ui">
     <button id="reposition" class="btn">Re-place</button>
     <button id="reset" class="btn">Reset</button>
   </div>
 
 <script type="module">
-  // Three.js + helpers
   import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
   import { ARButton } from "https://unpkg.com/three@0.161.0/examples/jsm/webxr/ARButton.js";
 
-  // --- Renderer / scene / camera ---
-  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+  // ===== Renderer / scene / camera =====
+  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+  renderer.xr.enabled = true;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+  const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
 
-  // Lighting so the board has shape
+  // Lights
   scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+  const dir = new THREE.DirectionalLight(0xffffff, 0.85);
   dir.position.set(1, 2, 1);
   scene.add(dir);
 
-  // --- Reticle for hit-test ---
+  // ===== Reticle =====
   const reticle = new THREE.Mesh(
     new THREE.RingGeometry(0.06, 0.075, 32),
     new THREE.MeshBasicMaterial({ color: 0x00ffcc })
   );
-  reticle.rotation.x = -Math.PI / 2;
+  reticle.rotation.x = -Math.PI/2;
   reticle.matrixAutoUpdate = false;
   reticle.visible = false;
   scene.add(reticle);
 
-  // --- Simple Tetris board (10x20 grid on a thin plane) ---
-  const COLS = 10, ROWS = 20, CELL = 0.06; // cell size in meters
-  const boardW = COLS * CELL, boardH = ROWS * CELL;
+  // ===== Parameters for board =====
+  const COLS = 10, ROWS = 20, CELL = 0.06;     // 6 cm cells
+  const boardW = COLS * CELL;                  // width in meters
+  const boardH = ROWS * CELL;                  // height in meters
 
-  const boardGroup = new THREE.Group(); // whole board container
-  boardGroup.visible = false;           // appears after placement
-  scene.add(boardGroup);
+  const basePad = 0.02;                        // border around grid
+  const baseW = boardW + basePad*2;            // foundation width
+  const baseD = 0.18;                          // foundation depth front-to-back
+  const baseT = 0.02;                          // foundation thickness
 
-  // Board base
-  const base = new THREE.Mesh(
-    new THREE.PlaneGeometry(boardW, boardH),
-    new THREE.MeshStandardMaterial({ color: 0x0b1020, metalness: 0.1, roughness: 0.9, transparent:true, opacity:0.85 })
+  const barT = 0.006;                          // thickness of grid bars
+
+  // ===== Group that holds the whole placed object =====
+  const rig = new THREE.Group();   // follows reticle/anchor
+  rig.visible = false;
+  scene.add(rig);
+
+  // --- FOUNDATION (solid slab) ---
+  const foundation = new THREE.Mesh(
+    new THREE.BoxGeometry(baseW, baseT, baseD),
+    new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness:0.95, metalness:0.05 })
   );
-  base.receiveShadow = false;
-  base.rotation.x = -Math.PI/2; // board is vertical by default; we’ll orient it later
-  boardGroup.add(base);
+  // sit the foundation on the plane (local Y-up)
+  foundation.position.y = baseT/2;
+  rig.add(foundation);
 
-  // Grid lines
-  const grid = new THREE.Group();
-  const gridMat = new THREE.LineBasicMaterial({ color: 0x66ccff, transparent:true, opacity:0.6 });
-  // Outer rect
-  grid.add(new THREE.LineLoop(
-    new THREE.BufferGeometry().setFromPoints([
-      new THREE.Vector3(-boardW/2, 0, -boardH/2),
-      new THREE.Vector3( boardW/2, 0, -boardH/2),
-      new THREE.Vector3( boardW/2, 0,  boardH/2),
-      new THREE.Vector3(-boardW/2, 0,  boardH/2),
-    ]),
-    gridMat
-  ));
-  // Vertical lines
+  // --- 3D GRID rising from back edge of foundation ---
+  const gridGroup = new THREE.Group();
+  // Place grid flush with the back edge of the foundation and just above it
+  gridGroup.position.set(0, baseT + barT/2, -baseD/2 + barT/2); // back edge in -Z
+  rig.add(gridGroup);
+
+  // Build grid frame using instanced thin boxes (performant)
+  // The grid plane is X (width) by Y (height), very thin in Z.
+  const gridMaterial = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
+  const barGeoH = new THREE.BoxGeometry(boardW, barT, barT); // horizontal bars (along X)
+  const barGeoV = new THREE.BoxGeometry(barT, boardH, barT); // vertical bars (along Y)
+
+  // Vertical edge rails
+  const railL = new THREE.Mesh(new THREE.BoxGeometry(barT*2, boardH + barT*2, barT*2), gridMaterial);
+  railL.position.set(-boardW/2 - barT, (boardH)/2, 0);
+  const railR = railL.clone(); railR.position.x = boardW/2 + barT;
+  gridGroup.add(railL, railR);
+
+  // Bottom & top rails
+  const railB = new THREE.Mesh(new THREE.BoxGeometry(boardW + barT*2, barT*2, barT*2), gridMaterial);
+  railB.position.set(0, 0, 0);
+  const railT = railB.clone(); railT.position.y = boardH;
+  gridGroup.add(railB, railT);
+
+  // Vertical internal bars (COLS-1)
+  const vCount = COLS - 1;
+  const vInst = new THREE.InstancedMesh(barGeoV, gridMaterial, vCount);
+  let i = 0;
   for (let c = 1; c < COLS; c++) {
     const x = -boardW/2 + c*CELL;
-    grid.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(x, 0, -boardH/2),
-        new THREE.Vector3(x, 0,  boardH/2),
-      ]),
-      gridMat
-    ));
+    const m = new THREE.Matrix4().makeTranslation(x, boardH/2, 0);
+    vInst.setMatrixAt(i++, m);
   }
-  // Horizontal lines
+  gridGroup.add(vInst);
+
+  // Horizontal internal bars (ROWS-1)
+  const hCount = ROWS - 1;
+  const hInst = new THREE.InstancedMesh(barGeoH, gridMaterial, hCount);
+  i = 0;
   for (let r = 1; r < ROWS; r++) {
-    const z = -boardH/2 + r*CELL;
-    grid.add(new THREE.Line(
-      new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-boardW/2, 0, z),
-        new THREE.Vector3( boardW/2, 0, z),
-      ]),
-      gridMat
-    ));
+    const y = r*CELL;
+    const m = new THREE.Matrix4().makeTranslation(0, y, 0);
+    hInst.setMatrixAt(i++, m);
   }
-  // Tilt the grid upright so the board is vertical like classic Tetris
-  grid.rotation.x = -Math.PI/2;
-  boardGroup.add(grid);
+  gridGroup.add(hInst);
 
-  // Decorative header (future scoreboard spot)
+  // Slight glow header panel for future scoreboard
   const header = new THREE.Mesh(
-    new THREE.PlaneGeometry(boardW, CELL * 2),
-    new THREE.MeshStandardMaterial({ color: 0x142440, emissive: 0x112255, roughness: 1 })
+    new THREE.BoxGeometry(boardW, barT*2, barT*2),
+    new THREE.MeshStandardMaterial({ color: 0x142c55, emissive: 0x0b1e44, roughness: 1 })
   );
-  header.position.set(0, 0.001, -boardH/2 - CELL); // just above top edge in board space
-  header.rotation.x = -Math.PI/2;
-  boardGroup.add(header);
+  header.position.set(0, boardH + barT*1.5, 0);
+  gridGroup.add(header);
 
-  // A placeholder “piece” so we see scale in AR (we'll add gameplay later)
-  const pieceMat = new THREE.MeshStandardMaterial({ color: 0xff5aa5, metalness: 0.2, roughness: 0.7 });
-  const piece = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), pieceMat);
-  piece.position.set(0, 0.02, -boardH/2 + CELL/2); // near top-center
-  boardGroup.add(piece);
-
-  // --- AR button (request hit-test; anchors optional) ---
+  // ===== AR button (hit-test required; anchors optional) =====
   const arButton = ARButton.createButton(renderer, {
     requiredFeatures: ["hit-test", "dom-overlay"],
     optionalFeatures: ["anchors"],
@@ -141,63 +148,51 @@
   });
   document.body.appendChild(arButton);
 
-  // Session state
+  // ===== Session / hit-test / anchors =====
   let xrSession = null;
   let viewerSpace = null;
   let hitTestSource = null;
-
-  // Anchor state (if supported)
-  let anchor = null;          // XRAnchor
-  let anchorSpace = null;     // XRSpace from anchor
   let hasAnchors = false;
+  let anchor = null;
+  let anchorSpace = null;
 
-  // Controls
   const $hud = document.getElementById('hud');
   const $reposition = document.getElementById('reposition');
   const $reset = document.getElementById('reset');
 
   $reposition.addEventListener('click', () => {
-    // Let user re-place: hide board, show reticle again
-    boardGroup.visible = false;
+    rig.visible = false;
     anchor = null; anchorSpace = null;
-    $hud.textContent = "Move phone to find a surface. Tap to place the board.";
+    $hud.textContent = "Move phone to find a surface. Tap to place the foundation.";
   });
 
   $reset.addEventListener('click', () => {
-    // Later this will clear pieces; for now just remove the placeholder and add a fresh one
-    boardGroup.remove(piece);
-    piece.position.set(0, 0.02, -boardH/2 + CELL/2);
-    boardGroup.add(piece);
+    // later this will clear pieces; now it just gives a tiny pulse to confirm
+    gridGroup.scale.set(1,1,1);
   });
 
-  // Session start/stop
   renderer.xr.addEventListener("sessionstart", async () => {
     xrSession = renderer.xr.getSession();
-    $hud.textContent = "Scanning… look for the cyan ring. Tap to place the board.";
-    try {
-      hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors");
-    } catch { hasAnchors = false; }
-
+    $hud.textContent = "Scanning… look for the cyan ring. Tap to place.";
+    try { hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors"); }
+    catch { hasAnchors = false; }
     try {
       viewerSpace = await xrSession.requestReferenceSpace("viewer");
       hitTestSource = await xrSession.requestHitTestSource({ space: viewerSpace });
-    } catch (e) {
-      $hud.textContent = "Hit-test not available on this device/browser.";
+    } catch {
+      $hud.textContent = "Hit-test not available here.";
     }
 
     xrSession.addEventListener("select", async (ev) => {
       if (!reticle.visible) return;
-
-      // Compute pose at tap time
       const refSpace = renderer.xr.getReferenceSpace();
-      const pose = new XRRigidTransform();
-      // reticle.matrix holds the transform in refSpace
-      const m = new THREE.Matrix4().copy(reticle.matrix);
-      const pos = new THREE.Vector3(); const quat = new THREE.Quaternion();
-      const scale = new THREE.Vector3();
-      m.decompose(pos, quat, scale);
 
-      // If anchors supported, create one so the board is truly locked to the world
+      // Decompose reticle matrix
+      const m = new THREE.Matrix4().copy(reticle.matrix);
+      const pos = new THREE.Vector3(); const quat = new THREE.Quaternion(); const scl = new THREE.Vector3();
+      m.decompose(pos, quat, scl);
+
+      // Create anchor if supported
       if (hasAnchors && ev.frame.createAnchor) {
         try {
           const transform = new XRRigidTransform(
@@ -206,40 +201,38 @@
           );
           anchor = await ev.frame.createAnchor(transform, refSpace);
           anchorSpace = anchor.anchorSpace;
-          $hud.textContent = "Board anchored. Tap Re-place to move it.";
+          $hud.textContent = "Anchored. Re-place to move it.";
         } catch {
           anchor = null; anchorSpace = null;
-          $hud.textContent = "Anchors not granted. Board placed without anchor.";
+          $hud.textContent = "Placed. (Anchors not granted.)";
         }
       } else {
-        $hud.textContent = "Board placed. (No anchors on this browser.)";
+        $hud.textContent = "Placed. (No anchors on this browser.)";
       }
 
-      // Position/orient the board now (works with or without anchor)
-      boardGroup.matrix.fromArray(reticle.matrix.elements);
-      boardGroup.matrix.decompose(boardGroup.position, boardGroup.quaternion, boardGroup.scale);
-      // Rotate so the board is vertical facing the user
-      // The reticle is on a horizontal plane; make the board face you by tipping it up.
-      boardGroup.rotateX(-Math.PI/2);
-      boardGroup.visible = true;
+      // Align the rig to the plane pose so the foundation lies flush on it
+      rig.position.copy(pos);
+      rig.quaternion.copy(quat);
+      // Lift slightly so slab isn’t z-fighting the plane
+      rig.position.y += 0.001;
+
+      rig.visible = true;
     });
   });
 
   renderer.xr.addEventListener("sessionend", () => {
-    xrSession = null;
-    hitTestSource = null;
+    xrSession = null; hitTestSource = null; reticle.visible = false;
     anchor = null; anchorSpace = null;
-    reticle.visible = false;
-    boardGroup.visible = false;
+    rig.visible = false;
     $hud.textContent = "AR session ended.";
   });
 
-  // Hit-test + anchor updates each frame
+  // Per-frame updates
   renderer.setAnimationLoop((time, frame) => {
     if (frame && hitTestSource) {
       const refSpace = renderer.xr.getReferenceSpace();
       const results = frame.getHitTestResults(hitTestSource);
-      if (!boardGroup.visible) {
+      if (!rig.visible) {
         if (results.length > 0) {
           const pose = results[0].getPose(refSpace);
           reticle.visible = true;
@@ -248,40 +241,32 @@
           reticle.visible = false;
         }
       } else {
-        reticle.visible = false;
-      }
-
-      // If we created an anchor, keep syncing the board to it
-      if (anchorSpace) {
-        const anchorPose = frame.getPose(anchorSpace, refSpace);
-        if (anchorPose) {
-          boardGroup.matrix.fromArray(anchorPose.transform.matrix);
-          boardGroup.matrix.decompose(boardGroup.position, boardGroup.quaternion, boardGroup.scale);
-          // Ensure vertical orientation
-          // The anchor is on the plane; rotate board upright to face the user.
-          // Compute once and keep — minimal extra math:
-          // (We do a small offset so the board isn't z-fighting the plane.)
-          boardGroup.rotation.x -= Math.PI/2;
-          boardGroup.position.y += 0.001;
-          // Remove the extra rotation from subsequent frames
-          anchorSpace = null; // lock orientation once; position stays stable via anchor
+        // keep following anchor if we have one
+        if (anchorSpace) {
+          const anchorPose = frame.getPose(anchorSpace, refSpace);
+          if (anchorPose) {
+            const mat = new THREE.Matrix4().fromArray(anchorPose.transform.matrix);
+            const p = new THREE.Vector3(); const q = new THREE.Quaternion(); const s = new THREE.Vector3();
+            mat.decompose(p,q,s);
+            rig.position.copy(p);
+            rig.quaternion.copy(q);
+          }
         }
       }
     }
     renderer.render(scene, camera);
   });
 
-  // Resize
+  // Resize handling
   window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.aspect = window.innerWidth/window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
   });
 
-  // Capability message if WebXR missing
   if (!navigator.xr) {
     document.getElementById('hud').textContent =
-      "This browser doesn’t expose WebXR. Use Chrome on Android with ARCore installed, over HTTPS.";
+      "WebXR not exposed. Use Chrome on Android with ARCore over HTTPS.";
   }
 </script>
 </body>
