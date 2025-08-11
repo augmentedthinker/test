@@ -26,34 +26,22 @@
   .btn:active { transform: translateY(1px); }
   .wide { min-width:92px; }
 
-  /* Centered, pronounced AR button */
+  /* Centered AR button */
   #arStart {
-    position: fixed;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-    z-index: 10;
-    pointer-events: auto;
-
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    z-index: 10; pointer-events: auto;
     display: inline-flex; align-items: center; justify-content: center; gap: 10px;
-    padding: 18px 28px;
-    border-radius: 999px;
-    border: 2px solid #7df;
+    padding: 18px 28px; border-radius: 999px; border: 2px solid #7df;
     color: #fff; font-family: system-ui, sans-serif; font-weight: 800; letter-spacing: .5px;
     background: radial-gradient(120% 120% at 50% 50%, rgba(30,130,255,.35), rgba(0,0,0,.65));
     box-shadow: 0 6px 26px rgba(30,130,255,.35), inset 0 0 22px rgba(125, 220, 255, .25);
-    backdrop-filter: blur(8px);
-    text-transform: uppercase;
+    backdrop-filter: blur(8px); text-transform: uppercase;
   }
   #arStart .ring {
     width: 16px; height: 16px; border-radius: 50%;
-    border: 3px solid #7df; box-shadow: 0 0 12px #7df;
-    animation: pulse 1.3s ease-in-out infinite;
+    border: 3px solid #7df; box-shadow: 0 0 12px #7df; animation: pulse 1.3s ease-in-out infinite;
   }
-  @keyframes pulse {
-    0% { transform: scale(1); opacity: 1; }
-    70% { transform: scale(1.35); opacity: .4; }
-    100% { transform: scale(1); opacity: 1; }
-  }
+  @keyframes pulse { 0%{transform:scale(1);opacity:1}70%{transform:scale(1.35);opacity:.4}100%{transform:scale(1);opacity:1} }
 </style>
 </head>
 <body>
@@ -127,7 +115,7 @@
 
   // 3D grid frame on back edge — bottom aligned exactly to the foundation top + small gap
   const gridGroup = new THREE.Group();
-  gridGroup.position.set(0, baseT + floorGap, -baseD/2 + barT/2); // <-- key: floor alignment
+  gridGroup.position.set(0, baseT + floorGap, -baseD/2 + barT/2); // floor alignment
   rig.add(gridGroup);
 
   const gridMat = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
@@ -135,7 +123,7 @@
   railL.position.set(-boardW/2 - barT, (boardH)/2, 0);
   const railR = railL.clone(); railR.position.x = boardW/2 + barT;
   const railB = new THREE.Mesh(new THREE.BoxGeometry(boardW + barT*2, barT*2, barT*2), gridMat);
-  railB.position.set(0, 0, 0); // bottom rail sits just above foundation
+  railB.position.set(0, 0, 0);
   const railT = railB.clone(); railT.position.y = boardH;
   gridGroup.add(railL, railR, railB, railT);
 
@@ -203,6 +191,62 @@
   function setHud(t){ $hud.textContent = t; }
   function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
 
+  // ===== Simple sound engine (WebAudio, no external files) =====
+  let audioCtx = null, audioUnlocked = false;
+  function ensureAudio(){
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    audioUnlocked = true;
+  }
+  function onFirstGesture(){
+    if (!audioUnlocked){ ensureAudio(); window.removeEventListener('pointerdown', onFirstGesture); }
+  }
+  window.addEventListener('pointerdown', onFirstGesture, { once:true });
+
+  function now(){ return audioCtx ? audioCtx.currentTime : 0; }
+
+  // Laser: fast descending blip
+  function playLaser(){
+    if (!audioUnlocked) return;
+    const t0 = now();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    const filt = audioCtx.createBiquadFilter();
+    osc.type = "sawtooth";
+    filt.type = "lowpass";
+    filt.frequency.setValueAtTime(8000, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.25, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+    osc.frequency.setValueAtTime(1200, t0);
+    osc.frequency.exponentialRampToValueAtTime(220, t0 + 0.12);
+    osc.connect(filt).connect(gain).connect(audioCtx.destination);
+    osc.start(t0); osc.stop(t0 + 0.14);
+  }
+
+  // Explosion: noise burst with lowpass sweep + decay
+  function playExplosion(){
+    if (!audioUnlocked) return;
+    const t0 = now();
+    const bufferSize = 0.5 * audioCtx.sampleRate;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i=0; i<bufferSize; i++){ data[i] = (Math.random()*2 - 1) * (1 - i/bufferSize); }
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const filt = audioCtx.createBiquadFilter();
+    filt.type = "lowpass";
+    filt.frequency.setValueAtTime(8000, t0);
+    filt.frequency.exponentialRampToValueAtTime(400, t0 + 0.45);
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.6, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.5);
+    noise.connect(filt).connect(gain).connect(audioCtx.destination);
+    noise.start(t0); noise.stop(t0 + 0.55);
+  }
+
+  // ===== Tetris logic =====
   function spawnPiece(){
     const k = KEYS[(Math.random()*KEYS.length)|0];
     const rots = SHAPES[k];
@@ -301,15 +345,18 @@
     playfield.remove(active.group);
     active = null;
     vibrate(12);
-    clearLines();
+    const cleared = clearLines();
+    if (cleared > 0) playExplosion();
   }
 
   function clearLines(){
+    let cleared = 0;
     for (let r=ROWS-1; r>=0; r--){
       if (board[r].every(Boolean)){
+        cleared++;
         for (let c=0;c<COLS;c++){
           const m = board[r][c];
-          playfield.remove(m); m.geometry.dispose(); m.material.dispose(); m && (board[r][c]=0);
+          playfield.remove(m); m.geometry.dispose(); m.material.dispose();
         }
         for (let rr=r; rr>0; rr--){
           for (let c=0;c<COLS;c++){
@@ -318,9 +365,10 @@
           }
         }
         for (let c=0;c<COLS;c++) board[0][c] = 0;
-        r++;
+        r++; // re-check this row after shift
       }
     }
+    return cleared;
   }
 
   function step(){
@@ -335,21 +383,27 @@
   function hardDrop(){
     if (!active) return;
     while (commit(0,1,0)) {}
+    playLaser();
     lockPiece(); spawnPiece();
   }
 
-  function gameOver(){ setHud("Game over — tap Reset or Re-place."); paused = true; }
+  function gameOver(){
+    setHud("Game over — tap Reset or Re-place.");
+    paused = true;
+    playExplosion();
+  }
 
+  // Controls (with audio on rotate / hard drop)
   function bindHold(el, fn){
-    let t=null; el.addEventListener('touchstart', e=>{ e.preventDefault(); fn(); t=setInterval(fn,150); }, {passive:false});
+    let t=null; el.addEventListener('touchstart', e=>{ e.preventDefault(); ensureAudio(); fn(); t=setInterval(fn,150); }, {passive:false});
     el.addEventListener('touchend', ()=> clearInterval(t));
-    el.addEventListener('click', e=>{ e.preventDefault(); fn(); });
+    el.addEventListener('click', e=>{ e.preventDefault(); ensureAudio(); fn(); });
   }
   bindHold($left, ()=> commit(-1,0,0));
   bindHold($right, ()=> commit( 1,0,0));
   bindHold($soft, ()=> commit( 0,1,0));
-  $rotate.addEventListener('click', ()=> { if (!commit(0,0,1)){ if (!commit(-1,0,1)) commit(1,0,1); } });
-  $hard.addEventListener('click', hardDrop);
+  $rotate.addEventListener('click', ()=> { ensureAudio(); if (!commit(0,0,1)){ if (!commit(-1,0,1)) commit(1,0,1); } playLaser(); });
+  $hard.addEventListener('click', ()=> { ensureAudio(); hardDrop(); });
 
   $pause.addEventListener('click', ()=> { paused = !paused; $pause.textContent = paused ? "Resume" : "Pause"; });
   $reset.addEventListener('click', ()=>{
@@ -368,7 +422,6 @@
     optionalFeatures: ["anchors"],
     domOverlay: { root: document.body }
   });
-  // Style + center + make pronounced
   arButton.id = "arStart";
   arButton.innerHTML = `<span class="ring" aria-hidden="true"></span> Enter AR`;
   document.body.appendChild(arButton);
@@ -383,8 +436,8 @@
   });
 
   renderer.xr.addEventListener("sessionstart", async ()=>{
-    // hide the big centered AR button once AR starts
     if (arButton) arButton.style.display = "none";
+    ensureAudio(); // starting AR counts as a user gesture; unlock audio
 
     xrSession = renderer.xr.getSession();
     setHud("Scanning… look for the cyan ring. Tap to place.");
@@ -425,7 +478,6 @@
   renderer.xr.addEventListener("sessionend", ()=>{
     xrSession=null; hitTestSource=null; reticle.visible=false; rig.visible=false; paused=true;
     anchor=null; anchorSpace=null; setHud("AR session ended.");
-    // show the big centered AR button again when AR ends
     if (arButton) arButton.style.display = "inline-flex";
   });
 
