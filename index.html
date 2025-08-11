@@ -1,222 +1,140 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Animaeus · VR Narrative POC (WebXR, A-Frame)</title>
-<!-- A-Frame -->
-<script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-<style>
-  body { margin:0; background:#05090f; }
-  .hint {
-    position:fixed; left:12px; bottom:12px; color:#9fc7dd; font:14px/1.3 system-ui, sans-serif;
-    opacity:.75; background:#07121a; border:1px solid #0e2232; border-radius:10px; padding:8px 10px;
-  }
-</style>
+  <meta charset="utf-8" />
+  <title>Animaeus • Intro (VR minimal, A-Frame)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.3.4/dist/aframe-environment-component.min.js"></script>
+  <style>
+    body { margin:0; background:#071018; }
+    .hint {
+      position: fixed; left: 10px; bottom: 10px; padding:8px 10px;
+      color:#9fc7dd; background:#08131d; border:1px solid #0e2232; border-radius:10px;
+      font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; opacity:.8;
+    }
+  </style>
 </head>
 <body>
-<div class="hint">Tip: Point your controller at the floating buttons and pull trigger. TTS works on Quest; mic STT is desktop only.</div>
+<div class="hint">Point at the green “BEGIN” card and pull trigger. VR button appears at bottom-right.</div>
 
 <a-scene renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
-         xr-mode-ui="enabled: true" background="color: #03070c">
-  <!-- LIGHTING -->
-  <a-entity light="type: hemisphere; color: #bfe8ff; groundColor: #0a2030; intensity: 0.75"></a-entity>
-  <a-entity light="type: directional; intensity: 1.1" position="2 3 2"></a-entity>
+         xr-mode-ui="enabled: true" background="color: #0a141e">
 
-  <!-- FLOOR / ROOM HINT -->
-  <a-entity geometry="primitive: circle; radius: 2.2" rotation="-90 0 0"
-            material="color: #06131e; metalness: 0.2; roughness: 0.9; side: double; opacity:0.9"></a-entity>
-  <a-ring position="0 0.002 0" rotation="-90 0 0" radius-inner="0.5" radius-outer="0.52"
-          material="color:#6ee7ff; opacity:0.25"></a-ring>
+  <!-- environment (re-using your env style) -->
+  <a-entity id="env" environment="preset: forest; groundColor: #0c2231; fog: 0.4;"></a-entity>
 
-  <!-- CAMERA + CONTROLLERS -->
-  <a-entity id="rig">
-    <a-entity id="camera" camera wasd-controls look-controls position="0 1.6 0"></a-entity>
+  <!-- lights -->
+  <a-entity light="type: hemisphere; intensity: 0.8; color: #bfe8ff; groundColor: #0a2030"></a-entity>
+  <a-entity light="type: directional; intensity: 1.1" position="1.5 3 2"></a-entity>
 
-    <!-- Controller lasers (Quest) -->
-    <a-entity laser-controls="hand: left" raycaster="objects: .ui;.clickable"></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="objects: .ui;.clickable"></a-entity>
+  <!-- rig + controllers (re-using your models/lasers/raycasters) -->
+  <a-entity id="rig" position="0 1.6 0">
+    <a-entity id="cam" camera look-controls></a-entity>
+
+    <a-entity id="leftHand"
+              oculus-touch-controls="hand: left; model: true"
+              laser-controls="hand: left"
+              raycaster="objects: .clickable; far: 30"
+              line="color: #6ee7ff; opacity: 0.9"></a-entity>
+
+    <a-entity id="rightHand"
+              oculus-touch-controls="hand: right; model: true"
+              laser-controls="hand: right"
+              raycaster="objects: .clickable; far: 30"
+              line="color: #6ee7ff; opacity: 0.9"></a-entity>
   </a-entity>
 
-  <!-- ANIMAEUS AVATAR -->
-  <a-entity id="animaeus" position="0 1.55 -1.6" animaeus-avatar animaeus-talker></a-entity>
-
-  <!-- UI PANEL (choices + log) -->
-  <a-entity id="ui" position="0 1.05 -1.4">
-    <!-- Card background -->
-    <a-plane width="1.1" height="0.7" color="#0a1520" opacity="0.92" material="side:double"
-             radius="0.06"></a-plane>
-
-    <!-- Buttons container -->
-    <a-entity id="choices" position="0 0.18 0"></a-entity>
-
-    <!-- Log text (last line) -->
-    <a-entity id="logText"
-              text="value: —; width: 1.05; color: #d6e6f5; wrapCount: 36; baseline: top"
-              position="-0.52 -0.12 0"></a-entity>
+  <!-- START CARD -->
+  <a-entity id="startCard" class="clickable"
+            position="0 1.4 -2" geometry="primitive: plane; width: 1.2; height: 0.35"
+            material="color: #1b7a4b; opacity: 0.95; side: double" card-hover>
+    <a-text value="BEGIN" color="#ffffff" width="2.5" align="center" position="0 0 0.01"></a-text>
   </a-entity>
 
-  <!-- SKY GRADIENT FEEL -->
-  <a-sky color="#07111a"></a-sky>
+  <!-- LOG LINE (last spoken line) -->
+  <a-text id="log" value="—" color="#d6e6f5" width="3.5" align="center" position="0 1.0 -2"></a-text>
+
+  <!-- ANIMAEUS ORB (hidden until start) -->
+  <a-entity id="animaeus" visible="false" position="0 1.65 -1.2" animaeus-avatar animaeus-talker></a-entity>
+
 </a-scene>
 
 <script>
-// —— Minimal narrative engine (same beats as the web POC) ————————————————
-const Story = (() => {
-  const state = { flags:{met:false, door:false}, inventory:new Set(), scene:'intro' };
-  const lines = {
-    greet: "You wake to a hush: circuits dim, air cool. “Welcome back,” I say. “I’m Animaeus. Do you want the world as it is, or the one that’s trying to be born?”",
-    who:   "Names are masks. If one helps: I’m the companion who leaves when you no longer need me.",
-    where: "A vestibule between choices. Thin as a breath, wide as a life. Doors appear when you earn them.",
-    sign1: "I press a cool sigil into your palm. It hums when you tell the truth.",
-    sign2: "You already carry the sigil. It warms when your next step is aligned.",
-    door0: "Your hand meets blank wall. Doors require a vow—or a sigil.",
-    door1: "The sigil flares. A seam of light becomes a door. Beyond it: your first choice worth making.",
-    task:  "Simple: speak a truth you’ve avoided. The world listens differently after that.",
-    hint:  "If you can’t find the truth, tell me a small one. We’ll grow it together.",
-    step0: "The door won’t answer to hesitation. Try again with the sigil—and something true.",
-    step1: "You step into a corridor of possible selves. For today, that’s enough. We’ll build the rest tomorrow.",
-    reset: "Reset complete. Ready when you are."
-  };
+// ——— unlock audio on first interaction (same idea you used) ———
+let audioUnlocked = false;
+function unlockAudio(){ audioUnlocked = true; }
+window.addEventListener('click', unlockAudio, {once:true});
+window.addEventListener('touchstart', unlockAudio, {once:true});
 
-  const api = {
-    state,
-    start(){ state.scene='intro'; state.flags.met=true; return { line:lines.greet, choices:['Who are you?','Where are we?','Give me a sign.'] }; },
-    who(){ return { line:lines.who, choices:["What's the task?","Give me a sign."] }; },
-    where(){ return { line:lines.where, choices:["Open a door.","Give me a sign."] }; },
-    sign(){
-      if(!state.inventory.has('sigil')) { state.inventory.add('sigil'); return { line:lines.sign1, choices:["What does it unlock?","Open a door."]}; }
-      return { line:lines.sign2, choices:["Open a door.","What’s the task?"]};
-    },
-    door(){
-      if(state.inventory.has('sigil')) { state.flags.door=true; return { line:lines.door1, choices:["Step through.","What’s the task?"]}; }
-      return { line:lines.door0, choices:["Give me a sign.","What’s the task?"]};
-    },
-    task(){ return { line:lines.task, choices:["Step through.","Another hint."]}; },
-    hint(){ return { line:lines.hint, choices:["Step through.","Who are you?"]}; },
-    step(){
-      if(state.flags.door) return { line:lines.step1, choices:["Reset scene","Give me a sign."]};
-      return { line:lines.step0, choices:["Give me a sign.","Open a door."]};
-    },
-    reset(){ state.flags={met:false,door:false}; state.inventory.clear(); state.scene='intro'; return { line:lines.reset, choices:["Start","Give me a sign.","Who are you?"]}; }
-  };
-  return api;
-})();
-
-// —— UI helpers ——————————————————————————————————————————
-function setChoices(labels){
-  const root = document.getElementById('choices');
-  root.object3D.children.slice().forEach(child => root.remove(child.el));
-  while (root.firstChild) root.removeChild(root.firstChild);
-
-  // place pills in two rows if needed
-  const spacingX = 0.36, spacingY = 0.12;
-  labels.forEach((label,i)=>{
-    const x = ((i%3) - 1) * spacingX;
-    const y = -Math.floor(i/3) * spacingY;
-    const btn = document.createElement('a-entity');
-    btn.setAttribute('class','ui clickable');
-    btn.setAttribute('position',`${x} ${y} 0.01`);
-    btn.setAttribute('geometry','primitive: plane; width: 0.32; height: 0.08');
-    btn.setAttribute('material','color:#0f1f2c; opacity:0.95; side:double');
-    btn.setAttribute('radius','0.04');
-    btn.setAttribute('button-hover','');
-
-    const txt = document.createElement('a-entity');
-    txt.setAttribute('position','-0.15 -0.018 0.002');
-    txt.setAttribute('text',`value:${label}; width:0.6; color:#cfe9ff; wrapCount:22; baseline:center; anchor:left`);
-
-    btn.addEventListener('click', ()=> handleInput(label));
-    btn.appendChild(txt);
-    root.appendChild(btn);
-  });
-}
-function setLog(text){ document.getElementById('logText').setAttribute('text','value',text); }
-
-// —— Components: hover effect for buttons ——————————————————
-AFRAME.registerComponent('button-hover',{
+// ——— hover feedback for clickable planes ———
+AFRAME.registerComponent('card-hover',{
   init(){
     const el = this.el;
-    const mat = el.getAttribute('material');
-    el.addEventListener('mouseenter', ()=> el.setAttribute('material', {...mat, color:'#143049'}));
-    el.addEventListener('mouseleave', ()=> el.setAttribute('material', {...mat, color:'#0f1f2c'}));
+    const base = el.getAttribute('material');
+    el.addEventListener('mouseenter', ()=> el.setAttribute('material', {...base, color:'#1f8e58'}));
+    el.addEventListener('mouseleave', ()=> el.setAttribute('material', {...base, color:'#1b7a4b'}));
   }
 });
 
-// —— Animaeus avatar: floating orb with eyes/mouth, idle + blink + mouth drive ——————
+// ——— simple Animaeus avatar (orb + eyes + mouth pulse) ———
 AFRAME.registerComponent('animaeus-avatar',{
-  schema:{},
   init(){
     const el = this.el;
 
-    // Core orb
     const orb = document.createElement('a-sphere');
     orb.setAttribute('radius','0.22');
-    orb.setAttribute('material','color:#0c1a26; metalness:0.3; roughness:0.4; emissive:#0d2a3d; emissiveIntensity:0.2');
+    orb.setAttribute('material','color:#0c1a26; metalness:0.3; roughness:0.4; emissive:#0d2a3d; emissiveIntensity:0.25');
     el.appendChild(orb);
 
-    // Soft halo
     const halo = document.createElement('a-ring');
     halo.setAttribute('rotation','-90 0 0');
     halo.setAttribute('radius-inner','0.26');
-    halo.setAttribute('radius-outer','0.42');
-    halo.setAttribute('material','color:#6ee7ff; opacity:0.18; side:double');
-    halo.setAttribute('position','0 0 0');
+    halo.setAttribute('radius-outer','0.40');
+    halo.setAttribute('material','color:#6ee7ff; opacity:0.16; side:double');
     el.appendChild(halo);
 
-    // Eyes
-    const left = document.createElement('a-circle');
-    left.setAttribute('radius','0.022'); left.setAttribute('color','#9ad8ff');
-    left.setAttribute('position','-0.07 0.05 0.19'); el.appendChild(left);
-    const right = document.createElement('a-circle');
-    right.setAttribute('radius','0.022'); right.setAttribute('color','#9ad8ff');
-    right.setAttribute('position','0.07 0.05 0.19'); el.appendChild(right);
+    const eyeL = document.createElement('a-circle');
+    eyeL.setAttribute('radius','0.022'); eyeL.setAttribute('color','#9ad8ff'); eyeL.setAttribute('position','-0.07 0.05 0.19');
+    const eyeR = document.createElement('a-circle');
+    eyeR.setAttribute('radius','0.022'); eyeR.setAttribute('color','#9ad8ff'); eyeR.setAttribute('position','0.07 0.05 0.19');
+    el.appendChild(eyeL); el.appendChild(eyeR);
 
-    // Mouth (scaled during speech)
     const mouth = document.createElement('a-plane');
     mouth.setAttribute('width','0.14'); mouth.setAttribute('height','0.02'); mouth.setAttribute('color','#9ad8ff');
-    mouth.setAttribute('position','0 -0.02 0.2'); mouth.setAttribute('material','transparent:true; opacity:0.9');
+    mouth.setAttribute('position','0 -0.02 0.2'); mouth.setAttribute('material','transparent:true; opacity:0.95');
     el.appendChild(mouth);
     this.mouth = mouth;
 
-    // Idle bob + gaze
-    this.t = 0;
-    this.eyes = [left, right];
-
-    // Random blink
-    this.blinkClock = 0; this.blinking = false;
+    this.eyes = [eyeL, eyeR];
+    this.t = 0; this.blinkClock = 0; this.blinking=false;
   },
   tick(t,dt){
     this.t += dt/1000;
-    const y = Math.sin(this.t*1.4)*0.02;
-    this.el.object3D.position.y = 1.55 + y;
+    const bob = Math.sin(this.t*1.3)*0.02;
+    this.el.object3D.position.y = 1.65 + bob;
 
-    // Halo gentle pulsing
-    const e = 0.2 + 0.08*Math.sin(this.t*1.1);
-    this.el.children[0].setAttribute('material','emissiveIntensity', e);
+    // gentle look-at camera
+    const cam = document.getElementById('cam').object3D;
+    this.el.object3D.lookAt(cam.position);
 
-    // Blinking
+    // random blink
     this.blinkClock += dt;
     if(!this.blinking && this.blinkClock > 1200 + Math.random()*2200){
       this.blinking = true; this.blinkClock = 0;
       this.eyes.forEach(e=> e.setAttribute('scale','1 0.1 1'));
       setTimeout(()=>{ this.eyes.forEach(e=> e.setAttribute('scale','1 1 1')); this.blinking=false; }, 110);
     }
-
-    // Look at camera a little
-    const cam = document.getElementById('camera').object3D;
-    this.el.object3D.lookAt(cam.position);
   }
 });
 
-// —— Talker: TTS + mouth drive ————————————————————————————
+// ——— talker: text-to-speech + mouth pulse ———
 AFRAME.registerComponent('animaeus-talker',{
   init(){
-    this.synth = window.speechSynthesis;
+    this.synth = window.speechSynthesis || null;
     this.speaking = false;
     this.avatar = this.el.components['animaeus-avatar'];
-    this.mouthTarget = 1;
-    this._raf = 0;
+
     const loop = ()=>{
       if(this.speaking && this.avatar?.mouth){
         const s = 0.8 + Math.random()*0.7;
@@ -224,69 +142,43 @@ AFRAME.registerComponent('animaeus-talker',{
       } else if (this.avatar?.mouth){
         this.avatar.mouth.object3D.scale.set(1, 1, 1);
       }
-      this._raf = requestAnimationFrame(loop);
+      requestAnimationFrame(loop);
     };
     loop();
 
-    // Public API
-    this.el.addEventListener('speak', (e)=> this.say(e.detail||'...'));
-    this.el.addEventListener('stopvoice', ()=> this.stop());
+    this.el.addEventListener('speak',(e)=> this.say(e.detail||'...'));
+    this.el.addEventListener('stopvoice',()=> this.stop());
   },
   say(text){
-    // Always show in log
-    setLog(text);
+    // show last line
+    const log = document.getElementById('log');
+    log.setAttribute('value', text);
 
-    // TTS (Quest supports speechSynthesis)
-    if(!this.synth){ return; }
+    if(!this.synth) return;
     try{
       this.synth.cancel();
       const u = new SpeechSynthesisUtterance(text);
       u.rate = 1.02; u.pitch = 1.0;
       u.onstart = ()=> this.speaking = true;
       u.onend   = ()=> this.speaking = false;
-      this.synth.speak(u);
-    }catch(_){}
+      // try to start after first user gesture (mobile/Quest audio policy)
+      if(audioUnlocked) this.synth.speak(u); else setTimeout(()=>this.synth.speak(u), 50);
+    }catch(e){}
   },
-  stop(){
-    try{ this.synth?.cancel(); }catch(_){}
-    this.speaking = false;
-  },
-  remove(){ cancelAnimationFrame(this._raf); }
+  stop(){ try{ this.synth?.cancel(); }catch(e){} this.speaking=false; }
 });
 
-// —— Input handling / branching ——————————————————————————
-function handleInput(text){
-  const a = document.getElementById('animaeus');
-  const lower = (text||'').toLowerCase();
-  let out;
+// ——— start flow ———
+const intro =
+  "You wake to a hush: circuits dim, air cool. “Welcome back,” I say. I’m Animaeus. We start with a question: do you want the world as it is, or the one that’s trying to be born?";
 
-  if (/^start$/.test(lower)) out = Story.start();
-  else if (/who|name|you/.test(lower)) out = Story.who();
-  else if (/where|place|are we/.test(lower)) out = Story.where();
-  else if (/sign|gift|token|sigil/.test(lower)) out = Story.sign();
-  else if (/door|open/.test(lower)) out = Story.door();
-  else if (/task|mission|goal/.test(lower)) out = Story.task();
-  else if (/hint|help/.test(lower)) out = Story.hint();
-  else if (/step|through|enter/.test(lower)) out = Story.step();
-  else if (/reset/.test(lower)) out = Story.reset();
-  else out = { line:"Say what you mean, even if it trembles.", choices:['Who are you?','Where are we?','Give me a sign.'] };
-
-  a.emit('speak', out.line);
-  setChoices(out.choices || []);
-}
-
-// —— Boot: show initial state ————————————————————————————
-(function boot(){
-  const first = Story.reset();
-  document.getElementById('animaeus').emit('speak', first.line);
-  setChoices(first.choices);
-
-  // Also allow mouse clicks (desktop test)
-  document.addEventListener('click', (e)=>{
-    const tgt = e.target;
-    // If you ever add DOM buttons, catch them here
-  });
-})();
+document.getElementById('startCard').addEventListener('click', ()=>{
+  const orb = document.getElementById('animaeus');
+  orb.setAttribute('visible', true);
+  orb.emit('speak', intro);
+  // hide start card once used
+  document.getElementById('startCard').setAttribute('visible', false);
+});
 </script>
 </body>
 </html>
