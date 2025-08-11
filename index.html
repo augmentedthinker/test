@@ -2,33 +2,97 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR Button + Controllers Only</title>
+  <title>VR Sphere Audio Color</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+  <style>
+    body { margin: 0; background:#000; }
+    #startAudio {
+      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
+      padding: 12px 20px; border-radius: 24px; border: 2px solid #0ff;
+      background: rgba(0,255,255,0.12); color:#0ff; font-size: 16px;
+      backdrop-filter: blur(6px); cursor: pointer; z-index: 10;
+    }
+    #startAudio:disabled { opacity: .6; cursor: not-allowed; }
+  </style>
 </head>
 <body>
-  <!-- Enter VR button appears automatically in the bottom-right -->
+  <button id="startAudio">🎤 Start Audio</button>
+
   <a-scene xr-mode-ui="enabled: true">
-    <!-- Camera (no movement controls to keep it minimal) -->
-    <a-entity id="cameraRig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls></a-entity>
-
-      <!-- Left controller: model + laser/pointer -->
-      <a-entity
-        oculus-touch-controls="hand: left; model: true"
-        laser-controls="hand: left"
-        raycaster="objects: .clickable; far: 30"
-        line="color: #6ee7ff; opacity: 0.9">
-      </a-entity>
-
-      <!-- Right controller: model + laser/pointer -->
-      <a-entity
-        oculus-touch-controls="hand: right; model: true"
-        laser-controls="hand: right"
-        raycaster="objects: .clickable; far: 30"
-        line="color: #6ee7ff; opacity: 0.9">
-      </a-entity>
+    <!-- Camera rig -->
+    <a-entity position="0 1.6 0">
+      <a-entity camera look-controls></a-entity>
     </a-entity>
+
+    <!-- Sphere: ~0.8 m diameter (≈2.6 ft), 4 ft in front of camera -->
+    <a-sphere id="colorBall" radius="0.4" color="#FFFFFF" position="0 1.6 -1.22"></a-sphere>
   </a-scene>
+
+  <script>
+    // Minimal microphone → analyser → color mapping
+    const btn = document.getElementById('startAudio');
+    const sphere = document.getElementById('colorBall');
+    let audioContext, analyser, dataArray, rafId;
+
+    function hslToHex(h, s=100, l=50){
+      h = (h%360+360)%360; s/=100; l/=100;
+      const C=(1-Math.abs(2*l-1))*s, X=C*(1-Math.abs((h/60)%2-1)), m=l-C/2;
+      let [r,g,b]=h<60?[C,X,0]:h<120?[X,C,0]:h<180?[0,C,X]:
+                 h<240?[0,X,C]:h<300?[X,0,C]:[C,0,X];
+      r=Math.round((r+m)*255); g=Math.round((g+m)*255); b=Math.round((b+m)*255);
+      return "#"+[r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("");
+    }
+
+    function animate(){
+      rafId = requestAnimationFrame(animate);
+      analyser.getByteFrequencyData(dataArray);
+
+      // Find dominant frequency bin and average loudness for a touch of dynamism
+      let maxIdx = 0, maxVal = 0, avg = 0;
+      for (let i=0;i<dataArray.length;i++){
+        const v = dataArray[i];
+        avg += v; 
+        if (v>maxVal){ maxVal=v; maxIdx=i; }
+      }
+      avg /= dataArray.length;
+
+      // Map dominant bin → hue (0..360). Speed up a bit with loudness.
+      const hue = (maxIdx / dataArray.length) * 360 + (avg/255)*30;
+      sphere.setAttribute('material','color', hslToHex(hue, 100, 50));
+    }
+
+    btn.addEventListener('click', async () => {
+      try {
+        btn.disabled = true;
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            sampleRate: 22050
+          }
+        });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const source = audioContext.createMediaStreamSource(stream);
+        analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;                    // lightweight for Quest
+        analyser.smoothingTimeConstant = 0.8;      // stable color motion
+        source.connect(analyser);
+        dataArray = new Uint8Array(analyser.frequencyBinCount);
+        btn.style.display = 'none';
+        animate();
+      } catch (e) {
+        btn.disabled = false;
+        btn.textContent = 'Microphone blocked — enable and reload';
+        console.error(e);
+      }
+    });
+
+    window.addEventListener('beforeunload', () => { 
+      if (rafId) cancelAnimationFrame(rafId);
+      if (audioContext) audioContext.close();
+    });
+  </script>
 </body>
 </html>
