@@ -2,96 +2,206 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR Sphere Audio Color</title>
+  <title>VR Sphere Audio Visualizer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    body { margin: 0; background:#000; }
-    #startAudio {
-      position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%);
-      padding: 12px 20px; border-radius: 24px; border: 2px solid #0ff;
-      background: rgba(0,255,255,0.12); color:#0ff; font-size: 16px;
-      backdrop-filter: blur(6px); cursor: pointer; z-index: 10;
-    }
-    #startAudio:disabled { opacity: .6; cursor: not-allowed; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#000; color:#9ff; }
+    .ui { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:10px; z-index:5; }
+    button { border:2px solid #00FFFF88; background:#001a1a; color:#9ff; padding:10px 14px; border-radius:999px; cursor:pointer; font-size:14px; }
+    button:hover { background:#003333; }
+    .status { position:fixed; left:20px; top:16px; z-index:5; opacity:.9; font-size:14px; color:#8ff; }
+    .warn { color:#ff9; }
+    .err { color:#f88; }
   </style>
 </head>
 <body>
-  <button id="startAudio">🎤 Start Audio</button>
+  <div class="status" id="status">🔊 Ready. Click <b>Start Mic</b> (GitHub Pages uses HTTPS, which is required).</div>
+  <div class="ui">
+    <button id="startBtn">🎤 Start Mic</button>
+    <button id="stopBtn" disabled>⏹️ Stop</button>
+    <button id="recenterBtn">🎯 Recenter</button>
+  </div>
 
-  <a-scene xr-mode-ui="enabled: true">
-    <!-- Camera rig -->
-    <a-entity position="0 1.6 0">
-      <a-entity camera look-controls></a-entity>
+  <!-- SCENE -->
+  <a-scene renderer="antialias: true; colorManagement: true" background="color: #000">
+    <!-- Soft stars for ambience -->
+    <a-entity id="stars"></a-entity>
+
+    <!-- Camera + controllers -->
+    <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity id="camera" camera look-controls></a-entity>
+
+      <!-- Left controller: model + laser/pointer -->
+      <a-entity oculus-touch-controls="hand: left; model: true"
+                laser-controls="hand: left"
+                raycaster="objects: .clickable; far: 30"
+                line="color: #6ee7ff; opacity: 0.9"></a-entity>
+      <!-- Right controller: model + laser/pointer -->
+      <a-entity oculus-touch-controls="hand: right; model: true"
+                laser-controls="hand: right"
+                raycaster="objects: .clickable; far: 30"
+                line="color: #6ee7ff; opacity: 0.9"></a-entity>
     </a-entity>
 
-    <!-- Sphere: ~0.8 m diameter (≈2.6 ft), 4 ft in front of camera -->
-    <a-sphere id="colorBall" radius="0.4" color="#FFFFFF" position="0 1.6 -1.22"></a-sphere>
+    <!-- The reactive sphere (user is inside it) -->
+    <a-entity id="viz"
+              geometry="primitive: sphere; radius: 8; segmentsWidth: 96; segmentsHeight: 64"
+              material="color: #0ff; metalness: 0.1; roughness: 0.8; side: back"
+              position="0 1.6 0"
+              mic-visualizer>
+    </a-entity>
+
+    <!-- A faint floor disk for orientation -->
+    <a-circle radius="1.5" position="0 0 0" rotation="-90 0 0"
+              material="color:#012; opacity:0.6; transparent:true"></a-circle>
   </a-scene>
 
   <script>
-    // Minimal microphone → analyser → color mapping
-    const btn = document.getElementById('startAudio');
-    const sphere = document.getElementById('colorBall');
-    let audioContext, analyser, dataArray, rafId;
-
-    function hslToHex(h, s=100, l=50){
-      h = (h%360+360)%360; s/=100; l/=100;
-      const C=(1-Math.abs(2*l-1))*s, X=C*(1-Math.abs((h/60)%2-1)), m=l-C/2;
-      let [r,g,b]=h<60?[C,X,0]:h<120?[X,C,0]:h<180?[0,C,X]:
-                 h<240?[0,X,C]:h<300?[X,0,C]:[C,0,X];
-      r=Math.round((r+m)*255); g=Math.round((g+m)*255); b=Math.round((b+m)*255);
-      return "#"+[r,g,b].map(v=>v.toString(16).padStart(2,"0")).join("");
-    }
-
-    function animate(){
-      rafId = requestAnimationFrame(animate);
-      analyser.getByteFrequencyData(dataArray);
-
-      // Find dominant frequency bin and average loudness for a touch of dynamism
-      let maxIdx = 0, maxVal = 0, avg = 0;
-      for (let i=0;i<dataArray.length;i++){
-        const v = dataArray[i];
-        avg += v; 
-        if (v>maxVal){ maxVal=v; maxIdx=i; }
-      }
-      avg /= dataArray.length;
-
-      // Map dominant bin → hue (0..360). Speed up a bit with loudness.
-      const hue = (maxIdx / dataArray.length) * 360 + (avg/255)*30;
-      sphere.setAttribute('material','color', hslToHex(hue, 100, 50));
-    }
-
-    btn.addEventListener('click', async () => {
-      try {
-        btn.disabled = true;
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            sampleRate: 22050
-          }
-        });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
-        const source = audioContext.createMediaStreamSource(stream);
-        analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;                    // lightweight for Quest
-        analyser.smoothingTimeConstant = 0.8;      // stable color motion
-        source.connect(analyser);
-        dataArray = new Uint8Array(analyser.frequencyBinCount);
-        btn.style.display = 'none';
-        animate();
-      } catch (e) {
-        btn.disabled = false;
-        btn.textContent = 'Microphone blocked — enable and reload';
-        console.error(e);
+    // --- Tiny star field (cheap) ---
+    AFRAME.registerComponent('stars', {
+      init() {
+        const COUNT = 800; const spread = 70; const el = this.el;
+        for (let i=0;i<COUNT;i++) {
+          const s = document.createElement('a-entity');
+          const x = (Math.random()-.5)*spread;
+          const y = (Math.random()*.6 + .2)*spread; // bias upward
+          const z = (Math.random()-.5)*spread;
+          s.setAttribute('geometry', {primitive:'sphere', radius: 0.02});
+          s.setAttribute('material', {color:'#9ff', emissive:'#6cf', emissiveIntensity: 0.8});
+          s.setAttribute('position', `${x} ${y} ${z}`);
+          el.appendChild(s);
+        }
       }
     });
 
-    window.addEventListener('beforeunload', () => { 
-      if (rafId) cancelAnimationFrame(rafId);
-      if (audioContext) audioContext.close();
+    document.getElementById('stars').setAttribute('stars', '');
+
+    // --- Audio-driven sphere deformation + color shift ---
+    AFRAME.registerComponent('mic-visualizer', {
+      schema: {},
+      init() {
+        this.started = false;
+        this.audioCtx = null; this.analyser = null; this.src = null; this.data = null;
+        this.mesh = null; this.base = null; this.rand = null;
+        this.time = 0; this.frameToggle = false;
+        this._bindUI();
+
+        this.el.addEventListener('object3dset', () => this._grabMesh());
+        if (this.el.getObject3D('mesh')) this._grabMesh();
+      },
+      _grabMesh() {
+        const obj = this.el.getObject3D('mesh');
+        if (!obj || this.mesh) return;
+        this.mesh = obj; const g = this.mesh.geometry;
+        // Ensure non-indexed for simpler per-vertex ops
+        if (g.index) this.mesh.geometry = this.mesh.geometry.toNonIndexed();
+        const geom = this.mesh.geometry;
+        const pos = geom.attributes.position;
+        this.base = pos.array.slice(0);
+        this.rand = new Float32Array(pos.count);
+        for (let i=0;i<pos.count;i++) this.rand[i] = this._hash(i)*0.9 + 0.1; // 0.1..1.0
+        geom.computeVertexNormals();
+      },
+      _hash(i){ // tiny deterministic hash → 0..1
+        let x = Math.sin(i*127.1)*43758.5453; return x - Math.floor(x);
+      },
+      _bindUI(){
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const recenterBtn = document.getElementById('recenterBtn');
+
+        startBtn.addEventListener('click', async () => {
+          try {
+            if (this.started) return;
+            const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
+            this.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+            this.analyser = this.audioCtx.createAnalyser();
+            this.analyser.fftSize = 256; // performance-friendly
+            this.analyser.smoothingTimeConstant = 0.8;
+            this.src = this.audioCtx.createMediaStreamSource(stream);
+            this.src.connect(this.analyser);
+            this.data = new Uint8Array(this.analyser.frequencyBinCount);
+            this.started = true;
+            status.textContent = '🎧 Listening… talk or play music near the mic.';
+            startBtn.disabled = true; stopBtn.disabled = false;
+          } catch(e){
+            status.innerHTML = '❌ <span class="err">Microphone permission failed.</span> On Quest, use HTTPS (GitHub Pages) and allow mic.';
+            console.error(e);
+          }
+        });
+
+        stopBtn.addEventListener('click', () => {
+          if (!this.started) return;
+          if (this.audioCtx) this.audioCtx.close();
+          this.audioCtx = null; this.analyser=null; this.src=null; this.data=null; this.started=false;
+          startBtn.disabled = false; stopBtn.disabled = true;
+          status.textContent = '⏹️ Stopped.';
+        });
+
+        recenterBtn.addEventListener('click', () => {
+          const rig = document.getElementById('cameraRig');
+          rig.setAttribute('position', '0 1.6 0');
+          status.textContent = '🎯 Recentered.';
+        });
+      },
+      _bandAvg(from, to){
+        if (!this.data) return 0;
+        let s=0,c=0; for(let i=from;i<=to && i<this.data.length;i++){ s+=this.data[i]; c++; }
+        return c? s/c : 0;
+      },
+      tick(t, dt){
+        if (!this.mesh) return;
+        this.time += (dt||0)/1000;
+
+        // Idle shimmer if no mic yet
+        let low=5, mid=5, high=5, overall=0.02;
+        if (this.started && this.analyser && this.data){
+          this.analyser.getByteFrequencyData(this.data);
+          low = this._bandAvg(2, 8);
+          mid = this._bandAvg(9, 32);
+          high = this._bandAvg(33, 64);
+          overall = (low*0.5 + mid*0.35 + high*0.15) / 255; // 0..1
+        }
+
+        // Skip every other frame to keep Quest smooth
+        this.frameToggle = !this.frameToggle; if (this.frameToggle && this.started) { /* allow update every frame once started for responsiveness */ } 
+
+        const geom = this.mesh.geometry; const pos = geom.attributes.position;
+        if (!this.base) return;
+        const base = this.base; const rand = this.rand;
+        const baseRadius = 8.0;
+        const amp = 0.8 * overall + 0.02; // keep a minimum ripple
+        const ttime = this.time;
+
+        for (let i=0;i<pos.count;i++){
+          const ix = i*3; const x = base[ix], y = base[ix+1], z = base[ix+2];
+          const r = Math.sqrt(x*x+y*y+z*z);
+          // per-vertex phase/ripple
+          const ph = rand[i]*6.283 + ttime* (1.2 + rand[i]*1.8);
+          const ripple = Math.sin(ph + r*0.6);
+          const push = (0.25 + 0.75*rand[i]) * amp * (0.6 + 0.4*ripple);
+          const newR = baseRadius + push;
+          const s = newR / r; // scale along normal
+          pos.array[ix] = x * s;
+          pos.array[ix+1] = y * s;
+          pos.array[ix+2] = z * s;
+        }
+        pos.needsUpdate = true;
+        // Recompute normals occasionally (costly) for nicer lighting
+        if ((Math.floor(ttime*10)%10)===0) geom.computeVertexNormals();
+
+        // Color shift: cyan→blue by spectrum tilt
+        const hue = 0.55 - Math.min(0.15, (high - low)/255 * 0.15); // 0.55..0.40
+        const sat = 0.9; const lit = 0.55 + Math.min(0.2, overall*0.4);
+        this._setHSL(this.mesh.material.color, hue, sat, lit);
+        this.mesh.material.emissive = new THREE.Color().setHSL(hue, sat*0.6, Math.min(0.7, lit*0.6));
+        this.mesh.material.emissiveIntensity = 0.6 + overall*0.8;
+      },
+      _setHSL(color, h,s,l){
+        const tmp = new THREE.Color(); tmp.setHSL(h,s,l); color.copy(tmp);
+      }
     });
   </script>
 </body>
