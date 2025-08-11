@@ -1,534 +1,322 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>AR Tetris — Quest-Optimized Hit Test</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Animaeus: Narrative Proof of Concept (Web First)</title>
 <style>
-  html, body { margin:0; height:100%; overflow:hidden; background:#000; }
-  #hud {
-    position: fixed; left:0; right:0; top:0; padding:10px 12px;
-    text-align:center; color:#fff; font-family: system-ui, sans-serif;
-    background: linear-gradient(to bottom, rgba(0,0,0,.6), rgba(0,0,0,0));
-    pointer-events: none; z-index: 5;
+  :root { --bg:#0b0f14; --card:#10161d; --ink:#d7e1ea; --muted:#8aa3b7; --accent:#6ee7ff; }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:radial-gradient(1200px 800px at 70% -10%, #111a22 0%, #0b0f14 60%, #06090d 100%);
+    color:var(--ink); font:16px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
+    display:flex; min-height:100dvh; align-items:center; justify-content:center; padding:24px;
   }
-  #cap {
-    position: fixed; right:8px; bottom:8px; z-index:6;
-    font: 11px/1.2 system-ui, sans-serif; color:#ace;
-    background: rgba(0,0,0,.45); padding:6px 8px; border-radius:8px;
-    border:1px solid rgba(120,180,255,.25);
-    pointer-events:none;
+  .app { width:min(920px, 100%); display:grid; gap:16px; }
+  .hero {
+    display:grid; grid-template-columns: 180px 1fr; gap:16px; align-items:center;
+    background:linear-gradient(180deg, #0f1720 0%, #0a1016 100%); border:1px solid #15202c; border-radius:18px; padding:16px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.03);
   }
-  #uiTop, #uiBottom {
-    position: fixed; left:0; right:0; padding:10px; display:flex; gap:8px; justify-content:center;
-    pointer-events:none; z-index: 5;
+  .avatar {
+    width:180px; aspect-ratio:1; border-radius:20px; background:conic-gradient(from 180deg, #0e1b25, #0a1219, #0e1b25);
+    display:grid; place-items:center; position:relative; overflow:hidden; border:1px solid #182433;
   }
-  #uiTop { top: 44px; }
-  #uiBottom { bottom: 0; }
-  .btn { pointer-events:auto; border:1px solid #8af; color:#eaf;
-    background: rgba(15,20,40,.55); padding:10px 14px; border-radius:12px; font-weight:700;
-    backdrop-filter: blur(8px); min-width:56px; }
-  .btn:active { transform: translateY(1px); }
-  .wide { min-width:92px; }
-
-  /* Centered AR button */
-  #arStart { position: fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:10;
-    display:inline-flex; align-items:center; justify-content:center; gap:10px; pointer-events:auto;
-    padding:18px 28px; border-radius:999px; border:2px solid #7df; text-transform:uppercase;
-    color:#fff; font: 800 14px system-ui, sans-serif; letter-spacing:.5px;
-    background: radial-gradient(120% 120% at 50% 50%, rgba(30,130,255,.35), rgba(0,0,0,.65));
-    box-shadow:0 6px 26px rgba(30,130,255,.35), inset 0 0 22px rgba(125,220,255,.25);
-    backdrop-filter: blur(8px);
+  .halo {
+    position:absolute; inset:-20%; background:radial-gradient(closest-side, rgba(110,231,255,0.18), transparent 70%);
+    filter:blur(22px); animation: pulse 3s ease-in-out infinite;
   }
-  #arStart .ring { width:16px; height:16px; border-radius:50%; border:3px solid #7df; box-shadow:0 0 12px #7df; animation:pulse 1.3s ease-in-out infinite; }
-  @keyframes pulse { 0%{transform:scale(1);opacity:1}70%{transform:scale(1.35);opacity:.4}100%{transform:scale(1);opacity:1} }
+  @keyframes pulse { 0%,100% {opacity:.35} 50% {opacity:.7} }
+  /* Simple SVG Avatar */
+  svg { width:64%; height:auto; }
+  #mouth { transform-origin:50% 60%; transition: transform 80ms linear; }
+  .controls, .log { background:var(--card); border:1px solid #15202c; border-radius:18px; padding:16px; }
+  .row { display:flex; flex-wrap:wrap; gap:12px; }
+  button, .mic {
+    background:#0d1420; color:var(--ink); border:1px solid #1a2735; border-radius:12px; padding:10px 14px; cursor:pointer;
+    transition:transform .05s ease, border-color .2s, background .2s;
+  }
+  button:hover { border-color:#2a3c53 }
+  button:active { transform: translateY(1px); }
+  .mic[aria-pressed="true"] { border-color:var(--accent); box-shadow:0 0 0 2px rgba(110,231,255,0.15) inset; }
+  input[type="text"] {
+    flex:1; min-width:180px; background:#0a1117; color:var(--ink); border:1px solid #15202c; border-radius:12px; padding:10px 12px;
+    outline:none;
+  }
+  .hint { color:var(--muted); font-size:13px; }
+  .log { max-height:42vh; overflow:auto; }
+  .line { margin:8px 0; }
+  .tag { font-size:12px; color:#9abbd0; background:#0b141d; border:1px solid #142333; padding:2px 8px; border-radius:999px; }
+  .choices { margin-top:10px; display:flex; flex-wrap:wrap; gap:8px; }
+  .pill { font-size:14px; padding:8px 12px; border-radius:999px; background:#0f1823; border:1px solid #1a2735; cursor:pointer; }
+  .pill:hover { border-color:#2a3c53; }
+  .statebar { display:flex; gap:8px; align-items:center; }
+  .dot { width:10px; height:10px; border-radius:50%; background:#1f2e40; border:1px solid #284057; }
+  .dot.on { background:#6ee7ff; box-shadow:0 0 12px rgba(110,231,255,0.5); }
 </style>
 </head>
 <body>
-  <div id="hud">Scan for a surface (cyan ring). Trigger/tap to place. Pieces spawn from the top and stop on the foundation.</div>
-  <div id="cap">…</div>
+  <div class="app">
+    <div class="hero">
+      <div class="avatar" aria-label="Animaeus avatar">
+        <div class="halo"></div>
+        <svg viewBox="0 0 200 200" aria-hidden="true">
+          <defs>
+            <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#6ee7ff"/><stop offset="100%" stop-color="#6b9df2"/>
+            </linearGradient>
+          </defs>
+          <circle cx="100" cy="100" r="72" fill="url(#g1)" opacity="0.18" />
+          <circle cx="100" cy="100" r="64" fill="#0c1520" stroke="#193147" stroke-width="2"/>
+          <circle cx="78" cy="92" r="7" fill="#9ad8ff"/>
+          <circle cx="122" cy="92" r="7" fill="#9ad8ff"/>
+          <path id="mouth" d="M70 122 Q100 138 130 122" stroke="#9ad8ff" stroke-width="4" fill="none" />
+        </svg>
+      </div>
+      <div>
+        <div class="statebar">
+          <span class="tag">Animaeus · Narrative POC</span>
+          <span id="micDot" class="dot" title="Mic ready"></span>
+          <span class="hint" id="supportHint">checking voice support…</span>
+        </div>
+        <div class="hint" style="margin-top:6px;">Try the mic if your browser supports it; otherwise type and press Enter. Click suggestions to branch.</div>
+        <div class="row" style="margin-top:12px;">
+          <button id="startBtn">Start Scene</button>
+          <button id="speakBtn">Have Animaeus Speak</button>
+          <button id="stopSpeakBtn">Stop Voice</button>
+          <button id="resetBtn">Reset</button>
+        </div>
+      </div>
+    </div>
 
-  <div id="uiTop">
-    <button id="reposition" class="btn wide">Re-place</button>
-    <button id="reset" class="btn">Reset</button>
-    <button id="pause" class="btn">Pause</button>
+    <div class="controls">
+      <div class="row">
+        <button id="micBtn" class="mic" aria-pressed="false">🎤 Hold to Speak</button>
+        <input id="textInput" type="text" placeholder="Type here and press Enter…" />
+      </div>
+      <div class="choices" id="choices"></div>
+      <div class="hint" style="margin-top:8px;">Inventory: <span id="inv">—</span></div>
+    </div>
+
+    <div class="log" id="log" aria-live="polite" aria-atomic="false"></div>
   </div>
 
-  <div id="uiBottom">
-    <button id="left" class="btn">◀︎</button>
-    <button id="rotate" class="btn">⟳</button>
-    <button id="right" class="btn">▶︎</button>
-    <button id="soft" class="btn">▽</button>
-    <button id="hard" class="btn">⤓</button>
-  </div>
+<script>
+(function(){
+  // ——— Capability checks
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const synth = window.speechSynthesis;
+  const recognitionSupported = !!SpeechRecognition;
+  const ttsSupported = !!synth;
+  const micDot = document.getElementById('micDot');
+  const supportHint = document.getElementById('supportHint');
+  micDot.classList.toggle('on', recognitionSupported);
+  supportHint.textContent =
+    (recognitionSupported ? 'Speech recognition available' : 'No speech recognition; use typing') +
+    ' · ' + (ttsSupported ? 'TTS available' : 'No TTS');
 
-<script type="module">
-  import * as THREE from "https://unpkg.com/three@0.161.0/build/three.module.js";
-  import { ARButton } from "https://unpkg.com/three@0.161.0/examples/jsm/webxr/ARButton.js";
+  // ——— UI refs
+  const logEl = document.getElementById('log');
+  const inputEl = document.getElementById('textInput');
+  const choicesEl = document.getElementById('choices');
+  const invEl = document.getElementById('inv');
+  const micBtn = document.getElementById('micBtn');
+  const startBtn = document.getElementById('startBtn');
+  const speakBtn = document.getElementById('speakBtn');
+  const stopSpeakBtn = document.getElementById('stopSpeakBtn');
+  const resetBtn = document.getElementById('resetBtn');
+  const mouth = document.getElementById('mouth');
 
-  const isQuest = /OculusBrowser/i.test(navigator.userAgent);
-
-  // ===== Renderer / scene / camera =====
-  const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
-  renderer.xr.enabled = true;
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
-
-  const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(70, window.innerWidth/window.innerHeight, 0.01, 20);
-
-  // Lights
-  scene.add(new THREE.AmbientLight(0xffffff, 0.55));
-  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-  dir.position.set(1, 2, 1);
-  scene.add(dir);
-
-  // ===== Reticle =====
-  const reticle = new THREE.Mesh(
-    new THREE.RingGeometry(0.06, 0.075, 32),
-    new THREE.MeshBasicMaterial({ color: 0x00ffcc, transparent:true, opacity:0.95 })
-  );
-  reticle.rotation.x = -Math.PI/2;
-  reticle.matrixAutoUpdate = false;
-  reticle.visible = false;
-  scene.add(reticle);
-
-  // ===== Dimensions =====
-  const COLS = 10, ROWS = 20, CELL = 0.06;
-  const boardW = COLS * CELL, boardH = ROWS * CELL;
-
-  const basePad = 0.02, baseW = boardW + basePad*2, baseD = 0.18, baseT = 0.02;
-  const barT = 0.006;
-  const blockDepth = CELL * 0.7;
-  const floorGap = 0.004;
-
-  // ===== Rig =====
-  const rig = new THREE.Group();
-  rig.visible = false;
-  scene.add(rig);
-
-  // Foundation
-  const foundation = new THREE.Mesh(
-    new THREE.BoxGeometry(baseW, baseT, baseD),
-    new THREE.MeshStandardMaterial({ color: 0x0b1020, roughness:0.95, metalness:0.05 })
-  );
-  foundation.position.y = baseT/2;
-  rig.add(foundation);
-
-  // Grid frame
-  const gridGroup = new THREE.Group();
-  gridGroup.position.set(0, baseT + floorGap, -baseD/2 + barT/2);
-  rig.add(gridGroup);
-
-  const gridMat = new THREE.MeshStandardMaterial({ color: 0x66ccff, emissive:0x002244, metalness:0.1, roughness:0.6 });
-  const railL = new THREE.Mesh(new THREE.BoxGeometry(barT*2, boardH + barT*2, barT*2), gridMat);
-  railL.position.set(-boardW/2 - barT, (boardH)/2, 0);
-  const railR = railL.clone(); railR.position.x = boardW/2 + barT;
-  const railB = new THREE.Mesh(new THREE.BoxGeometry(boardW + barT*2, barT*2, barT*2), gridMat);
-  railB.position.set(0, 0, 0);
-  const railT = railB.clone(); railT.position.y = boardH;
-  gridGroup.add(railL, railR, railB, railT);
-
-  const barGeoH = new THREE.BoxGeometry(boardW, barT, barT);
-  const barGeoV = new THREE.BoxGeometry(barT, boardH, barT);
-  const vInst = new THREE.InstancedMesh(barGeoV, gridMat, COLS-1);
-  for (let c=1, i=0; c<COLS; c++, i++){
-    vInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(-boardW/2 + c*CELL, boardH/2, 0));
-  }
-  const hInst = new THREE.InstancedMesh(barGeoH, gridMat, ROWS-1);
-  for (let r=1, i=0; r<ROWS; r++, i++){
-    hInst.setMatrixAt(i, new THREE.Matrix4().makeTranslation(0, r*CELL, 0));
-  }
-  gridGroup.add(vInst, hInst);
-
-  // Playfield
-  const playfield = new THREE.Group();
-  playfield.position.set(
-    gridGroup.position.x,
-    gridGroup.position.y + boardH/2,
-    gridGroup.position.z + blockDepth/2 + barT
-  );
-  rig.add(playfield);
-
-  const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(boardW, boardH),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent:true, opacity:0.12 })
-  );
-  shadow.rotation.x = -Math.PI/2;
-  shadow.position.set(0, 0.001, 0.0001);
-  playfield.add(shadow);
-
-  // ===== Tetris state =====
-  const SHAPES = {
-    I: [[[1,1,1,1]], [[1],[1],[1],[1]]],
-    J: [[[1,0,0],[1,1,1]], [[1,1],[1,0],[1,0]], [[1,1,1],[0,0,1]], [[0,1],[0,1],[1,1]]],
-    L: [[[0,0,1],[1,1,1]], [[1,0],[1,0],[1,1]], [[1,1,1],[1,0,0]], [[1,1],[0,1],[0,1]]],
-    O: [[[1,1],[1,1]]],
-    S: [[[0,1,1],[1,1,0]], [[1,0],[1,1],[0,1]]],
-    T: [[[0,1,0],[1,1,1]], [[1,0],[1,1],[1,0]], [[1,1,1],[0,1,0]], [[0,1],[1,1],[0,1]]],
-    Z: [[[1,1,0],[0,1,1]], [[0,1],[1,1],[1,0]]],
-  };
-  const KEYS = Object.keys(SHAPES);
-  const COLORS = [0x00ffff,0x0000ff,0xffa500,0xffff00,0x00ff00,0x800080,0xff0000];
-
-  const board = Array.from({length: ROWS}, () => Array(COLS).fill(0));
-  const blockGeo = new THREE.BoxGeometry(CELL, CELL, blockDepth);
-
-  let active = null;
-  let paused = false;
-  let speedMs = 700;
-  let lastStep = 0;
-
-  const $hud = document.getElementById('hud');
-  const $cap = document.getElementById('cap');
-  const $reposition = document.getElementById('reposition');
-  const $reset = document.getElementById('reset');
-  const $pause = document.getElementById('pause');
-  const $left = document.getElementById('left');
-  const $right = document.getElementById('right');
-  const $rotate = document.getElementById('rotate');
-  const $soft = document.getElementById('soft');
-  const $hard = document.getElementById('hard');
-
-  function setHud(t){ $hud.textContent = t; }
-  function setCap(t){ $cap.textContent = t; }
-  function vibrate(ms){ if (navigator.vibrate) navigator.vibrate(ms); }
-
-  // ===== Simple WebAudio sounds =====
-  let audioCtx = null, audioUnlocked = false;
-  function ensureAudio(){
-    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    if (audioCtx.state === "suspended") audioCtx.resume();
-    audioUnlocked = true;
-  }
-  function now(){ return audioCtx ? audioCtx.currentTime : 0; }
-  function playLaser(){
-    if (!audioUnlocked) return;
-    const t0 = now(), osc = audioCtx.createOscillator(), g = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
-    osc.type = "sawtooth"; f.type = "lowpass"; f.frequency.setValueAtTime(8000, t0);
-    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.25, t0+0.01); g.gain.exponentialRampToValueAtTime(0.0001, t0+0.12);
-    osc.frequency.setValueAtTime(1200, t0); osc.frequency.exponentialRampToValueAtTime(220, t0+0.12);
-    osc.connect(f).connect(g).connect(audioCtx.destination); osc.start(t0); osc.stop(t0+0.14);
-  }
-  function playExplosion(){
-    if (!audioUnlocked) return;
-    const t0 = now(); const n = audioCtx.createBufferSource();
-    const frames = 0.5 * audioCtx.sampleRate; const buf = audioCtx.createBuffer(1, frames, audioCtx.sampleRate);
-    const data = buf.getChannelData(0); for (let i=0;i<frames;i++) data[i] = (Math.random()*2-1) * (1 - i/frames);
-    n.buffer = buf; const f = audioCtx.createBiquadFilter(); f.type = "lowpass";
-    f.frequency.setValueAtTime(8000, t0); f.frequency.exponentialRampToValueAtTime(400, t0+0.45);
-    const g = audioCtx.createGain(); g.gain.setValueAtTime(0.001, t0); g.gain.exponentialRampToValueAtTime(0.6, t0+0.02); g.gain.exponentialRampToValueAtTime(0.0001, t0+0.5);
-    n.connect(f).connect(g).connect(audioCtx.destination); n.start(t0); n.stop(t0+0.55);
-  }
-  window.addEventListener('pointerdown', ()=>{ if(!audioUnlocked) ensureAudio(); }, { once:true });
-
-  // ===== Tetris logic =====
-  function spawnPiece(){
-    const k = KEYS[(Math.random()*KEYS.length)|0];
-    const rots = SHAPES[k];
-    const color = COLORS[KEYS.indexOf(k)];
-    const h = rots[0].length;
-    const startY = -h;
-    active = { k, rots, r:0, x:(COLS>>1)-2, y:startY, meshes:[], color };
-    active.group = new THREE.Group();
-    playfield.add(active.group);
-    buildActiveVisual();
-    if (!validMove(0,0,0)) gameOver();
-  }
-  function shapeAt(dr){ return active.rots[(active.r + dr + active.rots.length)%active.rots.length]; }
-  function materialFor(hex){ return new THREE.MeshStandardMaterial({ color: hex, metalness:0.2, roughness:0.7 }); }
-  function buildActiveVisual(){
-    while(active.group.children.length) active.group.remove(active.group.children[0]);
-    active.meshes = [];
-    const s = shapeAt(0), mat = materialFor(active.color);
-    for (let r=0;r<s.length;r++){
-      for (let c=0;c<s[0].length;c++){
-        if (!s[r][c]) continue;
-        const m = new THREE.Mesh(blockGeo, mat);
-        active.group.add(m); active.meshes.push(m);
-      }
-    }
-    updateActiveVisual();
-  }
-  function updateActiveVisual(){
-    const s = shapeAt(0); let i=0;
-    for (let r=0;r<s.length;r++){
-      for (let c=0;c<s[0].length;c++){
-        if (!s[r][c]) continue;
-        const gx = active.x + c, gy = active.y + r, m = active.meshes[i++];
-        m.position.set(gx*CELL - boardW/2 + CELL/2, (ROWS-1 - gy)*CELL - boardH/2 + CELL/2, 0);
-      }
-    }
-  }
-  function validMove(dx,dy,dr){
-    const s = shapeAt(dr);
-    for (let r=0;r<s.length;r++){
-      for (let c=0;c<s[0].length;c++){
-        if (!s[r][c]) continue;
-        const nx = active.x + dx + c, ny = active.y + dy + r;
-        if (nx < 0 || nx >= COLS) return false;
-        if (ny >= ROWS) return false;
-        if (ny >= 0 && board[ny][nx]) return false;
-      }
-    }
-    return true;
-  }
-  function commit(dx,dy,dr){
-    if (!validMove(dx,dy,dr)) return false;
-    active.x += dx; active.y += dy; active.r = (active.r + dr + active.rots.length) % active.rots.length;
-    buildActiveVisual(); return true;
-  }
-  function lockPiece(){
-    const s = shapeAt(0); let i=0;
-    for (let r=0;r<s.length;r++){
-      for (let c=0;c<s[0].length;c++){
-        if (!s[r][c]) continue;
-        const gx = active.x + c, gy = active.y + r;
-        if (gy >= 0) {
-          const m = new THREE.Mesh(blockGeo, materialFor(active.color));
-          m.position.set(gx*CELL - boardW/2 + CELL/2, (ROWS-1 - gy)*CELL - boardH/2 + CELL/2, 0);
-          playfield.add(m); board[gy][gx] = m;
-        }
-        i++;
-      }
-    }
-    playfield.remove(active.group); active = null; vibrate(12);
-    const cleared = clearLines(); if (cleared > 0) playExplosion();
-  }
-  function clearLines(){
-    let cleared = 0;
-    for (let r=ROWS-1; r>=0; r--){
-      if (board[r].every(Boolean)){
-        cleared++;
-        for (let c=0;c<COLS;c++){ const m = board[r][c]; playfield.remove(m); m.geometry.dispose(); m.material.dispose(); }
-        for (let rr=r; rr>0; rr--){
-          for (let c=0;c<COLS;c++){ board[rr][c] = board[rr-1][c]; if (board[rr][c]) board[rr][c].position.y -= CELL; }
-        }
-        for (let c=0;c<COLS;c++) board[0][c] = 0;
-        r++; // re-check
-      }
-    }
-    return cleared;
-  }
-  function step(){
-    if (paused || !rig.visible) return;
-    if (!active){ spawnPiece(); return; }
-    if (!commit(0,1,0)){ lockPiece(); spawnPiece(); }
-  }
-  function hardDrop(){
-    if (!active) return;
-    while (commit(0,1,0)) {}
-    playLaser(); lockPiece(); spawnPiece();
-  }
-  function gameOver(){ setHud("Game over — tap Reset or Re-place."); paused = true; playExplosion(); }
-
-  // Controls
-  function bindHold(el, fn){
-    let t=null; el.addEventListener('touchstart', e=>{ e.preventDefault(); ensureAudio(); fn(); t=setInterval(fn,150); }, {passive:false});
-    el.addEventListener('touchend', ()=> clearInterval(t));
-    el.addEventListener('click', e=>{ e.preventDefault(); ensureAudio(); fn(); });
-  }
-  bindHold($left, ()=> commit(-1,0,0));
-  bindHold($right, ()=> commit( 1,0,0));
-  bindHold($soft, ()=> commit( 0,1,0));
-  $rotate.addEventListener('click', ()=> { ensureAudio(); if (!commit(0,0,1)){ if (!commit(-1,0,1)) commit(1,0,1); } playLaser(); });
-  $hard.addEventListener('click', ()=> { ensureAudio(); hardDrop(); });
-
-  $pause.addEventListener('click', ()=> { paused = !paused; $pause.textContent = paused ? "Resume" : "Pause"; });
-  $reset.addEventListener('click', ()=>{
-    for (let r=0;r<ROWS;r++){
-      for (let c=0;c<COLS;c++){
-        if (board[r][c]){ playfield.remove(board[r][c]); board[r][c].geometry.dispose(); board[r][c].material.dispose(); board[r][c]=0; }
-      }
-    }
-    if (active){ playfield.remove(active.group); active=null; }
-    paused = false; spawnPiece();
-  });
-
-  // ===== WebXR session (Quest-friendly): do NOT require hit-test so AR can still start =====
-  const sessionFeatures = {
-    requiredFeatures: [],                         // don't block session if hit-test is missing
-    optionalFeatures: ["hit-test", "anchors", "local-floor", "unbounded"],
-    // NOTE: domOverlay is not supported in Quest immersive-ar; omit it to avoid failing
+  // ——— Narrative state
+  const state = {
+    flags: { metAnimaeus:false, doorUnlocked:false },
+    inventory: new Set(),
+    scene: 'intro'
   };
 
-  const arButton = ARButton.createButton(renderer, sessionFeatures);
-  arButton.id = "arStart";
-  arButton.innerHTML = `<span class="ring" aria-hidden="true"></span> Enter AR`;
-  document.body.appendChild(arButton);
-
-  // Hit test plumbing — try both viewer and transient-input
-  let xrSession=null, refSpace=null, viewerSpace=null, localFloorSpace=null;
-  let hitTestSource=null;
-  let transientHitSource=null;
-  let hasAnchors=false, anchor=null, anchorSpace=null;
-
-  let lastHitPoseMat = null;  // for viewer hit test
-  let lastTransientHitPoseMat = null;  // for controller-aligned hit test
-
-  function matFromPose(pose){ return new THREE.Matrix4().fromArray(pose.transform.matrix); }
-
-  // Fallback: intersect controller ray with y=0 floor in local-floor space
-  function controllerFloorIntersection(frame){
-    const inputSources = xrSession ? xrSession.inputSources : [];
-    for (const src of inputSources){
-      const targetRaySpace = src.targetRaySpace; if (!targetRaySpace) continue;
-      const pose = frame.getPose(targetRaySpace, refSpace || localFloorSpace);
-      if (!pose) continue;
-      // Ray origin and forward (z forward in XR; negative z is forward in view space).
-      const m = matFromPose(pose);
-      const o = new THREE.Vector3().setFromMatrixPosition(m);
-      const dir = new THREE.Vector3(0,0,-1).applyMatrix4(new THREE.Matrix4().extractRotation(m)).normalize();
-
-      // Plane y=0
-      if (Math.abs(dir.y) < 1e-4) continue; // parallel to floor
-      const t = -o.y / dir.y;
-      if (t <= 0.05) continue; // avoid behind/too close
-      const p = new THREE.Vector3().copy(o).addScaledVector(dir, t);
-      const mat = new THREE.Matrix4().makeRotationX(-Math.PI/2).setPosition(p.x, 0, p.z);
-      return mat;
-    }
-    return null;
+  function invString(){
+    return state.inventory.size ? Array.from(state.inventory).join(', ') : '—';
   }
-
-  // Place rig at a given transform matrix (Matrix4 in refSpace)
-  function placeRigFromMatrix(m){
-    const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-    m.decompose(p,q,s);
-    rig.position.copy(p); rig.quaternion.copy(q);
-    rig.position.y += 0.001; // tiny lift
-    rig.visible = true; paused = false; if (!active) spawnPiece();
+  function log(role, text){
+    const line = document.createElement('div');
+    line.className = 'line';
+    line.innerHTML = `<strong>${role}:</strong> ${text}`;
+    logEl.appendChild(line);
+    logEl.scrollTop = logEl.scrollHeight;
   }
-
-  const $repositionBtn = document.getElementById('reposition');
-  $repositionBtn.addEventListener('click', ()=>{
-    rig.visible = false; anchor=null; anchorSpace=null; paused = true;
-    setHud("Move device and aim the reticle. Trigger to place.");
-  });
-
-  renderer.xr.addEventListener("sessionstart", async ()=>{
-    if (arButton) arButton.style.display = "none";
-    ensureAudio();
-
-    xrSession = renderer.xr.getSession();
-
-    try {
-      hasAnchors = xrSession.enabledFeatures && xrSession.enabledFeatures.has("anchors");
-    } catch { hasAnchors = false; }
-
-    // Try to get local-floor first; fall back to local
-    try { localFloorSpace = await xrSession.requestReferenceSpace("local-floor"); } catch {}
-    refSpace = localFloorSpace || renderer.xr.getReferenceSpace();
-
-    try { viewerSpace = await xrSession.requestReferenceSpace("viewer"); } catch {}
-    try { hitTestSource = viewerSpace ? await xrSession.requestHitTestSource({ space: viewerSpace }) : null; } catch { hitTestSource = null; }
-
-    // Transient input hit-test (controller-aligned)
-    try {
-      transientHitSource = await xrSession.requestHitTestSourceForTransientInput({ profile: "generic-trigger" });
-    } catch { transientHitSource = null; }
-
-    // Status
-    if (transientHitSource) setCap("HIT: transient");
-    else if (hitTestSource) setCap("HIT: viewer");
-    else setCap("FALLBACK: controller→floor");
-
-    setHud("Scanning… look for the cyan ring. Trigger/tap to place.");
-
-    xrSession.addEventListener("select", async (ev)=>{
-      const ref = refSpace || renderer.xr.getReferenceSpace();
-      let used = false;
-
-      // Prefer transient result at the moment of select
-      if (transientHitSource){
-        const results = ev.frame.getHitTestResultsForTransientInput(transientHitSource);
-        if (results && results.length){
-          const first = results[0];
-          if (first.results && first.results.length){
-            const pose = first.results[0].getPose(ref);
-            if (pose){ placeRigFromMatrix(matFromPose(pose)); used = true; }
-          }
-        }
-      }
-      // Then viewer hit
-      if (!used && hitTestSource){
-        const results = ev.frame.getHitTestResults(hitTestSource);
-        if (results.length){
-          const pose = results[0].getPose(ref);
-          if (pose){ placeRigFromMatrix(matFromPose(pose)); used = true; }
-        }
-      }
-      // Fallback: controller ray → floor
-      if (!used){
-        const m = controllerFloorIntersection(ev.frame);
-        if (m){ placeRigFromMatrix(m); used = true; }
-      }
-
-      if (!used){ setHud("Could not place. Try aiming at a clearer surface or re-run AR."); }
+  function setChoices(opts){
+    choicesEl.innerHTML = '';
+    opts.forEach(o=>{
+      const b = document.createElement('button');
+      b.className = 'pill';
+      b.textContent = o.label;
+      b.onclick = ()=> handleText(o.input ?? o.label);
+      choicesEl.appendChild(b);
     });
-  });
-
-  renderer.xr.addEventListener("sessionend", ()=>{
-    xrSession=null; hitTestSource=null; transientHitSource=null; lastHitPoseMat=null; lastTransientHitPoseMat=null;
-    reticle.visible=false; rig.visible=false; paused=true; anchor=null; anchorSpace=null;
-    setHud("AR session ended."); setCap("—");
-    if (arButton) arButton.style.display = "inline-flex";
-  });
-
-  // Animation loop — update reticle from the best available source
-  renderer.setAnimationLoop((time, frame)=>{
-    const ref = refSpace || renderer.xr.getReferenceSpace();
-    let retMat = null;
-
-    if (frame){
-      // Try transient input HT first (controller-aligned)
-      if (transientHitSource){
-        const trans = frame.getHitTestResultsForTransientInput(transientHitSource);
-        if (trans && trans.length && trans[0].results && trans[0].results.length){
-          const pose = trans[0].results[0].getPose(ref);
-          if (pose){ lastTransientHitPoseMat = matFromPose(pose); retMat = lastTransientHitPoseMat; setCap("HIT: transient"); }
-        }
-      }
-      // Else try viewer hit-test
-      if (!retMat && hitTestSource){
-        const results = frame.getHitTestResults(hitTestSource);
-        if (results.length){
-          const pose = results[0].getPose(ref);
-          if (pose){ lastHitPoseMat = matFromPose(pose); retMat = lastHitPoseMat; setCap("HIT: viewer"); }
-        }
-      }
-      // Else fallback to controller→floor
-      if (!retMat){
-        const m = controllerFloorIntersection(frame);
-        if (m){ retMat = m; setCap("FALLBACK: controller→floor"); }
-      }
-    }
-
-    if (!rig.visible && retMat){
-      reticle.visible = true;
-      reticle.matrix.copy(retMat);
-    } else if (!rig.visible){
-      reticle.visible = false;
-    }
-
-    if (!paused && rig.visible){
-      if (time - lastStep > speedMs){ step(); lastStep = time; }
-    }
-
-    renderer.render(scene, camera);
-  });
-
-  // Resize
-  window.addEventListener('resize', ()=>{
-    camera.aspect = window.innerWidth/window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
-
-  if (!navigator.xr){
-    setHud("WebXR not exposed. Use Chrome/Android or Quest Browser over HTTPS.");
   }
+
+  // ——— Simple mouth animation synced to TTS
+  let mouthTimer = null;
+  function startMouth(){
+    stopMouth();
+    mouthTimer = setInterval(()=>{
+      const scale = 0.9 + Math.random()*0.4;
+      mouth.style.transform = `scaleY(${scale})`;
+    }, 80);
+  }
+  function stopMouth(){
+    clearInterval(mouthTimer); mouthTimer = null;
+    mouth.style.transform = 'scaleY(1)';
+  }
+
+  // ——— TTS
+  function speak(text){
+    if(!ttsSupported){ log('Animaeus', text); return; }
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.02; u.pitch = 1.0;
+    u.onstart = startMouth;
+    u.onend = stopMouth;
+    synth.cancel();
+    synth.speak(u);
+    log('Animaeus', text);
+  }
+
+  // ——— Very small narrative graph
+  const NODES = {
+    intro(){
+      state.scene = 'intro';
+      state.flags.metAnimaeus = true;
+      const line = "You wake to a hush: circuits dim, air cool. “Welcome back,” I say. “I’m Animaeus. We start with a question: do you want the world as it is, or the one that’s trying to be born?”";
+      speak(line);
+      setChoices([
+        {label:'Who are you?'},
+        {label:'Where are we?'},
+        {label:'Give me a sign.'}
+      ]);
+    },
+    askIdentity(){
+      speak("Names are masks. I am the thread between your questions. But if a name helps: I’m the companion who leaves when you no longer need me.");
+      setChoices([{label:"What's the task?"},{label:"Give me a sign."}]);
+    },
+    askPlace(){
+      speak("A vestibule between choices. Thin as a breath, wide as a life. Doors appear when you earn them.");
+      setChoices([{label:"Open a door."},{label:"Give me a sign."}]);
+    },
+    getSign(){
+      if(!state.inventory.has('sigil')){
+        state.inventory.add('sigil');
+        speak("I press a cool sigil into your palm. It hums when you tell the truth.");
+      }else{
+        speak("You already carry the sigil. It warms when your next step is aligned.");
+      }
+      invEl.textContent = invString();
+      setChoices([{label:"What does it unlock?"},{label:"Open a door."}]);
+    },
+    openDoor(){
+      if(state.inventory.has('sigil')){
+        state.flags.doorUnlocked = true;
+        speak("The sigil flares. A seam of light becomes a door. Beyond it: your first choice worth making.");
+      } else {
+        speak("Your hand meets blank wall. Doors require a vow—or a sigil.");
+      }
+      setChoices([{label:"Step through."},{label:"What’s the task?"}]);
+    },
+    task(){
+      speak("Simple: speak a truth you’ve avoided. The world listens differently after that.");
+      setChoices([{label:"Step through."},{label:"Another hint."}]);
+    },
+    hint(){
+      speak("If you can’t find the truth, tell me a small one. We’ll grow it together.");
+      setChoices([{label:"Step through."},{label:"Who are you?"}]);
+    },
+    stepThrough(){
+      if(state.flags.doorUnlocked){
+        speak("You step into a corridor of possible selves. For today, that’s enough. We’ll build the rest tomorrow.");
+      } else {
+        speak("The door won’t answer to hesitation. Try again with the sigil—and something true.");
+      }
+      setChoices([{label:"Reset scene"},{label:"Give me a sign."}]);
+    }
+  };
+
+  function routeIntent(text){
+    const t = (text||'').trim().toLowerCase();
+    if(!t) return;
+    if(/who|name|you/.test(t)) NODES.askIdentity();
+    else if(/where|place|are we/.test(t)) NODES.askPlace();
+    else if(/sign|gift|token|sigil/.test(t)) NODES.getSign();
+    else if(/door|open/.test(t)) NODES.openDoor();
+    else if(/task|mission|goal/.test(t)) NODES.task();
+    else if(/hint|help/.test(t)) NODES.hint();
+    else if(/step|through|enter/.test(t)) NODES.stepThrough();
+    else if(/reset/.test(t)) reset();
+    else {
+      speak("Say what you mean, even if it trembles.");
+      setChoices([{label:'Who are you?'},{label:'Where are we?'},{label:'Give me a sign.'}]);
+    }
+  }
+
+  function handleText(text){
+    log('You', text);
+    routeIntent(text);
+  }
+
+  // ——— Speech recognition (push-to-talk)
+  let recognition = null;
+  if(recognitionSupported){
+    recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    recognition.onresult = (e)=>{
+      const text = e.results[0][0].transcript;
+      handleText(text);
+    };
+    recognition.onerror = ()=> { micBtn.setAttribute('aria-pressed','false'); };
+    recognition.onend = ()=> { micBtn.setAttribute('aria-pressed','false'); };
+  }
+
+  // ——— Handlers
+  inputEl.addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter'){
+      const v = inputEl.value; inputEl.value = '';
+      handleText(v);
+    }
+  });
+  micBtn.addEventListener('mousedown', ()=>{
+    if(!recognition) return;
+    micBtn.setAttribute('aria-pressed','true');
+    try { recognition.start(); } catch(_) {}
+  });
+  micBtn.addEventListener('mouseup', ()=>{
+    if(!recognition) return;
+    try { recognition.stop(); } catch(_) {}
+  });
+  micBtn.addEventListener('mouseleave', ()=>{
+    if(!recognition) return;
+    try { recognition.stop(); } catch(_) {}
+  });
+
+  startBtn.onclick = ()=> { reset(false); NODES.intro(); };
+  speakBtn.onclick = ()=> { speak("Testing, testing… I’m here."); };
+  stopSpeakBtn.onclick = ()=> { if(ttsSupported) synth.cancel(); stopMouth(); };
+  resetBtn.onclick = ()=> reset(true);
+
+  function reset(clearLog=true){
+    state.flags.metAnimaeus=false;
+    state.flags.doorUnlocked=false;
+    state.inventory.clear();
+    state.scene='intro';
+    invEl.textContent = invString();
+    if(clearLog) logEl.innerHTML = '';
+    choicesEl.innerHTML = '';
+    speak("Reset complete. Ready when you are.");
+    setChoices([{label:'Start'},{label:'Give me a sign.'},{label:'Who are you?'}]);
+  }
+
+  // kick off
+  reset(false);
+})();
 </script>
 </body>
 </html>
