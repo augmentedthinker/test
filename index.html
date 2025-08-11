@@ -1,64 +1,34 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Animaeus · Minimal VR POC</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>VR Button + Controllers Only</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-  <style>body{margin:0;background:#08121b}</style>
 </head>
 <body>
-<a-scene xr-mode-ui="enabled: true" background="color: #0a1420"
-         renderer="antialias: true; physicallyCorrectLights: true">
-  <!-- simple lighting + floor so you’re not in a void -->
-  <a-entity light="type: hemisphere; intensity: 0.9; color: #bfe8ff; groundColor: #0a2030"></a-entity>
-  <a-entity geometry="primitive: circle; radius: 2.2" rotation="-90 0 0"
-            material="color: #0b1c2a; roughness: 1"></a-entity>
+  <!-- Enter VR button appears automatically in the bottom-right -->
+  <a-scene xr-mode-ui="enabled: true">
+    <!-- Camera (no movement controls to keep it minimal) -->
+    <a-entity id="cameraRig" position="0 1.6 0">
+      <a-entity id="camera" camera look-controls></a-entity>
 
-  <!-- camera + controller lasers -->
-  <a-entity id="rig" position="0 1.6 0">
-    <a-entity id="cam" camera look-controls></a-entity>
-    <a-entity laser-controls="hand: left"  raycaster="objects: .clickable; far: 20"></a-entity>
-    <a-entity laser-controls="hand: right" raycaster="objects: .clickable; far: 20"></a-entity>
-  </a-entity>
+      <!-- Left controller: model + laser/pointer -->
+      <a-entity
+        oculus-touch-controls="hand: left; model: true"
+        laser-controls="hand: left"
+        raycaster="objects: .clickable; far: 30"
+        line="color: #6ee7ff; opacity: 0.9">
+      </a-entity>
 
-  <!-- BEGIN button -->
-  <a-plane id="begin" class="clickable" position="0 1.4 -2" width="1" height="0.3"
-           color="#1b7a4b"></a-plane>
-  <a-text value="BEGIN" position="0 1.4 -1.99" align="center" color="#ffffff" width="2"></a-text>
-
-  <!-- Animaeus (hidden until start) -->
-  <a-entity id="animaeus" visible="false" position="0 1.65 -1.2">
-    <a-sphere radius="0.22" color="#0c1a26" material="emissive:#103048; emissiveIntensity:0.25"></a-sphere>
-  </a-entity>
-</a-scene>
-
-<script>
-  // minimal “talker”: uses speechSynthesis if present
-  const intro = `You wake to a hush: circuits dim, air cool. Welcome back. I am Animaeus.`;
-  let audioUnlocked = false;
-  const unlock = () => audioUnlocked = true;
-  window.addEventListener('click', unlock, {once:true});
-  window.addEventListener('touchstart', unlock, {once:true});
-
-  function speak(text){
-    const synth = window.speechSynthesis;
-    if(!synth) return;
-    try{
-      synth.cancel();
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.02; u.pitch = 1.0;
-      if(audioUnlocked) synth.speak(u); else setTimeout(()=>synth.speak(u), 50);
-    }catch(e){}
-  }
-
-  // start flow
-  document.getElementById('begin').addEventListener('click', ()=>{
-    const a = document.getElementById('animaeus');
-    a.setAttribute('visible', true);
-    document.getElementById('begin').setAttribute('visible', false);
-    speak(intro);
-  });
-</script>
+      <!-- Right controller: model + laser/pointer -->
+      <a-entity
+        oculus-touch-controls="hand: right; model: true"
+        laser-controls="hand: right"
+        raycaster="objects: .clickable; far: 30"
+        line="color: #6ee7ff; opacity: 0.9">
+      </a-entity>
+    </a-entity>
+  </a-scene>
 </body>
 </html>
