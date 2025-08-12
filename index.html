@@ -2,199 +2,252 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR Wireframe Sphere + Meridian Visualizer</title>
+  <title>VR Spherical Sound Bars (Meridian Cells)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    body { margin:0; background:#000; font-family:system-ui, sans-serif; }
-    .ui {
-      position: fixed; left: 50%; transform: translateX(-50%);
-      bottom: 18px; display: flex; gap: 10px; z-index: 10;
-    }
-    .ui button{
-      padding:10px 16px; border-radius:24px; border:2px solid #00ffff;
-      background: rgba(0,255,255,.12); color:#00ffff; font-weight:600;
-      cursor:pointer; backdrop-filter: blur(8px);
-    }
-    .ui button:disabled{opacity:.5; cursor:not-allowed}
-    .hint{
-      position: fixed; top: 16px; left: 16px; color:#8ff; opacity:.8; font-size:14px;
-      z-index:10
-    }
+    body{margin:0;background:#000;font-family:system-ui,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
+    .ui{position:fixed;left:50%;transform:translateX(-50%);bottom:18px;display:flex;gap:10px;z-index:10}
+    .ui button{padding:10px 16px;border-radius:24px;border:2px solid #00ffff;background:rgba(0,255,255,.12);color:#00ffff;font-weight:700;cursor:pointer;backdrop-filter:blur(8px)}
+    .ui button:disabled{opacity:.55;cursor:not-allowed}
+    .hint{position:fixed;top:16px;left:16px;color:#9ff;opacity:.85;font-size:14px;z-index:10;max-width:68ch;line-height:1.2}
   </style>
 </head>
 <body>
-  <div class="hint">🎤 Meridian Visualizer: tap <b>Start Mic</b> once, then Enter VR.</div>
+  <div class="hint">🎤 Big audio bars between meridians. Tap <b>Start Mic</b> (user gesture required), then <b>Enter VR</b>. You should see strong pulses; if not, you’ll still see a fallback animation.</div>
   <div class="ui">
     <button id="start">🎤 Start Mic</button>
     <button id="stop" disabled>⏹️ Stop</button>
   </div>
 
-  <a-scene xr-mode-ui="enabled: true" renderer="colorManagement: true; physicallyCorrectLights: true">
-    <!-- Camera rig centered in the sphere -->
+  <a-scene xr-mode-ui="enabled: true" renderer="colorManagement:true; physicallyCorrectLights:true; antialias:true">
+    <!-- Centered rig -->
     <a-entity id="cameraRig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
+      <a-entity id="camera" camera look-controls></a-entity>
 
-      <!-- Controllers + lasers -->
+      <!-- Controllers + laser lines -->
       <a-entity oculus-touch-controls="hand: left; model: true"
                 laser-controls="hand: left"
                 raycaster="objects: .clickable; far: 30"
-                line="color: #6ee7ff; opacity: 0.9"></a-entity>
-
+                line="color:#6ee7ff; opacity:0.9"></a-entity>
       <a-entity oculus-touch-controls="hand: right; model: true"
                 laser-controls="hand: right"
                 raycaster="objects: .clickable; far: 30"
-                line="color: #6ee7ff; opacity: 0.9"></a-entity>
+                line="color:#6ee7ff; opacity:0.9"></a-entity>
     </a-entity>
 
-    <!-- Soft light so models aren’t pitch black -->
-    <a-entity light="type: ambient; intensity: 0.4"></a-entity>
-    <a-entity light="type: point; intensity: 0.8; distance: 20" position="0 2 2"></a-entity>
+    <!-- Lighting -->
+    <a-entity light="type: ambient; intensity: 0.5"></a-entity>
+    <a-entity light="type: point; intensity: 1.0; distance: 25" position="0 2 2"></a-entity>
 
-    <!-- Wireframe sphere: 20ft diameter ≈ 6.096m (radius ≈ 3.048m) -->
+    <!-- Wireframe sphere shell (20 ft diameter ≈ 6.096 m; radius ≈ 3.048 m) -->
     <a-sphere radius="3.048" position="0 1.6 0"
-              segments-width="48" segments-height="32"
-              material="color:#0ff; wireframe:true; opacity:0.25; transparent:true">
-    </a-sphere>
+              segments-width="64" segments-height="40"
+              material="color:#00ffff; wireframe:true; opacity:0.22; transparent:true"></a-sphere>
 
-    <!-- Meridian visualizer container -->
-    <a-entity id="meridians"
+    <!-- Bars that fill the cells between meridians/latitudes -->
+    <a-entity id="bars"
               position="0 1.6 0"
-              audio-meridians="radius:3.048; meridians:24; beads:48; speed:0.6">
+              spherical-bars="radius:3.048; meridians:32; latBands:18; thickness:0.035; gain:1.8; smoothing:0.75; fft:256">
     </a-entity>
 
-    <!-- Minimal horizon so you feel centered -->
+    <!-- Small horizon ring at the feet -->
     <a-ring position="0 0 0" rotation="-90 0 0" radius-inner="0.05" radius-outer="0.06"
-            material="color:#0ff; opacity:0.6; transparent:true"></a-ring>
+            material="color:#00ffff; opacity:0.7; transparent:true"></a-ring>
   </a-scene>
 
   <script>
-    // ---- Microphone + analyser (shared) ----
-    let audioCtx = null, analyser = null, mic = null, data = null, micStream = null;
-    const FFT_SIZE = 256, SMOOTHING = 0.8;
-
-    async function startMic(){
-      try{
-        micStream = await navigator.mediaDevices.getUserMedia({audio:{
-          echoCancellation:true, noiseSuppression:true, autoGainControl:true, sampleRate:22050
-        }});
-        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        analyser = audioCtx.createAnalyser();
-        analyser.fftSize = FFT_SIZE;
-        analyser.smoothingTimeConstant = SMOOTHING;
-        mic = audioCtx.createMediaStreamSource(micStream);
-        mic.connect(analyser);
-        data = new Uint8Array(analyser.frequencyBinCount);
-        document.getElementById('start').disabled = true;
-        document.getElementById('stop').disabled = false;
-        // Notify A-Frame components
-        window.dispatchEvent(new CustomEvent('mic-ready', {detail:{analyser, data}}));
-      }catch(e){
-        alert('Mic access failed. On Quest, tap Start Mic before Enter VR.\n' + e.message);
-      }
-    }
-    function stopMic(){
-      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
-      if(audioCtx){ audioCtx.close(); audioCtx=null; }
-      analyser = null; data = null;
-      document.getElementById('start').disabled = false;
-      document.getElementById('stop').disabled = true;
-      window.dispatchEvent(new Event('mic-stopped'));
-    }
-    document.getElementById('start').addEventListener('click', startMic);
-    document.getElementById('stop').addEventListener('click', stopMic);
-
-    // ---- A-Frame component: build meridians + animate beads upward to audio ----
-    AFRAME.registerComponent('audio-meridians', {
-      schema: {
-        radius:{type:'number', default:3.048},      // meters (≈10 ft)
-        meridians:{type:'int', default:24},         // how many longitudes
-        beads:{type:'int', default:48},             // beads per meridian (from south to north)
-        speed:{type:'number', default:0.6}          // base upward speed (cycles/sec)
-      },
-      init: function(){
-        this.el.object3D.matrixAutoUpdate = true;
-        const {radius, meridians, beads} = this.data;
-        this.groups = [];
-        this.heads = new Array(meridians).fill(0); // progress 0..1 climbing upward
-        this.gains = new Array(meridians).fill(0); // audio influence per meridian
-
-        // Build meridians as bead chains
-        for(let m=0; m<meridians; m++){
-          const group = new THREE.Group();
-          const lon = (m/meridians) * Math.PI*2; // longitude angle
-          for(let i=0;i<beads;i++){
-            const t = i/(beads-1);               // 0..1 from south to north
-            const lat = -Math.PI/2 + t*Math.PI;  // latitude angle
-            const x = radius * Math.cos(lat) * Math.cos(lon);
-            const y = radius * Math.sin(lat);
-            const z = radius * Math.cos(lat) * Math.sin(lon);
-            const bead = document.createElement('a-sphere');
-            bead.setAttribute('radius', 0.03); // ~3cm
-            bead.setAttribute('position', `${x} ${y} ${z}`);
-            bead.setAttribute('material', 'color:#00ffff; emissive:#00ffff; emissiveIntensity:0.0; opacity:0.6; transparent:true; metalness:0; roughness:1');
-            // face camera a bit brighter at eye level to anchor presence
-            if (Math.abs(y) < 0.2) bead.setAttribute('material', 'color:#a0ffff; emissive:#a0ffff; emissiveIntensity:0.1; opacity:0.75; transparent:true');
-            group.add(bead.object3D);
-          }
-          this.el.object3D.add(group);
-          this.groups.push(group);
+  // ----------- Microphone plumbing -----------
+  let audioCtx=null, analyser=null, micStream=null, dataArray=null;
+  async function startMic(){
+    try{
+      micStream = await navigator.mediaDevices.getUserMedia({
+        audio:{
+          echoCancellation:true, noiseSuppression:true, autoGainControl:true
         }
+      });
+      audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.75;
+      const src = audioCtx.createMediaStreamSource(micStream);
+      src.connect(analyser);
+      dataArray = new Uint8Array(analyser.frequencyBinCount);
+      document.getElementById('start').disabled = true;
+      document.getElementById('stop').disabled = false;
+      window.dispatchEvent(new CustomEvent('mic-ready',{detail:{analyser, dataArray}}));
+    }catch(e){
+      alert('Mic permission failed. On Quest, you must tap "Start Mic" first.\n' + e.message);
+    }
+  }
+  function stopMic(){
+    if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+    if(audioCtx){ audioCtx.close(); audioCtx=null; }
+    analyser=null; dataArray=null;
+    document.getElementById('start').disabled=false;
+    document.getElementById('stop').disabled=true;
+    window.dispatchEvent(new Event('mic-stopped'));
+  }
+  document.getElementById('start').addEventListener('click', startMic);
+  document.getElementById('stop').addEventListener('click', stopMic);
 
-        // Listen for mic readiness
+  // ----------- A-Frame component: spherical bars -----------
+  AFRAME.registerComponent('spherical-bars',{
+    schema:{
+      radius:{type:'number', default:3.048},     // ≈10 ft
+      meridians:{type:'int', default:32},        // longitudes
+      latBands:{type:'int', default:18},         // latitude slices (south->north)
+      thickness:{type:'number', default:0.03},   // how "thick" the quads pop visually
+      gain:{type:'number', default:1.6},         // visual loudness multiplier
+      smoothing:{type:'number', default:0.75},   // how much to smooth mic data
+      fft:{type:'int', default:256}              // FFT size (must match mic)
+    },
+    init:function(){
+      const THREE = AFRAME.THREE;
+      const d = this.data;
+      this.group = new THREE.Group();
+      this.el.object3D.add(this.group);
+
+      // Build quads between adjacent meridians & latitude bands
+      const R = d.radius;
+      const M = d.meridians;
+      const B = d.latBands;
+      const shell = R + 0.001; // avoid z-fighting with wireframe
+      const off  = d.thickness; // normal offset for thickness illusion
+
+      this.cells = []; // {mesh, m, b, val, avg}
+      for(let m=0;m<M;m++){
+        const lon0 = (m/M)*Math.PI*2;
+        const lon1 = ((m+1)/M)*Math.PI*2;
+        for(let b=0;b<B;b++){
+          const t0 = b/B, t1 = (b+1)/B;
+          const lat0 = -Math.PI/2 + t0*Math.PI;
+          const lat1 = -Math.PI/2 + t1*Math.PI;
+
+          const p = (lon,lat,r)=>new THREE.Vector3(
+            r*Math.cos(lat)*Math.cos(lon),
+            r*Math.sin(lat),
+            r*Math.cos(lat)*Math.sin(lon)
+          );
+
+          // Four corners (slightly inflated radius for a clear panel)
+          const a = p(lon0, lat0, shell);
+          const btm = p(lon1, lat0, shell);
+          const c = p(lon1, lat1, shell);
+          const dpt = p(lon0, lat1, shell);
+
+          // Create geometry (two triangles)
+          const geom = new THREE.BufferGeometry();
+          const verts = new Float32Array([
+            a.x,a.y,a.z,  btm.x,btm.y,btm.z,  c.x,c.y,c.z,
+            a.x,a.y,a.z,  c.x,c.y,c.z,       dpt.x,dpt.y,dpt.z
+          ]);
+          geom.setAttribute('position', new THREE.BufferAttribute(verts,3));
+          geom.computeVertexNormals();
+
+          // Material (strong emissive + transparency)
+          const mat = new THREE.MeshStandardMaterial({
+            color: 0x00ffff,
+            emissive: 0x00ffff,
+            emissiveIntensity: 0.0,
+            transparent: true,
+            opacity: 0.08,
+            metalness: 0.0,
+            roughness: 1.0,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+            depthTest: true
+          });
+
+          const mesh = new THREE.Mesh(geom, mat);
+          // Slightly push outward along averaged normal for thickness feel
+          const center = new THREE.Vector3().addVectors(a,btm).add(c).add(dpt).multiplyScalar(0.25);
+          const normal = center.clone().normalize();
+          mesh.position.copy(normal.multiplyScalar(off*0.5));
+
+          this.group.add(mesh);
+          this.cells.push({mesh, m, b, val:0, avg:0});
+        }
+      }
+
+      // Mic hookup
+      this.analyser = null;
+      this.dataArray = null;
+      this.scratch = [];
+      window.addEventListener('mic-ready', (e)=>{
+        this.analyser = e.detail.analyser;
+        this.dataArray = e.detail.dataArray;
+        if (this.analyser) {
+          // align smoothing with schema
+          this.analyser.smoothingTimeConstant = this.data.smoothing;
+          if (this.analyser.fftSize !== this.data.fft) this.analyser.fftSize = this.data.fft;
+        }
+      });
+      window.addEventListener('mic-stopped', ()=>{
         this.analyser = null; this.dataArray = null;
-        window.addEventListener('mic-ready', (e)=>{
-          this.analyser = e.detail.analyser;
-          this.dataArray = e.detail.data;
-        });
-        window.addEventListener('mic-stopped', ()=>{
-          this.analyser = null; this.dataArray = null;
-        });
+      });
 
-        this.last = performance.now();
-      },
-      tick: function(time, delta){
-        const dt = Math.min(delta, 50)/1000; // clamp big frames
-        const {meridians, beads, speed} = this.data;
+      this.t = 0;
+    },
+    tick:function(time,delta){
+      const dt = Math.min(delta, 50)/1000;
+      this.t += dt;
 
-        // Audio pull
-        let audioBoost = 0.25;
-        if(this.analyser && this.dataArray){
-          this.analyser.getByteFrequencyData(this.dataArray);
-          // Map frequency bins around the circle
-          const len = this.dataArray.length;
-          for(let m=0; m<meridians; m++){
-            const bin = Math.floor((m/meridians) * len);
-            const v = this.dataArray[bin]/255;
-            // smooth per-meridian gain
-            this.gains[m] = this.gains[m]*0.8 + v*0.2;
-          }
-          // global boost from overall loudness
-          let sum = 0; for(let i=0;i<len;i++) sum += this.dataArray[i];
-          audioBoost = 0.15 + (sum/len)/255 * 0.85;
-        }
-
-        // Advance “heads” upward; illuminate nearby beads
-        for(let m=0; m<meridians; m++){
-          const headSpeed = speed * (0.6 + this.gains[m]*1.4); // faster on louder freqs
-          this.heads[m] = (this.heads[m] + headSpeed*dt) % 1;
-
-          const headIdx = this.heads[m] * (beads-1);
-          // Update emissive intensity per bead based on distance from head
-          const children = this.groups[m].children;
-          for(let i=0;i<beads;i++){
-            const d = Math.abs(i - headIdx);        // beads away from head
-            const glow = Math.max(0, 1 - d/4);      // falloff across ~4 beads
-            const intensity = glow * (0.2 + audioBoost*0.8);
-            const mat = children[i].material;
-            if (mat){
-              mat.emissiveIntensity = intensity;
-              mat.opacity = 0.35 + intensity*0.55;
-            }
-          }
-        }
+      // Pull audio or fallback synth
+      let bins = null;
+      let len = 0;
+      if(this.analyser && this.dataArray){
+        this.analyser.getByteFrequencyData(this.dataArray);
+        bins = this.dataArray;
+        len = bins.length;
       }
-    });
+
+      const M = this.data.meridians;
+      const B = this.data.latBands;
+      const G = this.data.gain;
+
+      // Map frequency → spherical grid: longitude = around, latitude = low→high
+      // If no mic, synth a rotating gradient so you still see motion.
+      const energyAt = (m,b)=>{
+        if(!bins){
+          // fallback: moving blobs
+          const base = 0.5 + 0.5*Math.sin(this.t*1.6 + m*0.3) * Math.cos(this.t*0.9 + b*0.5);
+          return Math.max(0, base);
+        }
+        // Partition vertically so lows at bottom, highs at top
+        const start = Math.floor((b/B) * len);
+        const end   = Math.floor(((b+1)/B) * len);
+        let sum=0, n=0;
+        // Add a small longitudinal offset so adjacent meridians see slightly different bins
+        const offset = Math.floor((m/M)*3);
+        for(let i=start;i<end;i++){
+          const idx = Math.min(len-1, i+offset);
+          sum += bins[idx]; n++;
+        }
+        return n? (sum/n)/255 : 0;
+      };
+
+      // Update all cells: strong emissive pulse + opacity + slight hue shift
+      for(const cell of this.cells){
+        const raw = energyAt(cell.m, cell.b);
+        // Smooth per-cell for stability
+        cell.avg = cell.avg*0.75 + raw*0.25;
+        const v = Math.min(1, cell.avg * G);
+
+        const mat = cell.mesh.material;
+        // Hue shift from teal→cyan→white with loudness
+        const h = 0.48 - 0.08*v;    // ~teal to aqua
+        const s = 0.9 - 0.3*v;
+        const l = 0.5 + 0.3*v;
+        mat.color.setHSL(h, s, l);
+        mat.emissive.setHSL(h, s, Math.min(0.6, 0.3 + 0.7*v));
+
+        // Big, obvious brightness + opacity swing
+        mat.emissiveIntensity = 0.1 + v*2.2;
+        mat.opacity = 0.06 + v*0.9;
+      }
+    }
+  });
   </script>
 </body>
 </html>
