@@ -2,180 +2,196 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR Polar Bars Audio Visualizer</title>
+  <title>VR Wireframe Sphere + Meridian Visualizer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#000; color:#9ff; }
-    .ui { position:fixed; left:50%; transform:translateX(-50%); bottom:18px; display:flex; gap:10px; z-index:5; }
-    button { border:2px solid #00FFFF88; background:#001a1a; color:#9ff; padding:10px 14px; border-radius:999px; cursor:pointer; font-size:14px; }
-    button:hover { background:#003333; }
-    .status { position:fixed; left:20px; top:16px; z-index:5; opacity:.9; font-size:14px; color:#8ff; }
-    .warn { color:#ff9; }
-    .err { color:#f88; }
+    body { margin:0; background:#000; font-family:system-ui, sans-serif; }
+    .ui {
+      position: fixed; left: 50%; transform: translateX(-50%);
+      bottom: 18px; display: flex; gap: 10px; z-index: 10;
+    }
+    .ui button{
+      padding:10px 16px; border-radius:24px; border:2px solid #00ffff;
+      background: rgba(0,255,255,.12); color:#00ffff; font-weight:600;
+      cursor:pointer; backdrop-filter: blur(8px);
+    }
+    .ui button:disabled{opacity:.5; cursor:not-allowed}
+    .hint{
+      position: fixed; top: 16px; left: 16px; color:#8ff; opacity:.8; font-size:14px;
+      z-index:10
+    }
   </style>
 </head>
 <body>
-  <div class="status" id="status">🔊 Ready. Click <b>Start Mic</b> (Quest needs HTTPS on GitHub Pages).</div>
+  <div class="hint">🎤 Meridian Visualizer: tap <b>Start Mic</b> once, then Enter VR.</div>
   <div class="ui">
-    <button id="startBtn">🎤 Start Mic</button>
-    <button id="stopBtn" disabled>⏹️ Stop</button>
-    <button id="recenterBtn">🎯 Recenter</button>
+    <button id="start">🎤 Start Mic</button>
+    <button id="stop" disabled>⏹️ Stop</button>
   </div>
 
-  <!-- SCENE -->
-  <a-scene renderer="antialias: true; colorManagement: true" background="color: #000">
-    <!-- Camera + controllers -->
+  <a-scene xr-mode-ui="enabled: true" renderer="colorManagement: true; physicallyCorrectLights: true">
+    <!-- Camera rig centered in the sphere -->
     <a-entity id="cameraRig" position="0 1.6 0">
-      <a-entity id="camera" camera look-controls></a-entity>
-      <a-entity oculus-touch-controls="hand: left; model: true" laser-controls="hand: left" raycaster="objects: .clickable; far: 30" line="color: #6ee7ff; opacity: 0.9"></a-entity>
-      <a-entity oculus-touch-controls="hand: right; model: true" laser-controls="hand: right" raycaster="objects: .clickable; far: 30" line="color: #6ee7ff; opacity: 0.9"></a-entity>
+      <a-entity id="camera" camera look-controls wasd-controls="enabled:false"></a-entity>
+
+      <!-- Controllers + lasers -->
+      <a-entity oculus-touch-controls="hand: left; model: true"
+                laser-controls="hand: left"
+                raycaster="objects: .clickable; far: 30"
+                line="color: #6ee7ff; opacity: 0.9"></a-entity>
+
+      <a-entity oculus-touch-controls="hand: right; model: true"
+                laser-controls="hand: right"
+                raycaster="objects: .clickable; far: 30"
+                line="color: #6ee7ff; opacity: 0.9"></a-entity>
     </a-entity>
 
-    <!-- Cosmic shell so you're inside a sphere -->
-    <a-entity id="shell"
-              geometry="primitive: sphere; radius: 8; segmentsWidth: 96; segmentsHeight: 64"
-              material="color: #02141a; metalness: 0.0; roughness: 1.0; side: back; emissive:#012; emissiveIntensity:0.3"
-              position="0 1.6 0"></a-entity>
+    <!-- Soft light so models aren’t pitch black -->
+    <a-entity light="type: ambient; intensity: 0.4"></a-entity>
+    <a-entity light="type: point; intensity: 0.8; distance: 20" position="0 2 2"></a-entity>
 
-    <!-- South pole glow disk (lit up pole) -->
-    <a-entity id="southGlow" position="0 -6.4 0"> <!-- -radius*0.8 relative to rig -->
-      <a-circle radius="1.6" rotation="-90 0 0" material="color:#0ff; emissive:#0ff; emissiveIntensity:1.2; opacity:0.85; transparent:true"></a-circle>
-      <a-ring radius-inner="1.7" radius-outer="2.4" rotation="-90 0 0" material="color:#6cf; emissive:#6cf; emissiveIntensity:0.8; opacity:0.5; transparent:true"></a-ring>
+    <!-- Wireframe sphere: 20ft diameter ≈ 6.096m (radius ≈ 3.048m) -->
+    <a-sphere radius="3.048" position="0 1.6 0"
+              segments-width="48" segments-height="32"
+              material="color:#0ff; wireframe:true; opacity:0.25; transparent:true">
+    </a-sphere>
+
+    <!-- Meridian visualizer container -->
+    <a-entity id="meridians"
+              position="0 1.6 0"
+              audio-meridians="radius:3.048; meridians:24; beads:48; speed:0.6">
     </a-entity>
 
-    <!-- Bars group (erupts from south pole upward) -->
-    <a-entity id="bars" polar-visualizer="radius: 8; bands: 48"></a-entity>
+    <!-- Minimal horizon so you feel centered -->
+    <a-ring position="0 0 0" rotation="-90 0 0" radius-inner="0.05" radius-outer="0.06"
+            material="color:#0ff; opacity:0.6; transparent:true"></a-ring>
   </a-scene>
 
   <script>
-    // ===== Polar Bars Visualizer Component =====
-    AFRAME.registerComponent('polar-visualizer', {
-      schema: { radius: {type:'number', default: 8}, bands: {type:'int', default: 48} },
-      init(){
-        this.started=false; this.audioCtx=null; this.analyser=null; this.src=null; this.data=null;
-        this.bars=[]; this.levels=[]; this.target=[]; this.time=0;
-        this._makeBars();
-        this._bindUI();
-      },
-      _bindUI(){
-        const status = document.getElementById('status');
-        const startBtn = document.getElementById('startBtn');
-        const stopBtn = document.getElementById('stopBtn');
-        const recenterBtn = document.getElementById('recenterBtn');
+    // ---- Microphone + analyser (shared) ----
+    let audioCtx = null, analyser = null, mic = null, data = null, micStream = null;
+    const FFT_SIZE = 256, SMOOTHING = 0.8;
 
-        startBtn.addEventListener('click', async () => {
-          try {
-            if (this.started) return;
-            const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
-            this.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
-            this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 1024; // more bands → smoother circle mapping
-            this.analyser.smoothingTimeConstant = 0.7;
-            this.src = this.audioCtx.createMediaStreamSource(stream);
-            this.src.connect(this.analyser);
-            this.data = new Uint8Array(this.analyser.frequencyBinCount);
-            this.started=true; startBtn.disabled=true; stopBtn.disabled=false;
-            status.textContent = '🎧 Listening… bars rise from the south pole.';
-          } catch(e){
-            status.innerHTML = '❌ <span class="err">Microphone permission failed.</span> Use HTTPS in Quest and allow mic.';
-            console.error(e);
+    async function startMic(){
+      try{
+        micStream = await navigator.mediaDevices.getUserMedia({audio:{
+          echoCancellation:true, noiseSuppression:true, autoGainControl:true, sampleRate:22050
+        }});
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = FFT_SIZE;
+        analyser.smoothingTimeConstant = SMOOTHING;
+        mic = audioCtx.createMediaStreamSource(micStream);
+        mic.connect(analyser);
+        data = new Uint8Array(analyser.frequencyBinCount);
+        document.getElementById('start').disabled = true;
+        document.getElementById('stop').disabled = false;
+        // Notify A-Frame components
+        window.dispatchEvent(new CustomEvent('mic-ready', {detail:{analyser, data}}));
+      }catch(e){
+        alert('Mic access failed. On Quest, tap Start Mic before Enter VR.\n' + e.message);
+      }
+    }
+    function stopMic(){
+      if(micStream){ micStream.getTracks().forEach(t=>t.stop()); micStream=null; }
+      if(audioCtx){ audioCtx.close(); audioCtx=null; }
+      analyser = null; data = null;
+      document.getElementById('start').disabled = false;
+      document.getElementById('stop').disabled = true;
+      window.dispatchEvent(new Event('mic-stopped'));
+    }
+    document.getElementById('start').addEventListener('click', startMic);
+    document.getElementById('stop').addEventListener('click', stopMic);
+
+    // ---- A-Frame component: build meridians + animate beads upward to audio ----
+    AFRAME.registerComponent('audio-meridians', {
+      schema: {
+        radius:{type:'number', default:3.048},      // meters (≈10 ft)
+        meridians:{type:'int', default:24},         // how many longitudes
+        beads:{type:'int', default:48},             // beads per meridian (from south to north)
+        speed:{type:'number', default:0.6}          // base upward speed (cycles/sec)
+      },
+      init: function(){
+        this.el.object3D.matrixAutoUpdate = true;
+        const {radius, meridians, beads} = this.data;
+        this.groups = [];
+        this.heads = new Array(meridians).fill(0); // progress 0..1 climbing upward
+        this.gains = new Array(meridians).fill(0); // audio influence per meridian
+
+        // Build meridians as bead chains
+        for(let m=0; m<meridians; m++){
+          const group = new THREE.Group();
+          const lon = (m/meridians) * Math.PI*2; // longitude angle
+          for(let i=0;i<beads;i++){
+            const t = i/(beads-1);               // 0..1 from south to north
+            const lat = -Math.PI/2 + t*Math.PI;  // latitude angle
+            const x = radius * Math.cos(lat) * Math.cos(lon);
+            const y = radius * Math.sin(lat);
+            const z = radius * Math.cos(lat) * Math.sin(lon);
+            const bead = document.createElement('a-sphere');
+            bead.setAttribute('radius', 0.03); // ~3cm
+            bead.setAttribute('position', `${x} ${y} ${z}`);
+            bead.setAttribute('material', 'color:#00ffff; emissive:#00ffff; emissiveIntensity:0.0; opacity:0.6; transparent:true; metalness:0; roughness:1');
+            // face camera a bit brighter at eye level to anchor presence
+            if (Math.abs(y) < 0.2) bead.setAttribute('material', 'color:#a0ffff; emissive:#a0ffff; emissiveIntensity:0.1; opacity:0.75; transparent:true');
+            group.add(bead.object3D);
           }
+          this.el.object3D.add(group);
+          this.groups.push(group);
+        }
+
+        // Listen for mic readiness
+        this.analyser = null; this.dataArray = null;
+        window.addEventListener('mic-ready', (e)=>{
+          this.analyser = e.detail.analyser;
+          this.dataArray = e.detail.data;
+        });
+        window.addEventListener('mic-stopped', ()=>{
+          this.analyser = null; this.dataArray = null;
         });
 
-        stopBtn.addEventListener('click', () => {
-          if (!this.started) return;
-          if (this.audioCtx) this.audioCtx.close();
-          this.audioCtx=null; this.analyser=null; this.src=null; this.data=null; this.started=false;
-          startBtn.disabled=false; stopBtn.disabled=true; status.textContent='⏹️ Stopped.';
-        });
+        this.last = performance.now();
+      },
+      tick: function(time, delta){
+        const dt = Math.min(delta, 50)/1000; // clamp big frames
+        const {meridians, beads, speed} = this.data;
 
-        recenterBtn.addEventListener('click', () => {
-          const rig = document.getElementById('cameraRig');
-          rig.setAttribute('position', '0 1.6 0');
-          status.textContent = '🎯 Recentered.';
-        });
-      },
-      _makeBars(){
-        const R = this.dataRadius = this.dataRadius || this.dataRadius; // no-op, keeps closure tidy
-        const radius = this.dataRadius = this.dataRadius || this.dataRadius;
-        const el = this.el; const N = this.dataBands = this.dataBands || this.dataBands;
-      },
-      update(){
-        // build bars on update (first run)
-        const radius = this.data.radius;
-        const bands = this.data.bands;
-        const ring = 1.2; // small base circle around south pole
-        const baseY = -radius + 0.1; // just above the south pole
-        const group = this.el;
-        // clear if any
-        while (group.firstChild) group.removeChild(group.firstChild);
-        this.bars=[]; this.levels=[]; this.target=[];
-        for (let i=0;i<bands;i++){
-          const phi = (i/bands) * Math.PI*2; // around Y axis
-          const x = Math.cos(phi)*ring;
-          const z = Math.sin(phi)*ring;
-          const y = baseY;
-          const bar = document.createElement('a-cylinder');
-          bar.setAttribute('position', `${x} ${y} ${z}`);
-          bar.setAttribute('radius', 0.06);
-          bar.setAttribute('height', 0.2); // minimal at rest
-          bar.setAttribute('material', 'color:#0ff; emissive:#08f; emissiveIntensity:0.5; metalness:0.2; roughness:0.6; opacity:0.95; transparent:true');
-          // tilt bars very slightly toward the pole for aesthetics
-          const tilt = -4; // degrees
-          bar.setAttribute('rotation', `${tilt} ${(phi*180/Math.PI)} 0`);
-          group.appendChild(bar);
-          this.bars.push(bar);
-          this.levels.push(0.2);
-          this.target.push(0.2);
+        // Audio pull
+        let audioBoost = 0.25;
+        if(this.analyser && this.dataArray){
+          this.analyser.getByteFrequencyData(this.dataArray);
+          // Map frequency bins around the circle
+          const len = this.dataArray.length;
+          for(let m=0; m<meridians; m++){
+            const bin = Math.floor((m/meridians) * len);
+            const v = this.dataArray[bin]/255;
+            // smooth per-meridian gain
+            this.gains[m] = this.gains[m]*0.8 + v*0.2;
+          }
+          // global boost from overall loudness
+          let sum = 0; for(let i=0;i<len;i++) sum += this.dataArray[i];
+          audioBoost = 0.15 + (sum/len)/255 * 0.85;
         }
-        // glow stronger near the south pole
-        const glow = document.getElementById('southGlow');
-        if (glow) glow.setAttribute('animation__pulse', 'property=rotation; to=-90 360 0; loop=true; dur=12000; easing=linear');
-      },
-      _band(i){
-        // map bars around the ring to analyser bins (wrap/average groups)
-        if (!this.data) return 0;
-        const bins = this.data.length; // e.g., 512
-        const bands = this.data.bands || this.data.bands; // not accessible here; use this.data instead
-        return 0;
-      },
-      tick(t, dt){
-        if (!this.bars || this.bars.length===0) return;
-        if (this.started && this.analyser && this.data){
-          this.analyser.getByteFrequencyData(this.data);
-        }
-        // map spectrum → bars
-        const bins = this.data ? this.data.length : 0;
-        const N = this.bars.length;
-        for(let i=0;i<N;i++){
-          let v=0;
-          if (bins){
-            // average a small cluster of bins per bar, bias to lows near index 0
-            const start = Math.floor( Math.pow(i/N, 1.2) * (bins-1) );
-            const spread = Math.max(1, Math.floor(bins / (N*3)));
-            let s=0,c=0;
-            for (let k=0;k<spread;k++){
-              const idx = Math.min(bins-1, start+k);
-              s += this.data[idx]; c++;
+
+        // Advance “heads” upward; illuminate nearby beads
+        for(let m=0; m<meridians; m++){
+          const headSpeed = speed * (0.6 + this.gains[m]*1.4); // faster on louder freqs
+          this.heads[m] = (this.heads[m] + headSpeed*dt) % 1;
+
+          const headIdx = this.heads[m] * (beads-1);
+          // Update emissive intensity per bead based on distance from head
+          const children = this.groups[m].children;
+          for(let i=0;i<beads;i++){
+            const d = Math.abs(i - headIdx);        // beads away from head
+            const glow = Math.max(0, 1 - d/4);      // falloff across ~4 beads
+            const intensity = glow * (0.2 + audioBoost*0.8);
+            const mat = children[i].material;
+            if (mat){
+              mat.emissiveIntensity = intensity;
+              mat.opacity = 0.35 + intensity*0.55;
             }
-            v = c? (s/c)/255 : 0;
           }
-          const minH = 0.2;
-          const maxH = 16.2; // can rise well past equator (y=0) toward north pole
-          const targetH = minH + v * (maxH - minH);
-          // ease height for smoothness
-          this.target[i] = targetH;
-          this.levels[i] = this.levels[i] * 0.78 + this.target[i] * 0.22;
-          const bar = this.bars[i];
-          bar.setAttribute('height', this.levels[i]);
-          // move so the base hugs the south side and grows upward along +Y
-          const pos = bar.getAttribute('position');
-          bar.setAttribute('position', `${pos.x} ${(-8 + this.levels[i]/2)} ${pos.z}`);
-          // color shift per bar based on its level
-          const hue = 200/360 - Math.min(0.25, v*0.25); // cyan→blue
-          const hsl = `hsl(${hue*360}, 90%, ${45 + Math.min(25, v*40)}%)`;
-          bar.setAttribute('material', `color:${hsl}; emissive:${hsl}; emissiveIntensity:${0.5 + v*1.0}; opacity:0.95; metalness:0.2; roughness:0.6`);
         }
       }
     });
