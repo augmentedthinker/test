@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>VR Sphere Audio Visualizer</title>
+  <title>VR Polar Bars Audio Visualizer</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
@@ -16,7 +16,7 @@
   </style>
 </head>
 <body>
-  <div class="status" id="status">🔊 Ready. Click <b>Start Mic</b> (GitHub Pages uses HTTPS, which is required).</div>
+  <div class="status" id="status">🔊 Ready. Click <b>Start Mic</b> (Quest needs HTTPS on GitHub Pages).</div>
   <div class="ui">
     <button id="startBtn">🎤 Start Mic</button>
     <button id="stopBtn" disabled>⏹️ Stop</button>
@@ -25,86 +25,38 @@
 
   <!-- SCENE -->
   <a-scene renderer="antialias: true; colorManagement: true" background="color: #000">
-    <!-- Soft stars for ambience -->
-    <a-entity id="stars"></a-entity>
-
     <!-- Camera + controllers -->
     <a-entity id="cameraRig" position="0 1.6 0">
       <a-entity id="camera" camera look-controls></a-entity>
-
-      <!-- Left controller: model + laser/pointer -->
-      <a-entity oculus-touch-controls="hand: left; model: true"
-                laser-controls="hand: left"
-                raycaster="objects: .clickable; far: 30"
-                line="color: #6ee7ff; opacity: 0.9"></a-entity>
-      <!-- Right controller: model + laser/pointer -->
-      <a-entity oculus-touch-controls="hand: right; model: true"
-                laser-controls="hand: right"
-                raycaster="objects: .clickable; far: 30"
-                line="color: #6ee7ff; opacity: 0.9"></a-entity>
+      <a-entity oculus-touch-controls="hand: left; model: true" laser-controls="hand: left" raycaster="objects: .clickable; far: 30" line="color: #6ee7ff; opacity: 0.9"></a-entity>
+      <a-entity oculus-touch-controls="hand: right; model: true" laser-controls="hand: right" raycaster="objects: .clickable; far: 30" line="color: #6ee7ff; opacity: 0.9"></a-entity>
     </a-entity>
 
-    <!-- The reactive sphere (user is inside it) -->
-    <a-entity id="viz"
+    <!-- Cosmic shell so you're inside a sphere -->
+    <a-entity id="shell"
               geometry="primitive: sphere; radius: 8; segmentsWidth: 96; segmentsHeight: 64"
-              material="color: #0ff; metalness: 0.1; roughness: 0.8; side: back"
-              position="0 1.6 0"
-              mic-visualizer>
+              material="color: #02141a; metalness: 0.0; roughness: 1.0; side: back; emissive:#012; emissiveIntensity:0.3"
+              position="0 1.6 0"></a-entity>
+
+    <!-- South pole glow disk (lit up pole) -->
+    <a-entity id="southGlow" position="0 -6.4 0"> <!-- -radius*0.8 relative to rig -->
+      <a-circle radius="1.6" rotation="-90 0 0" material="color:#0ff; emissive:#0ff; emissiveIntensity:1.2; opacity:0.85; transparent:true"></a-circle>
+      <a-ring radius-inner="1.7" radius-outer="2.4" rotation="-90 0 0" material="color:#6cf; emissive:#6cf; emissiveIntensity:0.8; opacity:0.5; transparent:true"></a-ring>
     </a-entity>
 
-    <!-- A faint floor disk for orientation -->
-    <a-circle radius="1.5" position="0 0 0" rotation="-90 0 0"
-              material="color:#012; opacity:0.6; transparent:true"></a-circle>
+    <!-- Bars group (erupts from south pole upward) -->
+    <a-entity id="bars" polar-visualizer="radius: 8; bands: 48"></a-entity>
   </a-scene>
 
   <script>
-    // --- Tiny star field (cheap) ---
-    AFRAME.registerComponent('stars', {
-      init() {
-        const COUNT = 800; const spread = 70; const el = this.el;
-        for (let i=0;i<COUNT;i++) {
-          const s = document.createElement('a-entity');
-          const x = (Math.random()-.5)*spread;
-          const y = (Math.random()*.6 + .2)*spread; // bias upward
-          const z = (Math.random()-.5)*spread;
-          s.setAttribute('geometry', {primitive:'sphere', radius: 0.02});
-          s.setAttribute('material', {color:'#9ff', emissive:'#6cf', emissiveIntensity: 0.8});
-          s.setAttribute('position', `${x} ${y} ${z}`);
-          el.appendChild(s);
-        }
-      }
-    });
-
-    document.getElementById('stars').setAttribute('stars', '');
-
-    // --- Audio-driven sphere deformation + color shift ---
-    AFRAME.registerComponent('mic-visualizer', {
-      schema: {},
-      init() {
-        this.started = false;
-        this.audioCtx = null; this.analyser = null; this.src = null; this.data = null;
-        this.mesh = null; this.base = null; this.rand = null;
-        this.time = 0; this.frameToggle = false;
+    // ===== Polar Bars Visualizer Component =====
+    AFRAME.registerComponent('polar-visualizer', {
+      schema: { radius: {type:'number', default: 8}, bands: {type:'int', default: 48} },
+      init(){
+        this.started=false; this.audioCtx=null; this.analyser=null; this.src=null; this.data=null;
+        this.bars=[]; this.levels=[]; this.target=[]; this.time=0;
+        this._makeBars();
         this._bindUI();
-
-        this.el.addEventListener('object3dset', () => this._grabMesh());
-        if (this.el.getObject3D('mesh')) this._grabMesh();
-      },
-      _grabMesh() {
-        const obj = this.el.getObject3D('mesh');
-        if (!obj || this.mesh) return;
-        this.mesh = obj; const g = this.mesh.geometry;
-        // Ensure non-indexed for simpler per-vertex ops
-        if (g.index) this.mesh.geometry = this.mesh.geometry.toNonIndexed();
-        const geom = this.mesh.geometry;
-        const pos = geom.attributes.position;
-        this.base = pos.array.slice(0);
-        this.rand = new Float32Array(pos.count);
-        for (let i=0;i<pos.count;i++) this.rand[i] = this._hash(i)*0.9 + 0.1; // 0.1..1.0
-        geom.computeVertexNormals();
-      },
-      _hash(i){ // tiny deterministic hash → 0..1
-        let x = Math.sin(i*127.1)*43758.5453; return x - Math.floor(x);
       },
       _bindUI(){
         const status = document.getElementById('status');
@@ -118,16 +70,15 @@
             const stream = await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true}});
             this.audioCtx = new (window.AudioContext||window.webkitAudioContext)();
             this.analyser = this.audioCtx.createAnalyser();
-            this.analyser.fftSize = 256; // performance-friendly
-            this.analyser.smoothingTimeConstant = 0.8;
+            this.analyser.fftSize = 1024; // more bands → smoother circle mapping
+            this.analyser.smoothingTimeConstant = 0.7;
             this.src = this.audioCtx.createMediaStreamSource(stream);
             this.src.connect(this.analyser);
             this.data = new Uint8Array(this.analyser.frequencyBinCount);
-            this.started = true;
-            status.textContent = '🎧 Listening… talk or play music near the mic.';
-            startBtn.disabled = true; stopBtn.disabled = false;
+            this.started=true; startBtn.disabled=true; stopBtn.disabled=false;
+            status.textContent = '🎧 Listening… bars rise from the south pole.';
           } catch(e){
-            status.innerHTML = '❌ <span class="err">Microphone permission failed.</span> On Quest, use HTTPS (GitHub Pages) and allow mic.';
+            status.innerHTML = '❌ <span class="err">Microphone permission failed.</span> Use HTTPS in Quest and allow mic.';
             console.error(e);
           }
         });
@@ -135,9 +86,8 @@
         stopBtn.addEventListener('click', () => {
           if (!this.started) return;
           if (this.audioCtx) this.audioCtx.close();
-          this.audioCtx = null; this.analyser=null; this.src=null; this.data=null; this.started=false;
-          startBtn.disabled = false; stopBtn.disabled = true;
-          status.textContent = '⏹️ Stopped.';
+          this.audioCtx=null; this.analyser=null; this.src=null; this.data=null; this.started=false;
+          startBtn.disabled=false; stopBtn.disabled=true; status.textContent='⏹️ Stopped.';
         });
 
         recenterBtn.addEventListener('click', () => {
@@ -146,61 +96,87 @@
           status.textContent = '🎯 Recentered.';
         });
       },
-      _bandAvg(from, to){
+      _makeBars(){
+        const R = this.dataRadius = this.dataRadius || this.dataRadius; // no-op, keeps closure tidy
+        const radius = this.dataRadius = this.dataRadius || this.dataRadius;
+        const el = this.el; const N = this.dataBands = this.dataBands || this.dataBands;
+      },
+      update(){
+        // build bars on update (first run)
+        const radius = this.data.radius;
+        const bands = this.data.bands;
+        const ring = 1.2; // small base circle around south pole
+        const baseY = -radius + 0.1; // just above the south pole
+        const group = this.el;
+        // clear if any
+        while (group.firstChild) group.removeChild(group.firstChild);
+        this.bars=[]; this.levels=[]; this.target=[];
+        for (let i=0;i<bands;i++){
+          const phi = (i/bands) * Math.PI*2; // around Y axis
+          const x = Math.cos(phi)*ring;
+          const z = Math.sin(phi)*ring;
+          const y = baseY;
+          const bar = document.createElement('a-cylinder');
+          bar.setAttribute('position', `${x} ${y} ${z}`);
+          bar.setAttribute('radius', 0.06);
+          bar.setAttribute('height', 0.2); // minimal at rest
+          bar.setAttribute('material', 'color:#0ff; emissive:#08f; emissiveIntensity:0.5; metalness:0.2; roughness:0.6; opacity:0.95; transparent:true');
+          // tilt bars very slightly toward the pole for aesthetics
+          const tilt = -4; // degrees
+          bar.setAttribute('rotation', `${tilt} ${(phi*180/Math.PI)} 0`);
+          group.appendChild(bar);
+          this.bars.push(bar);
+          this.levels.push(0.2);
+          this.target.push(0.2);
+        }
+        // glow stronger near the south pole
+        const glow = document.getElementById('southGlow');
+        if (glow) glow.setAttribute('animation__pulse', 'property=rotation; to=-90 360 0; loop=true; dur=12000; easing=linear');
+      },
+      _band(i){
+        // map bars around the ring to analyser bins (wrap/average groups)
         if (!this.data) return 0;
-        let s=0,c=0; for(let i=from;i<=to && i<this.data.length;i++){ s+=this.data[i]; c++; }
-        return c? s/c : 0;
+        const bins = this.data.length; // e.g., 512
+        const bands = this.data.bands || this.data.bands; // not accessible here; use this.data instead
+        return 0;
       },
       tick(t, dt){
-        if (!this.mesh) return;
-        this.time += (dt||0)/1000;
-
-        // Idle shimmer if no mic yet
-        let low=5, mid=5, high=5, overall=0.02;
+        if (!this.bars || this.bars.length===0) return;
         if (this.started && this.analyser && this.data){
           this.analyser.getByteFrequencyData(this.data);
-          low = this._bandAvg(2, 8);
-          mid = this._bandAvg(9, 32);
-          high = this._bandAvg(33, 64);
-          overall = (low*0.5 + mid*0.35 + high*0.15) / 255; // 0..1
         }
-
-        // Skip every other frame to keep Quest smooth
-        this.frameToggle = !this.frameToggle; if (this.frameToggle && this.started) { /* allow update every frame once started for responsiveness */ } 
-
-        const geom = this.mesh.geometry; const pos = geom.attributes.position;
-        if (!this.base) return;
-        const base = this.base; const rand = this.rand;
-        const baseRadius = 8.0;
-        const amp = 0.8 * overall + 0.02; // keep a minimum ripple
-        const ttime = this.time;
-
-        for (let i=0;i<pos.count;i++){
-          const ix = i*3; const x = base[ix], y = base[ix+1], z = base[ix+2];
-          const r = Math.sqrt(x*x+y*y+z*z);
-          // per-vertex phase/ripple
-          const ph = rand[i]*6.283 + ttime* (1.2 + rand[i]*1.8);
-          const ripple = Math.sin(ph + r*0.6);
-          const push = (0.25 + 0.75*rand[i]) * amp * (0.6 + 0.4*ripple);
-          const newR = baseRadius + push;
-          const s = newR / r; // scale along normal
-          pos.array[ix] = x * s;
-          pos.array[ix+1] = y * s;
-          pos.array[ix+2] = z * s;
+        // map spectrum → bars
+        const bins = this.data ? this.data.length : 0;
+        const N = this.bars.length;
+        for(let i=0;i<N;i++){
+          let v=0;
+          if (bins){
+            // average a small cluster of bins per bar, bias to lows near index 0
+            const start = Math.floor( Math.pow(i/N, 1.2) * (bins-1) );
+            const spread = Math.max(1, Math.floor(bins / (N*3)));
+            let s=0,c=0;
+            for (let k=0;k<spread;k++){
+              const idx = Math.min(bins-1, start+k);
+              s += this.data[idx]; c++;
+            }
+            v = c? (s/c)/255 : 0;
+          }
+          const minH = 0.2;
+          const maxH = 16.2; // can rise well past equator (y=0) toward north pole
+          const targetH = minH + v * (maxH - minH);
+          // ease height for smoothness
+          this.target[i] = targetH;
+          this.levels[i] = this.levels[i] * 0.78 + this.target[i] * 0.22;
+          const bar = this.bars[i];
+          bar.setAttribute('height', this.levels[i]);
+          // move so the base hugs the south side and grows upward along +Y
+          const pos = bar.getAttribute('position');
+          bar.setAttribute('position', `${pos.x} ${(-8 + this.levels[i]/2)} ${pos.z}`);
+          // color shift per bar based on its level
+          const hue = 200/360 - Math.min(0.25, v*0.25); // cyan→blue
+          const hsl = `hsl(${hue*360}, 90%, ${45 + Math.min(25, v*40)}%)`;
+          bar.setAttribute('material', `color:${hsl}; emissive:${hsl}; emissiveIntensity:${0.5 + v*1.0}; opacity:0.95; metalness:0.2; roughness:0.6`);
         }
-        pos.needsUpdate = true;
-        // Recompute normals occasionally (costly) for nicer lighting
-        if ((Math.floor(ttime*10)%10)===0) geom.computeVertexNormals();
-
-        // Color shift: cyan→blue by spectrum tilt
-        const hue = 0.55 - Math.min(0.15, (high - low)/255 * 0.15); // 0.55..0.40
-        const sat = 0.9; const lit = 0.55 + Math.min(0.2, overall*0.4);
-        this._setHSL(this.mesh.material.color, hue, sat, lit);
-        this.mesh.material.emissive = new THREE.Color().setHSL(hue, sat*0.6, Math.min(0.7, lit*0.6));
-        this.mesh.material.emissiveIntensity = 0.6 + overall*0.8;
-      },
-      _setHSL(color, h,s,l){
-        const tmp = new THREE.Color(); tmp.setHSL(h,s,l); color.copy(tmp);
       }
     });
   </script>
