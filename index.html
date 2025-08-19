@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Super Mini Bros — Full Window + Pipes + Power-ups + Music</title>
+<title>Super Mini Bros — Music fix (gesture-safe)</title>
 <style>
   :root { --bg:#87ceeb; --ui:#111; --ui2:#fff; }
   html,body { height:100%; margin:0; background:#222; color:#eee; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden; }
@@ -15,10 +15,33 @@
   .pill { pointer-events:auto; background:#fff; color:#111; padding:6px 10px; border-radius:999px; font-weight:600; box-shadow:0 3px 10px rgba(0,0,0,.25); }
   .hint { pointer-events:auto; color:#ddd; font-size:12px; display:flex; gap:10px; align-items:center; background:#0006; padding:6px 10px; border-radius:999px; }
   .sound { background:#fff2; color:#fff; padding:4px 10px; border-radius:999px; font-weight:600; cursor:pointer; }
+
+  /* sound overlay */
+  #soundOverlay {
+    position:fixed; inset:0; background:rgba(0,0,0,.65);
+    display:flex; align-items:center; justify-content:center;
+    z-index: 10; backdrop-filter: blur(2px);
+  }
+  #soundOverlay button {
+    pointer-events:auto; font-size:18px; font-weight:700;
+    padding:14px 18px; border-radius:12px; border:0;
+    background:#00d084; color:#062b1f; box-shadow:0 6px 20px rgba(0,0,0,.35);
+    cursor:pointer;
+  }
+  #soundOverlay p { color:#eee; text-align:center; margin-top:10px; font-size:12px; }
+  #overlayInner { text-align:center; max-width: 440px; padding: 20px; }
 </style>
 </head>
 <body>
 <canvas id="game" aria-label="Super Mini Bros"></canvas>
+
+<!-- One-time sound unlock overlay -->
+<div id="soundOverlay" role="dialog" aria-label="Enable sound">
+  <div id="overlayInner">
+    <button id="enableSoundBtn">▶ Tap to Enable Sound</button>
+    <p>Required by browsers: one tap to start music & sound effects.</p>
+  </div>
+</div>
 
 <div id="hud">
   <div class="pill" id="score">Score: 000000</div>
@@ -26,7 +49,7 @@
   <div class="pill" id="powerup">Small Mario</div>
   <div class="hint">
     <span>Move: ← → / A D • Jump: ↑ / Z / Space • Fire: X • Reset: R</span>
-    <span id="soundBadge" class="sound" title="Click or press any key to enable audio">🔇 sound off</span>
+    <span id="soundBadge" class="sound" title="Click to toggle sound">🔇 sound off</span>
   </div>
 </div>
 
@@ -46,10 +69,7 @@
   const POWERUP_SPEED = 40;
   const FIREBALL_SPEED = 300;
 
-  // ---------- LEVEL ----------
-  // Legend:
-  //  ' ' empty | '#' ground | 'B' brick | '?' question block | '=' used block
-  //  'P' pipe(top) | 'g' goomba | 'o' coin | 'S' start | 'F' flagpole
+  // ---------- LEVEL (from your current file) ----------
   const LEVEL = `
                                                                                   
                                                                                   
@@ -65,7 +85,6 @@
 ##############################      ######       ############################### 
 #################################################################################
   `.split("\n").slice(1,-1).map(r => r.split(""));
-
   (function decorate() {
     const addAt = (x,y,ch)=>{ if (LEVEL[y] && LEVEL[y][x] === ' ') LEVEL[y][x] = ch; };
     [[20,6],[36,6],[52,6],[70,6],[95,6],[110,6]].forEach(([x,y])=>addAt(x,y,'g'));
@@ -83,7 +102,7 @@
   const WIDTH = LEVEL[0].length * TILE;
   const HEIGHT = LEVEL.length    * TILE;
 
-  // ---------- STATE ----------
+  // ---------- DOM ----------
   const canvas = document.getElementById("game");
   const c = canvas.getContext("2d");
   c.imageSmoothingEnabled = false;
@@ -92,6 +111,8 @@
   const uiCoins = document.getElementById("coins");
   const uiPowerup = document.getElementById("powerup");
   const soundBadge = document.getElementById("soundBadge");
+  const soundOverlay = document.getElementById("soundOverlay");
+  const enableSoundBtn = document.getElementById("enableSoundBtn");
 
   let keys = {};
   let gameState = "playing"; // 'playing' | 'win' | 'dead'
@@ -126,19 +147,13 @@
 
   // ---------- AUDIO (SFX) ----------
   let audioCtx = null;
-  function initAudio(){
+  let globalMuted = true; // start muted until user unlocks
+  function initAudioCtx(){
     if (!audioCtx){
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx){
-        audioCtx = new Ctx();
-      }
+      if (Ctx) audioCtx = new Ctx();
     }
-    // If we resumed from mute, reflect current mute state in badge below.
-    updateSoundBadge();
   }
-  window.addEventListener("pointerdown", () => { initAudio(); initMusic(); }, {once:false});
-  window.addEventListener("keydown", () => { initAudio(); initMusic(); }, {once:false});
-
   function tone({freq=440, type="square", duration=0.08, gain=0.08, attack=0.004, release=0.05, slide=0}){
     if (!audioCtx || audioCtx.state==="suspended" || globalMuted) return;
     const t0 = audioCtx.currentTime + 0.0005;
@@ -176,45 +191,80 @@
     let t=0; for (const {f,d} of seq){ setTimeout(()=>tone({freq:f,type:"triangle",duration:d,gain:0.08}), t*1000); t+=d*0.9; }
   }
 
-  // ---------- MUSIC (new) ----------
-  // Your hosted MP3 (must be HTTPS for browsers to allow playback on interaction)
-  const MUSIC_URL = "https://github.com/augmentedthinker/mario/raw/main/Mario.mp3";
+  // ---------- MUSIC (robust start + fallback) ----------
+  const MUSIC_URLS = [
+    // Prefer GitHub Pages if your repo has Pages enabled
+    "https://augmentedthinker.github.io/mario/Mario.mp3",
+    // Fallback to raw file
+    "https://github.com/augmentedthinker/mario/raw/main/Mario.mp3"
+  ];
   let bgMusic = null;
-  let globalMuted = false; // mutes both music and sfx
+  let musicUrlIndex = 0;
 
   function ensureMusic(){
     if (!bgMusic){
-      bgMusic = new Audio(MUSIC_URL);
+      bgMusic = new Audio(MUSIC_URLS[musicUrlIndex]);
       bgMusic.loop = true;
       bgMusic.volume = 0.5;
       bgMusic.preload = "auto";
-      bgMusic.crossOrigin = "anonymous";
+      // No crossOrigin needed unless we pipe into WebAudio
     }
   }
 
-  function initMusic(){
+  async function startAllAudio(){
+    initAudioCtx();
     ensureMusic();
-    if (bgMusic && bgMusic.paused && !globalMuted){
-      // Attempt playback after user gesture
-      bgMusic.play().catch(()=>{ /* ignore until next interaction */ });
+    try {
+      // Resume AudioContext (Chrome requires a gesture)
+      if (audioCtx && audioCtx.state === "suspended") {
+        await audioCtx.resume();
+      }
+      globalMuted = false;
+      await bgMusic.play();
+      hideSoundOverlay();
+      updateSoundBadge();
+    } catch (e) {
+      // If this URL failed (CORS or otherwise), try the next one
+      if (musicUrlIndex < MUSIC_URLS.length - 1) {
+        musicUrlIndex++;
+        bgMusic = null;
+        ensureMusic();
+        try {
+          await bgMusic.play();
+          hideSoundOverlay();
+          updateSoundBadge();
+        } catch (e2) {
+          // Still failed—keep overlay up so user can try again
+          console.warn("Music play failed; user can tap again.", e2);
+        }
+      } else {
+        console.warn("Music play failed; user can tap again.", e);
+      }
     }
-    updateSoundBadge();
   }
 
-  function setMuted(next){
-    globalMuted = next;
-    if (bgMusic){
+  function hideSoundOverlay(){
+    if (soundOverlay) soundOverlay.style.display = "none";
+  }
+
+  // One required tap/click (works on Quest 2 too)
+  enableSoundBtn.addEventListener("click", startAllAudio);
+
+  // Badge toggles mute for both SFX + music
+  soundBadge.addEventListener("click", () => {
+    if (!bgMusic) ensureMusic();
+    globalMuted = !globalMuted;
+    if (bgMusic) {
       bgMusic.muted = globalMuted;
-      if (!globalMuted){
-        // Try to play if unmuted after a user gesture
+      if (!globalMuted) {
+        // if unmuting, make sure it’s playing (after a gesture, which we already had)
         bgMusic.play().catch(()=>{});
       }
     }
     updateSoundBadge();
-  }
+  });
 
   function updateSoundBadge(){
-    // Reflect current state in the badge
     if (globalMuted){
       soundBadge.textContent = "🔇 sound off";
       soundBadge.title = "Click to turn sound on";
@@ -223,13 +273,6 @@
       soundBadge.title = "Click to turn sound off";
     }
   }
-
-  // Click badge to toggle mute/unmute (also initializes audio/music if needed)
-  soundBadge.addEventListener("click", () => {
-    initAudio();
-    initMusic();
-    setMuted(!globalMuted);
-  });
 
   // ---------- INPUT ----------
   addEventListener("keydown", e=>{
@@ -246,12 +289,12 @@
   addEventListener("keyup",   e=>{ keys[e.key] = false; });
 
   function shootFireball(){
-    if (fireballs.length >= 2) return; // Limit fireballs
+    if (fireballs.length >= 2) return;
     const fb = {
       x: player.x + (player.facing > 0 ? player.w : -8),
       y: player.y + player.h/2,
       w: 8, h: 8,
-      vx: player.facing * FIREBALL_SPEED,
+      vx: player.facing * 300,
       vy: -100,
       bounces: 0
     };
@@ -266,7 +309,7 @@
     player.w = 24; player.h = 28;
     score = 0; coins = 0; gameState="playing";
     powerups.length = 0; fireballs.length = 0;
-    
+
     const fresh = `
                                                                                   
                                                                                   
@@ -298,7 +341,6 @@
         if (LEVEL[y][x]==='S'){ start={x,y}; LEVEL[y][x]=' '; }
       }
     updateUI();
-    // Keep music state as-is on reset
   }
 
   function updateUI(){
@@ -328,26 +370,14 @@
     const ch = tileAtPx(headX, headY);
     if (ch === '?' ){
       setTileAtPx(headX, headY, '=');
-      
-      // Random powerup spawn
       const powerupType = Math.random() < 0.4 ? 'mushroom' : Math.random() < 0.7 ? 'flower' : 'star';
       const blockX = ((headX/TILE|0)*TILE);
       const blockY = ((headY/TILE|0)*TILE);
-      
-      powerups.push({
-        x: blockX + 4, y: blockY,
-        w: 24, h: 24,
-        vx: POWERUP_SPEED, vy: 0,
-        type: powerupType,
-        emerged: false, emergeTime: 0,
-        startY: blockY
-      });
-      
+      powerups.push({ x:blockX+4, y:blockY, w:24, h:24, vx:POWERUP_SPEED, vy:0, type:powerupType, emerged:false, emergeTime:0, startY:blockY });
       score += 200;
       pops.push({x: blockX + TILE/2, y: blockY + 8, t: 0, txt: powerupType === 'mushroom' ? "1UP" : powerupType === 'flower' ? "FIRE" : "STAR"});
       sfxCoin();
     } else if (ch === 'B'){
-      // Big Mario can break bricks
       if (player.powerState !== 'small') {
         setTileAtPx(headX, headY, ' ');
         score += 50;
@@ -392,20 +422,13 @@
   }
 
   function update(dt){
-    // Update invulnerability
     if (player.invulnerable) {
       player.invulnerableTime -= dt;
-      if (player.invulnerableTime <= 0) {
-        player.invulnerable = false;
-      }
+      if (player.invulnerableTime <= 0) player.invulnerable = false;
     }
-
-    // Update star power
     if (player.starTime > 0) {
       player.starTime -= dt;
-      if (player.starTime <= 0) {
-        player.invulnerable = false;
-      }
+      if (player.starTime <= 0) player.invulnerable = false;
     }
 
     const left  = keys["ArrowLeft"] || keys["a"] || keys["A"];
@@ -435,7 +458,6 @@
 
     moveAndCollide(player, dt);
 
-    // Big Mario can break bricks by running into them
     if (player.powerState !== 'small' && Math.abs(player.vx) > 150) {
       const frontX = player.x + (player.vx > 0 ? player.w : 0);
       const midY = player.y + player.h/2;
@@ -448,7 +470,6 @@
       }
     }
 
-    // Update enemies
     for (const e of enemies){
       if (!e.alive) continue;
       const aheadX = e.x + (e.vx>0 ? e.w+2 : -2);
@@ -468,119 +489,59 @@
         else { e.y = Math.floor((e.y)/TILE+1)*TILE; e.vy = 0.1; }
       }
 
-      // Enemy collision with player
       if (rectsOverlap(player, e)){
         if (player.starTime > 0) {
-          // Star power destroys enemies
-          e.alive = false;
-          score += 200; 
-          particlesBurst(e.x+e.w/2, e.y+e.h/2, 12);
-          sfxStomp();
+          e.alive = false; score += 200; particlesBurst(e.x+e.w/2, e.y+e.h/2, 12); sfxStomp();
         } else {
           const fromAbove = (player.vy > 120) && (player.y + player.h <= e.y + 8);
           if (fromAbove){
-            e.alive = false;
-            score += 200;
-            player.vy = -JUMP_V*0.7;
-            particlesBurst(e.x+e.w/2, e.y+e.h/2, 12);
-            sfxStomp();
+            e.alive = false; score += 200; player.vy = -JUMP_V*0.7; particlesBurst(e.x+e.w/2, e.y+e.h/2, 12); sfxStomp();
           } else {
-            if (!player.invulnerable && player.starTime <= 0) {
-              takeDamage();
-            }
+            if (!player.invulnerable && player.starTime <= 0) takeDamage();
           }
         }
       }
     }
 
-    // Update powerups
     for (let i = powerups.length - 1; i >= 0; i--) {
       const p = powerups[i];
-      
       if (!p.emerged) {
         p.emergeTime += dt;
         p.y = p.startY - (p.emergeTime * 30);
-        if (p.emergeTime >= 0.8) {
-          p.emerged = true;
-          p.y = p.startY - TILE;
-        }
+        if (p.emergeTime >= 0.8) { p.emerged = true; p.y = p.startY - TILE; }
         continue;
       }
-
       p.vy = (p.vy ?? 0) + GRAVITY * dt;
-      
-      // Horizontal movement and collision
-      const preX = p.x;
-      p.x += p.vx * dt;
-      if (solidAtRect(p)) {
-        p.x = preX;
-        p.vx *= -1;
-      }
 
-      // Vertical movement and collision
+      const preX = p.x; p.x += p.vx * dt;
+      if (solidAtRect(p)) { p.x = preX; p.vx *= -1; }
+
       p.y += p.vy * dt;
       if (solidAtRect(p)) {
-        if (p.vy > 0) {
-          p.y = Math.floor((p.y + p.h) / TILE) * TILE - p.h;
-          p.vy = 0;
-        }
+        if (p.vy > 0) { p.y = Math.floor((p.y + p.h) / TILE) * TILE - p.h; p.vy = 0; }
       }
-
-      // Check for edges to turn around
       const aheadX = p.x + (p.vx > 0 ? p.w + 2 : -2);
       const feetY = p.y + p.h + 1;
-      if (!isSolid(tileAtPx(aheadX, feetY))) {
-        p.vx *= -1;
-      }
+      if (!isSolid(tileAtPx(aheadX, feetY))) p.vx *= -1;
 
-      // Collision with player
-      if (rectsOverlap(player, p)) {
-        collectPowerup(p.type);
-        powerups.splice(i, 1);
-      }
-
-      // Remove if fallen off world
-      if (p.y > HEIGHT + 100) {
-        powerups.splice(i, 1);
-      }
+      if (rectsOverlap(player, p)) { collectPowerup(p.type); powerups.splice(i, 1); }
+      if (p.y > HEIGHT + 100) powerups.splice(i, 1);
     }
 
-    // Update fireballs
     for (let i = fireballs.length - 1; i >= 0; i--) {
       const fb = fireballs[i];
-      
-      fb.vy += GRAVITY * dt;
-      fb.x += fb.vx * dt;
-      fb.y += fb.vy * dt;
+      fb.vy += GRAVITY * dt; fb.x += fb.vx * dt; fb.y += fb.vy * dt;
 
-      // Bounce off ground
       if (solidAtRect(fb)) {
-        if (fb.vy > 0 && fb.bounces < 3) {
-          fb.y = Math.floor((fb.y + fb.h) / TILE) * TILE - fb.h;
-          fb.vy = -300;
-          fb.bounces++;
-        } else {
-          fireballs.splice(i, 1);
-          continue;
-        }
+        if (fb.vy > 0 && fb.bounces < 3) { fb.y = Math.floor((fb.y + fb.h) / TILE) * TILE - fb.h; fb.vy = -300; fb.bounces++; }
+        else { fireballs.splice(i, 1); continue; }
       }
-
-      // Hit enemies
       for (const e of enemies) {
         if (e.alive && rectsOverlap(fb, e)) {
-          e.alive = false;
-          score += 200;
-          particlesBurst(e.x + e.w/2, e.y + e.h/2, 8);
-          fireballs.splice(i, 1);
-          sfxStomp();
-          break;
+          e.alive = false; score += 200; particlesBurst(e.x + e.w/2, e.y + e.h/2, 8); fireballs.splice(i, 1); sfxStomp(); break;
         }
       }
-
-      // Remove if off screen or too many bounces
-      if (fb.x < -50 || fb.x > WIDTH + 50 || fb.y > HEIGHT + 100 || fb.bounces >= 3) {
-        fireballs.splice(i, 1);
-      }
+      if (fb.x < -50 || fb.x > WIDTH + 50 || fb.y > HEIGHT + 100 || fb.bounces >= 3) fireballs.splice(i, 1);
     }
 
     sweepCoinsUnderPlayer();
@@ -588,9 +549,7 @@
     if (player.y > HEIGHT + 200) { die(); return; }
 
     const flagRect = findFirstTileRect('F');
-    if (flagRect && rectsOverlap(player, flagRect)){
-      gameState = "win";
-    }
+    if (flagRect && rectsOverlap(player, flagRect)) gameState = "win";
 
     for (const p of particles){ p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 1200*dt; }
     while (particles.length && particles[0].t > particles[0].life) particles.shift();
@@ -602,42 +561,20 @@
 
   function collectPowerup(type) {
     if (type === 'mushroom') {
-      if (player.powerState === 'small') {
-        player.powerState = 'big';
-        player.h = 32;
-        player.y -= 4; // Adjust position for bigger size
-        score += 1000;
-        sfxPowerup();
-      }
+      if (player.powerState === 'small') { player.powerState = 'big'; player.h = 32; player.y -= 4; score += 1000; sfxPowerup(); }
     } else if (type === 'flower') {
-      if (player.powerState === 'small') {
-        player.powerState = 'big';
-        player.h = 32;
-        player.y -= 4;
-      }
-      player.powerState = 'fire';
-      score += 1000;
-      sfxPowerup();
+      if (player.powerState === 'small') { player.powerState = 'big'; player.h = 32; player.y -= 4; }
+      player.powerState = 'fire'; score += 1000; sfxPowerup();
     } else if (type === 'star') {
-      player.starTime = 8; // 8 seconds of star power
-      player.invulnerable = true;
-      score += 1000;
-      sfxPowerup();
+      player.starTime = 8; player.invulnerable = true; score += 1000; sfxPowerup();
     }
   }
 
   function takeDamage() {
     if (player.powerState === 'fire') {
-      player.powerState = 'big';
-      player.invulnerable = true;
-      player.invulnerableTime = 2;
-      sfxDamage();
+      player.powerState = 'big'; player.invulnerable = true; player.invulnerableTime = 2; sfxDamage();
     } else if (player.powerState === 'big') {
-      player.powerState = 'small';
-      player.h = 28;
-      player.invulnerable = true;
-      player.invulnerableTime = 2;
-      sfxDamage();
+      player.powerState = 'small'; player.h = 28; player.invulnerable = true; player.invulnerableTime = 2; sfxDamage();
     } else {
       die();
     }
@@ -676,10 +613,7 @@
         const t1 = tileAtPx(headX1, headY);
         const t2 = tileAtPx(headX2, headY);
         if (isSolid(t1) || isSolid(t2)){
-          if (o===player){
-            tryBonkBlock(headX1, headY);
-            tryBonkBlock(headX2, headY);
-          }
+          if (o===player){ tryBonkBlock(headX1, headY); tryBonkBlock(headX2, headY); }
           newY = Math.floor(headY/TILE + 1)*TILE;
           if (o===player) o.vy = 0;
         }
@@ -737,15 +671,13 @@
     return null;
   }
 
-  // ---------- RENDER ----------
+  // ---------- DRAW ----------
   function render(){
     const viewW = canvas.width, viewH = canvas.height;
 
-    // Camera X follows player, clamped to world
     let camX = player.x + player.w/2 - viewW/2;
     camX = Math.max(0, Math.min(WIDTH - viewW, camX));
 
-    // Camera Y aligned so world bottom sits on screen bottom
     const targetY = player.y + player.h/2 - viewH/2;
     const maxCamY = Math.max(0, HEIGHT - viewH);
     let camY = Math.max(0, Math.min(maxCamY, targetY));
@@ -756,7 +688,6 @@
     c.fillRect(0,0,viewW,viewH);
     drawClouds(camX);
 
-    // First pass: draw all tiles EXCEPT pipes, so pipes can draw over ground.
     const x0 = Math.floor((camX<0?0:camX) / TILE), x1 = Math.ceil((camX + viewW)/TILE);
     const y0 = Math.floor((camY<0?0:camY) / TILE), y1 = Math.ceil((camY + viewH)/TILE);
     const pendingPipes = [];
@@ -773,42 +704,34 @@
           case '=': drawUsed(px,py); break;
           case 'o': drawCoin(px+8,py+8); break;
           case 'F': drawFlag(px,py); break;
-          case 'P': pendingPipes.push({tx:x, ty:y}); break; // draw later
+          case 'P': pendingPipes.push({tx:x, ty:y}); break;
         }
       }
     }
 
-    // Second pass: draw pipes (top + body) OVER ground to "sink" into it.
-    for (const {tx,ty} of pendingPipes){
-      drawPipeStack(tx, ty, camX, camY);
-    }
+    for (const {tx,ty} of pendingPipes) drawPipeStack(tx, ty, camX, camY);
 
-    // Powerups
     for (const p of powerups) {
       if (!p.emerged) continue;
       const px = Math.floor(p.x - camX), py = Math.floor(p.y - camY);
       drawPowerup(px, py, p.type);
     }
 
-    // Fireballs
     for (const fb of fireballs) {
       const px = Math.floor(fb.x - camX), py = Math.floor(fb.y - camY);
       drawFireball(px, py);
     }
 
-    // Enemies
     for (const e of enemies){
       if (!e.alive) continue;
       const px = Math.floor(e.x - camX), py = Math.floor(e.y - camY);
       drawGoomba(px, py, e.vx<0);
     }
 
-    // Player
     const px = Math.floor(player.x - camX), py = Math.floor(player.y - camY);
     const playerState = player.vy<0 ? "jump" : (player.onGround ? (Math.abs(player.vx)>10?"run":"idle") : "fall");
     drawPlayer(px, py, playerState, player.facing);
 
-    // Pops/particles
     c.font = "12px monospace";
     c.textAlign = "center"; c.textBaseline = "middle";
     for (const pop of pops){
@@ -821,11 +744,8 @@
       c.fillRect(Math.floor(p.x - camX), Math.floor(p.y - camY), 3,3);
     }
 
-    if (gameState==="win"){
-      banner("YOU WIN!  Press R to play again");
-    } else if (gameState==="dead"){
-      banner("Ouch!  Press R to retry");
-    }
+    if (gameState==="win")      banner("YOU WIN!  Press R to play again");
+    else if (gameState==="dead") banner("Ouch!  Press R to retry");
 
     c.restore();
   }
@@ -879,11 +799,9 @@
     c.lineTo(x+TILE/2, y-TILE*4+16);
     c.closePath(); c.fill();
   }
-
   function drawPowerup(x, y, type) {
     c.save();
     if (type === 'mushroom') {
-      // Red mushroom
       c.fillStyle = "#ff4b4b";
       c.fillRect(x+2, y+8, 20, 16);
       c.fillStyle = "#fff";
@@ -891,7 +809,6 @@
       c.fillRect(x+12, y+10, 4, 4);
       c.fillRect(x+8, y+14, 8, 4);
     } else if (type === 'flower') {
-      // Fire flower
       c.fillStyle = "#ff8c42";
       for (let i = 0; i < 4; i++) {
         const angle = (i * Math.PI/2) + performance.now()/500;
@@ -902,7 +819,6 @@
       c.fillStyle = "#fff200";
       c.fillRect(x+10, y+10, 4, 4);
     } else if (type === 'star') {
-      // Star power
       c.fillStyle = "#ffff00";
       c.save();
       c.translate(x+12, y+12);
@@ -926,34 +842,19 @@
     }
     c.restore();
   }
+  function drawFireball(x, y) { c.save(); c.fillStyle = "#ff6b00"; c.fillRect(x, y, 8, 8); c.fillStyle = "#ffff00"; c.fillRect(x+2, y+2, 4, 4); c.restore(); }
 
-  function drawFireball(x, y) {
-    c.save();
-    c.fillStyle = "#ff6b00";
-    c.fillRect(x, y, 8, 8);
-    c.fillStyle = "#ffff00";
-    c.fillRect(x+2, y+2, 4, 4);
-    c.restore();
-  }
-
-  // NEW: draw a whole pipe stack (top + body down into ground)
   function drawPipeStack(tx, ty, camX, camY){
     const px = tx*TILE - camX, py = ty*TILE - camY;
-
-    // Top cap
     c.fillStyle="#1faa59"; c.fillRect(px,py,TILE,TILE);
     c.fillStyle="#158a43"; c.fillRect(px,py, TILE, 6);
     c.fillStyle="#c9ffd1"; c.fillRect(px+4,py+2, 8,2);
-
-    // Body tiles downward until (and including) the first ground '#'
     for (let yy = ty+1; yy < LEVEL.length; yy++){
       const bodyY = yy*TILE - camY;
-      // body
       c.fillStyle="#188a45"; c.fillRect(px, bodyY, TILE, TILE);
-      c.fillStyle="#106436"; c.fillRect(px+2, bodyY, 2, TILE); // left shadow stripe
-
+      c.fillStyle="#106436"; c.fillRect(px+2, bodyY, 2, TILE);
       const belowCh = LEVEL[yy]?.[tx];
-      if (belowCh === '#') break; // included this ground tile already
+      if (belowCh === '#') break;
     }
   }
 
@@ -971,49 +872,24 @@
     c.save();
     const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
     if (isFlashing) c.globalAlpha = 0.5;
-
-    // Star power rainbow effect
     if (player.starTime > 0) {
       const hue = (performance.now() / 100) % 360;
       c.filter = `hue-rotate(${hue}deg) saturate(2)`;
     }
-
     const h = player.h;
     const isBig = player.powerState !== 'small';
     c.translate(x+12,y+h/2); c.scale(facing,1); c.translate(-12,-h/2);
-    
-    // Hat
-    c.fillStyle = "#ff4b4b"; 
-    c.fillRect(4,0,16,10);
-    
-    // Overalls
-    if (player.powerState === 'fire') {
-      c.fillStyle = "#fff"; // White overalls for fire Mario
-    } else {
-      c.fillStyle = "#3b3bdc"; // Blue overalls
-    }
+    c.fillStyle = "#ff4b4b"; c.fillRect(4,0,16,10);             // hat
+    c.fillStyle = (player.powerState === 'fire') ? "#fff" : "#3b3bdc"; // overalls
     c.fillRect(6,10,12,isBig?12:10);
-    
-    // Face
-    c.fillStyle="#ffcc99"; 
-    c.fillRect(6,isBig?-6:-4,12,8);
-    
-    // Hair
-    c.fillStyle="#6b3f15"; 
-    c.fillRect(6,0,12,2);
-    
-    // Feet
-    c.fillStyle="#6b3f15"; 
-    c.fillRect(4,h-8,6,6); 
-    c.fillRect(14,h-8,6,6);
-    
+    c.fillStyle="#ffcc99"; c.fillRect(6,isBig?-6:-4,12,8);      // face
+    c.fillStyle="#6b3f15"; c.fillRect(6,0,12,2);                // hair
+    c.fillStyle="#6b3f15"; c.fillRect(4,h-8,6,6); c.fillRect(14,h-8,6,6); // feet
     if (state!=="idle"){ c.translate(0, state==="jump"?-2:2); }
     c.restore();
   }
-
   function drawClouds(camX){
-    c.save();
-    c.globalAlpha = 0.5;
+    c.save(); c.globalAlpha = 0.5;
     for (let i=0;i<6;i++){
       const x = ((i*300 - (camX*0.4)) % (canvas.width+320)) - 160;
       const y = 40 + (i%3)*30;
@@ -1028,11 +904,18 @@
   }
 
   // ---------- START ----------
+  function resizeCanvas(){ canvas.width = Math.floor(window.innerWidth); canvas.height = Math.floor(window.innerHeight); }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+
+  function updateSoundBadge(){ /* defined above, but hoisted */ }
+  function hideSoundOverlay(){ /* defined above, but hoisted */ }
+
   updateUI();
-  updateSoundBadge(); // reflect initial off state
-  // Music/SFX will start on first click or key press due to browser policies
-  // (Handled by the pointerdown/keydown listeners above)
+  // Keep overlay visible until user taps the button
+  // After they tap once, music+SFX are enabled and overlay is hidden
   tick();
+
 })();
 </script>
 </body>
