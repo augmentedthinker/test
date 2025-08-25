@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Super Mini Bros — Sprites + Music</title>
+<title>Super Mini Bros — Sprites + Music (Flag Fix)</title>
 <style>
   :root { --bg:#87ceeb; --ui:#111; --ui2:#fff; }
   html,body { height:100%; margin:0; background:#222; color:#eee; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden; }
@@ -46,9 +46,9 @@
   const POWERUP_SPEED = 40;
   const FIREBALL_SPEED = 300;
 
-  // PATHS (set these to where your assets live)
+  // PATHS
   const PLAYER_SPRITE_URL = "player.png";
-  const MUSIC_URL = "Mario.mp3"; // change to "test/Mario.mp3" if index.html is above /test/
+  const MUSIC_URL = "Mario.mp3"; // change to "test/Mario.mp3" if needed
 
   // ---------- LEVEL ----------
   const LEVEL = `
@@ -126,6 +126,16 @@
   const powerups = [];
   const fireballs = [];
 
+  // ---------- FLAG INFO (for instant win + drop) ----------
+  const flagInfo = {
+    poleX: null,          // world x of the pole line
+    topY: null,           // top of pole in world coords
+    bottomY: null,        // bottom of pole
+    hasWon: false,
+    dropStartMs: 0,
+    dropDuration: 1000    // ms for flag to slide down
+  };
+
   // ---------- SPRITES ----------
   const SPRITE = {
     img: new Image(),
@@ -150,10 +160,8 @@
 
   // ---------- AUDIO ----------
   let audioCtx = null;
-  let musicElem = null;      // HTMLAudioElement
-  let musicNode = null;      // MediaElementSourceNode
-  let musicGain = null;      // GainNode
-  let musicEnabled = false;  // master toggle
+  let musicElem = null, musicNode = null, musicGain = null;
+  let musicEnabled = false;
 
   function ensureMusicNodes(){
     if (!audioCtx) return;
@@ -165,87 +173,51 @@
     if (!musicNode){
       musicNode = audioCtx.createMediaElementSource(musicElem);
       musicGain = audioCtx.createGain();
-      musicGain.gain.value = 0.0; // start silent, fade in
+      musicGain.gain.value = 0.0;
       musicNode.connect(musicGain).connect(audioCtx.destination);
     }
   }
-
   function fadeMusic(target=0.5, ms=500){
     if (!audioCtx || !musicGain) return;
     const t0 = audioCtx.currentTime;
     musicGain.gain.setValueAtTime(musicGain.gain.value, t0);
     musicGain.gain.linearRampToValueAtTime(target, t0 + ms/1000);
   }
-
   async function startMusic(){
     if (!audioCtx) return;
     ensureMusicNodes();
-    try { await musicElem.play(); } catch(e) { /* ignored until user gesture */ }
+    try { await musicElem.play(); } catch(e) {}
     fadeMusic(0.5, 600);
     soundBadge.textContent = "🔊 sound on";
   }
-
-  function stopMusic(){
-    if (!musicElem || !musicGain) return;
-    fadeMusic(0.0, 300);
-    soundBadge.textContent = "🔇 sound off";
-  }
-
-  function toggleMusic(){
-    if (!audioCtx) initAudio(); // also starts music
-    musicEnabled = !musicEnabled;
-    if (musicEnabled) startMusic(); else stopMusic();
-  }
-
+  function stopMusic(){ if (!musicElem||!musicGain) return; fadeMusic(0.0, 300); soundBadge.textContent="🔇 sound off"; }
+  function toggleMusic(){ if (!audioCtx) initAudio(); musicEnabled=!musicEnabled; if(musicEnabled) startMusic(); else stopMusic(); }
   function initAudio(){
     if (!audioCtx){
       const Ctx = window.AudioContext || window.webkitAudioContext;
       if (Ctx){ audioCtx = new Ctx(); }
     }
-    if (audioCtx){
-      ensureMusicNodes();
-      musicEnabled = true;
-      startMusic();
-      soundBadge.title = "Click to toggle audio";
-    }
+    if (audioCtx){ ensureMusicNodes(); musicEnabled = true; startMusic(); soundBadge.title="Click to toggle audio"; }
   }
-
   window.addEventListener("pointerdown", initAudio, {once:false});
   window.addEventListener("keydown", initAudio, {once:false});
   soundBadge.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMusic(); });
+  document.addEventListener("visibilitychange", ()=>{ if (!audioCtx||!musicElem) return; if (document.hidden) fadeMusic(0.0,200); else if (musicEnabled) startMusic(); });
 
-  // pause music when tab hidden, resume on focus
-  document.addEventListener("visibilitychange", ()=>{
-    if (!audioCtx || !musicElem) return;
-    if (document.hidden) { fadeMusic(0.0, 200); }
-    else if (musicEnabled) { startMusic(); }
-  });
-
-  // SFX (unchanged)
+  // SFX
   function tone({freq=440, type="square", duration=0.08, gain=0.08, attack=0.004, release=0.05, slide=0}){
     if (!audioCtx || audioCtx.state==="suspended") return;
-    const t0 = audioCtx.currentTime + 0.0005;
-    const t1 = t0 + duration;
-    const osc = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, t0);
-    if (slide !== 0){ osc.frequency.linearRampToValueAtTime(freq + slide, t1); }
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(gain, t0 + attack);
-    g.gain.linearRampToValueAtTime(0.0001, t1 + release);
-    osc.connect(g).connect(audioCtx.destination);
-    osc.start(t0); osc.stop(t1 + release + 0.02);
+    const t0 = audioCtx.currentTime + 0.0005, t1 = t0 + duration;
+    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+    osc.type = type; osc.frequency.setValueAtTime(freq, t0);
+    if (slide) osc.frequency.linearRampToValueAtTime(freq + slide, t1);
+    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + attack); g.gain.linearRampToValueAtTime(0.0001, t1 + release);
+    osc.connect(g).connect(audioCtx.destination); osc.start(t0); osc.stop(t1 + release + 0.02);
   }
-  function noise({duration=0.06, gain=0.05}={}){
-    if (!audioCtx || audioCtx.state==="suspended") return;
-    const t0 = audioCtx.currentTime + 0.0005;
-    const buffer = audioCtx.createBuffer(1, audioCtx.sampleRate * duration, audioCtx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i=0;i<data.length;i++) data[i] = (Math.random()*2-1) * (1 - i/data.length);
-    const src = audioCtx.createBufferSource(); src.buffer = buffer;
-    const g = audioCtx.createGain(); g.gain.value = gain;
-    src.connect(g).connect(audioCtx.destination); src.start(t0);
+  function noise({duration=0.06, gain=0.05}={}){ if (!audioCtx||audioCtx.state==="suspended") return;
+    const t0=audioCtx.currentTime+0.0005, buffer=audioCtx.createBuffer(1, audioCtx.sampleRate*duration, audioCtx.sampleRate);
+    const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*(1-i/data.length);
+    const src=audioCtx.createBufferSource(); src.buffer=buffer; const g=audioCtx.createGain(); g.gain.value=gain; src.connect(g).connect(audioCtx.destination); src.start(t0);
   }
   function sfxCoin(){ tone({freq:880,type:"square",duration:0.10,gain:0.08,slide:120}); }
   function sfxBrick(){ tone({freq:520,type:"square",duration:0.05,gain:0.07}); noise({duration:0.03,gain:0.03}); }
@@ -255,7 +227,7 @@
   function sfxDamage(){ tone({freq:220,type:"triangle",duration:0.25,gain:0.1,slide:-100}); }
   function sfxGameOver(){
     if (!audioCtx) return;
-    const seq = [ {f:440,d:0.12},{f:392,d:0.12},{f:349,d:0.14},{f:330,d:0.18} ];
+    const seq=[{f:440,d:0.12},{f:392,d:0.12},{f:349,d:0.14},{f:330,d:0.18}];
     let t=0; for (const {f,d} of seq){ setTimeout(()=>tone({freq:f,type:"triangle",duration:d,gain:0.08}), t*1000); t+=d*0.9; }
   }
 
@@ -274,27 +246,18 @@
   addEventListener("keyup",   e=>{ keys[e.key] = false; });
 
   function shootFireball(){
-    if (fireballs.length >= 2) return; // Limit fireballs
-    const fb = {
-      x: player.x + (player.facing > 0 ? player.w : -8),
-      y: player.y + player.h/2,
-      w: 8, h: 8,
-      vx: player.facing * FIREBALL_SPEED,
-      vy: -100,
-      bounces: 0
-    };
-    fireballs.push(fb);
-    sfxFireball();
+    if (fireballs.length >= 2) return;
+    const fb = { x: player.x + (player.facing > 0 ? player.w : -8), y: player.y + player.h/2, w:8, h:8, vx: player.facing * FIREBALL_SPEED, vy: -100, bounces: 0 };
+    fireballs.push(fb); sfxFireball();
   }
 
   function resetLevel(){
     player.x = start.x*TILE+4; player.y=(start.y-1)*TILE; player.vx=0; player.vy=0;
     player.onGround=false; player.lastGroundMs=0; player.lastJumpPressMs=-9999; player.facing=1;
-    player.powerState = 'small'; player.invulnerable = false; player.invulnerableTime = 0; player.starTime = 0;
-    player.w = 24; player.h = 28; player.animTime = 0;
-    score = 0; coins = 0; gameState="playing";
-    powerups.length = 0; fireballs.length = 0;
-    
+    player.powerState='small'; player.invulnerable=false; player.invulnerableTime=0; player.starTime=0;
+    player.w=24; player.h=28; player.animTime=0;
+    score=0; coins=0; gameState="playing"; powerups.length=0; fireballs.length=0;
+
     const fresh = `
                                                                                   
                                                                                   
@@ -319,12 +282,16 @@
       for (let x=26;x<31;x++) addAt(x,5,'?');
       for (let x=60;x<65;x++) addAt(x,4,'?');
     })();
+
     enemies.length = 0;
     for (let y=0;y<LEVEL.length;y++)
       for (let x=0;x<LEVEL[0].length;x++){
         if (LEVEL[y][x]==='g'){ enemies.push({x:x*TILE+4, y:(y-1)*TILE+8, w:24, h:24, vx:-ENEMY_SPEED, alive:true}); LEVEL[y][x]=' '; }
         if (LEVEL[y][x]==='S'){ start={x,y}; LEVEL[y][x]=' '; }
       }
+
+    // recompute flag info
+    computeFlagInfo();
     updateUI();
   }
 
@@ -356,8 +323,7 @@
     if (ch === '?' ){
       setTileAtPx(headX, headY, '=');
       const powerupType = Math.random() < 0.4 ? 'mushroom' : Math.random() < 0.7 ? 'flower' : 'star';
-      const blockX = ((headX/TILE|0)*TILE);
-      const blockY = ((headY/TILE|0)*TILE);
+      const blockX = ((headX/TILE|0)*TILE), blockY = ((headY/TILE|0)*TILE);
       powerups.push({ x:blockX+4, y:blockY, w:24, h:24, vx:POWERUP_SPEED, vy:0, type:powerupType, emerged:false, emergeTime:0, startY:blockY });
       score += 200;
       pops.push({x: blockX + TILE/2, y: blockY + 8, t: 0, txt: powerupType === 'mushroom' ? "1UP" : powerupType === 'flower' ? "FIRE" : "STAR"});
@@ -365,9 +331,7 @@
     } else if (ch === 'B'){
       if (player.powerState !== 'small') {
         setTileAtPx(headX, headY, ' ');
-        score += 50;
-        particlesBurst(((headX/TILE|0)*TILE)+TILE/2, ((headY/TILE|0)*TILE)+TILE/2, 10);
-        sfxBrick();
+        score += 50; particlesBurst(((headX/TILE|0)*TILE)+TILE/2, ((headY/TILE|0)*TILE)+TILE/2, 10); sfxBrick();
       } else {
         sfxBrick();
       }
@@ -377,20 +341,35 @@
 
   // ---------- PARTICLES & POPS ----------
   const particles = [];
-  function particlesBurst(x,y,n){
-    for (let i=0;i<n;i++){
-      particles.push({x,y, vx:(Math.random()*2-1)*150, vy:(Math.random()*-1-0.3)*250, life:0.6, t:0});
-    }
-  }
+  function particlesBurst(x,y,n){ for (let i=0;i<n;i++){ particles.push({x,y, vx:(Math.random()*2-1)*150, vy:(Math.random()*-1-0.3)*250, life:0.6, t:0}); } }
   const pops = [];
 
   // ---------- RESIZE ----------
-  function resizeCanvas(){
-    canvas.width = Math.floor(window.innerWidth);
-    canvas.height = Math.floor(window.innerHeight);
-  }
+  function resizeCanvas(){ canvas.width = Math.floor(window.innerWidth); canvas.height = Math.floor(window.innerHeight); }
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
+
+  // ---------- FLAG HELPERS ----------
+  function computeFlagInfo(){
+    const fr = findFirstTileRect('F');
+    if (fr){
+      flagInfo.poleX   = fr.x + TILE/2;   // center of the pole
+      flagInfo.topY    = fr.y - 5*TILE;   // matches drawFlag pole height
+      flagInfo.bottomY = fr.y + TILE;
+      flagInfo.hasWon = false;
+      flagInfo.dropStartMs = 0;
+    }
+  }
+  computeFlagInfo();
+
+  function triggerWin(){
+    if (flagInfo.hasWon) return;
+    flagInfo.hasWon = true;
+    flagInfo.dropStartMs = performance.now();
+    gameState = "win";            // stop gameplay immediately
+    // freeze the player where they are
+    player.vx = 0; player.vy = 0;
+  }
 
   // ---------- GAME LOOP ----------
   let last = performance.now();
@@ -407,6 +386,9 @@
   }
 
   function update(dt){
+    // Save edges before movement (for pole crossing test)
+    const beforeLeft = player.x, beforeRight = player.x + player.w;
+
     // Update invulnerability
     if (player.invulnerable) {
       player.invulnerableTime -= dt;
@@ -449,15 +431,13 @@
     // advance sprite animation
     player.animTime += dt * (player.onGround ? 1 : 0.5);
 
-    // Big Mario shoulder-check breaks
+    // Big Mario brick smash
     if (player.powerState !== 'small' && Math.abs(player.vx) > 150) {
       const frontX = player.x + (player.vx > 0 ? player.w : 0);
       const midY = player.y + player.h/2;
       if (tileAtPx(frontX, midY) === 'B') {
         setTileAtPx(frontX, midY, ' ');
-        score += 50;
-        particlesBurst(((frontX/TILE|0)*TILE)+TILE/2, ((midY/TILE|0)*TILE)+TILE/2, 8);
-        sfxBrick(); updateUI();
+        score += 50; particlesBurst(((frontX/TILE|0)*TILE)+TILE/2, ((midY/TILE|0)*TILE)+TILE/2, 8); sfxBrick(); updateUI();
       }
     }
 
@@ -499,20 +479,14 @@
     for (let i = powerups.length - 1; i >= 0; i--) {
       const p = powerups[i];
       if (!p.emerged) {
-        p.emergeTime += dt;
-        p.y = p.startY - (p.emergeTime * 30);
+        p.emergeTime += dt; p.y = p.startY - (p.emergeTime * 30);
         if (p.emergeTime >= 0.8) { p.emerged = true; p.y = p.startY - TILE; }
         continue;
       }
       p.vy = (p.vy ?? 0) + GRAVITY * dt;
-      const preX = p.x; p.x += p.vx * dt;
-      if (solidAtRect(p)) { p.x = preX; p.vx *= -1; }
-      p.y += p.vy * dt;
-      if (solidAtRect(p)) {
-        if (p.vy > 0) { p.y = Math.floor((p.y + p.h) / TILE) * TILE - p.h; p.vy = 0; }
-      }
-      const aheadX = p.x + (p.vx > 0 ? p.w + 2 : -2);
-      const feetY = p.y + p.h + 1;
+      const preX = p.x; p.x += p.vx * dt; if (solidAtRect(p)) { p.x = preX; p.vx *= -1; }
+      p.y += p.vy * dt; if (solidAtRect(p)) { if (p.vy > 0) { p.y = Math.floor((p.y + p.h) / TILE) * TILE - p.h; p.vy = 0; } }
+      const aheadX = p.x + (p.vx > 0 ? p.w + 2 : -2); const feetY = p.y + p.h + 1;
       if (!isSolid(tileAtPx(aheadX, feetY))) p.vx *= -1;
       if (rectsOverlap(player, p)) { collectPowerup(p.type); powerups.splice(i, 1); }
       if (p.y > HEIGHT + 100) powerups.splice(i, 1);
@@ -536,8 +510,20 @@
 
     if (player.y > HEIGHT + 200) { die(); return; }
 
-    const flagRect = findFirstTileRect('F');
-    if (flagRect && rectsOverlap(player, flagRect)){ gameState = "win"; }
+    // --- INSTANT WIN: trigger when crossing the pole line ---
+    if (!flagInfo.hasWon && flagInfo.poleX != null){
+      const afterLeft  = player.x, afterRight = player.x + player.w;
+      const L = flagInfo.poleX;
+      const crossed =
+        (beforeRight < L && afterRight >= L) ||   // moving right across the pole
+        (beforeLeft  > L && afterLeft  <= L) ||   // moving left across the pole
+        rectsOverlap(player, {x:L-2, y:flagInfo.topY, w:4, h:flagInfo.bottomY - flagInfo.topY}); // overlap the pole strip
+      if (crossed) triggerWin();
+    }
+
+    // (OLD) tile overlap win check removed to avoid delayed wins
+    // const flagRect = findFirstTileRect('F');
+    // if (flagRect && rectsOverlap(player, flagRect)){ gameState = "win"; }
 
     for (const p of particles){ p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 1200*dt; }
     while (particles.length && particles[0].t > particles[0].life) particles.shift();
@@ -621,8 +607,7 @@
         if (tileAtPx((o.x+o.w/2)|0, (o.y+o.h/2)|0) === 'o' && o===player){
           setTileAtPx(o.x+o.w/2, o.y+o.h/2, ' ');
           coins++; score += 100;
-          pops.push({x:o.x+o.w/2, y:o.y, t:0, txt:"+1"});
-          sfxCoin();
+          pops.push({x:o.x+o.w/2, y:o.y, t:0, txt:"+1"}); sfxCoin();
         }
       }
     }
@@ -647,8 +632,7 @@
           if (rectsOverlap(player, coinRect)){
             LEVEL[y][x]=' ';
             coins++; score += 100;
-            pops.push({x:coinRect.x+8, y:coinRect.y, t:0, txt:"+1"});
-            sfxCoin();
+            pops.push({x:coinRect.x+8, y:coinRect.y, t:0, txt:"+1"}); sfxCoin();
           }
         }
       }
@@ -680,7 +664,7 @@
     c.fillRect(0,0,viewW,viewH);
     drawClouds(camX);
 
-    // First pass: draw all tiles EXCEPT pipes
+    // tiles, deferring pipes
     const x0 = Math.floor((camX<0?0:camX) / TILE), x1 = Math.ceil((camX + viewW)/TILE);
     const y0 = Math.floor((camY<0?0:camY) / TILE), y1 = Math.ceil((camY + viewH)/TILE);
     const pendingPipes = [];
@@ -696,13 +680,11 @@
           case '?': drawQuestion(px,py); break;
           case '=': drawUsed(px,py); break;
           case 'o': drawCoin(px+8,py+8); break;
-          case 'F': drawFlag(px,py); break;
+          case 'F': drawFlag(px,py); break;   // flag draws with drop if hasWon
           case 'P': pendingPipes.push({tx:x, ty:y}); break;
         }
       }
     }
-
-    // Pipes on top
     for (const {tx,ty} of pendingPipes){ drawPipeStack(tx, ty, camX, camY); }
 
     // Powerups
@@ -791,14 +773,30 @@
     c.fillStyle="#a37900"; c.fillRect(-1, -6, 2, 12);
     c.restore();
   }
+
+  // Flag pole + dropping flag (uses flagInfo.hasWon/timing)
   function drawFlag(x,y){
-    c.fillStyle="#dcdcdc"; c.fillRect(x+TILE/2-2, y-5*TILE, 4, 6*TILE);
+    // Pole
+    c.fillStyle="#dcdcdc";
+    c.fillRect(x+TILE/2-2, y-5*TILE, 4, 6*TILE);
+
+    // Flag triangle position
+    const startY = y - TILE*4;  // original flag anchor
+    const endY   = y - TILE;    // where it drops to
+    let drop = 0;
+    if (flagInfo.hasWon) {
+      const t = (performance.now() - flagInfo.dropStartMs) / flagInfo.dropDuration;
+      drop = Math.max(0, Math.min(1, t));
+    }
+    const flagY = startY + (endY - startY) * drop;
+
+    // Waving triangle
     c.fillStyle="#ff3b3b";
     const wave = Math.sin(performance.now()/250)*3;
     c.beginPath();
-    c.moveTo(x+TILE/2, y-TILE*4);
-    c.lineTo(x+TILE/2+20+wave, y-TILE*4+8);
-    c.lineTo(x+TILE/2, y-TILE*4+16);
+    c.moveTo(x+TILE/2, flagY);
+    c.lineTo(x+TILE/2+20+wave, flagY+8);
+    c.lineTo(x+TILE/2, flagY+16);
     c.closePath(); c.fill();
   }
 
@@ -868,7 +866,7 @@
       c.save();
       const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
       if (isFlashing) c.globalAlpha = 0.5;
-      if (player.starTime > 0) { const hue = (performance.now() / 100) % 360; c.filter = `hue-rotate(${hue}deg) saturate(2)`; }
+      if (player.starTime > 0) { const hue=(performance.now()/100)%360; c.filter=`hue-rotate(${hue}deg) saturate(2)`; }
       const h = player.h, isBig = player.powerState !== 'small';
       c.translate(x+12,y+h/2); c.scale(facing,1); c.translate(-12,-h/2);
       c.fillStyle = "#ff4b4b"; c.fillRect(4,0,16,10);
@@ -885,7 +883,7 @@
     c.save();
     const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
     if (isFlashing) c.globalAlpha = 0.6;
-    if (player.starTime > 0) { const hue = (performance.now() / 100) % 360; c.filter = `hue-rotate(${hue}deg) saturate(2)`; }
+    if (player.starTime > 0) { const hue=(performance.now()/100)%360; c.filter=`hue-rotate(${hue}deg) saturate(2)`; }
 
     const anim = SPRITE.anims[state] || SPRITE.anims.idle;
     const frames = anim.frames.length || 1;
