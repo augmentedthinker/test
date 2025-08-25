@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Super Mini Bros — Full Window + Pipes + Power-ups</title>
+<title>Super Mini Bros — Sprites Edition</title>
 <style>
   :root { --bg:#87ceeb; --ui:#111; --ui2:#fff; }
   html,body { height:100%; margin:0; background:#222; color:#eee; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden; }
@@ -109,7 +109,8 @@
     powerState: 'small', // 'small', 'big', 'fire'
     invulnerable: false,
     invulnerableTime: 0,
-    starTime: 0
+    starTime: 0,
+    animTime: 0 // sprite animation timer
   };
 
   const enemies = [];
@@ -123,6 +124,35 @@
 
   const powerups = [];
   const fireballs = [];
+
+  // ---------- SPRITES ----------
+  // Place player.png next to this HTML (or change the URL below).
+  const PLAYER_SPRITE_URL = "player.png";
+
+  const SPRITE = {
+    img: new Image(),
+    loaded: false,
+    fw: 32,  // frame width on the sheet
+    fh: 32,  // frame height on the sheet
+    // If your first row contains all the run frames, we can auto-fill them:
+    autoRunFrames: true,
+    anims: {
+      idle: { row: 0, frames: [0], fps: 1 },
+      run:  { row: 0, frames: [/* auto */], fps: 12 },
+      jump: { row: 1, frames: [0], fps: 1 },
+      fall: { row: 1, frames: [1], fps: 1 }
+    }
+  };
+
+  SPRITE.img.onload = () => {
+    SPRITE.loaded = true;
+    // Auto-fill run frames to cover the entire first row, if requested.
+    if (SPRITE.autoRunFrames) {
+      const cols = Math.max(1, Math.floor(SPRITE.img.width / SPRITE.fw));
+      SPRITE.anims.run.frames = Array.from({length: cols}, (_,i)=>i);
+    }
+  };
+  SPRITE.img.src = PLAYER_SPRITE_URL;
 
   // ---------- AUDIO ----------
   let audioCtx = null;
@@ -208,7 +238,7 @@
     player.x = start.x*TILE+4; player.y=(start.y-1)*TILE; player.vx=0; player.vy=0;
     player.onGround=false; player.lastGroundMs=0; player.lastJumpPressMs=-9999; player.facing=1;
     player.powerState = 'small'; player.invulnerable = false; player.invulnerableTime = 0; player.starTime = 0;
-    player.w = 24; player.h = 28;
+    player.w = 24; player.h = 28; player.animTime = 0;
     score = 0; coins = 0; gameState="playing";
     powerups.length = 0; fireballs.length = 0;
     
@@ -378,6 +408,9 @@
     }
 
     moveAndCollide(player, dt);
+
+    // advance sprite animation
+    player.animTime += dt * (player.onGround ? 1 : 0.5);
 
     // Big Mario can break bricks by running into them
     if (player.powerState !== 'small' && Math.abs(player.vx) > 150) {
@@ -880,7 +913,7 @@
     c.restore();
   }
 
-  // NEW: draw a whole pipe stack (top + body down into ground)
+  // draw a whole pipe stack (top + body down into ground)
   function drawPipeStack(tx, ty, camX, camY){
     const px = tx*TILE - camX, py = ty*TILE - camY;
 
@@ -911,47 +944,74 @@
     c.restore();
   }
 
+  // SPRITE-BASED PLAYER DRAW
   function drawPlayer(x,y,state,facing){
-    c.save();
-    const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
-    if (isFlashing) c.globalAlpha = 0.5;
+    // If the image isn't ready yet, fall back to the original box-y placeholder
+    if (!SPRITE.loaded) {
+      c.save();
+      const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
+      if (isFlashing) c.globalAlpha = 0.5;
+      if (player.starTime > 0) {
+        const hue = (performance.now() / 100) % 360;
+        c.filter = `hue-rotate(${hue}deg) saturate(2)`;
+      }
+      const h = player.h;
+      const isBig = player.powerState !== 'small';
+      c.translate(x+12,y+h/2); c.scale(facing,1); c.translate(-12,-h/2);
+      c.fillStyle = "#ff4b4b"; 
+      c.fillRect(4,0,16,10);                    // hat
+      c.fillStyle = (player.powerState === 'fire') ? "#fff" : "#3b3bdc"; 
+      c.fillRect(6,10,12,isBig?12:10);          // overalls
+      c.fillStyle="#ffcc99"; 
+      c.fillRect(6,isBig?-6:-4,12,8);           // face
+      c.fillStyle="#6b3f15"; 
+      c.fillRect(6,0,12,2);                     // hair
+      c.fillStyle="#6b3f15"; 
+      c.fillRect(4,h-8,6,6); c.fillRect(14,h-8,6,6);
+      if (state!=="idle"){ c.translate(0, state==="jump"?-2:2); }
+      c.restore();
+      return;
+    }
 
-    // Star power rainbow effect
+    c.save();
+
+    // Invulnerability blink
+    const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
+    if (isFlashing) c.globalAlpha = 0.6;
+
+    // Star rainbow tint (keeps original vibe)
     if (player.starTime > 0) {
       const hue = (performance.now() / 100) % 360;
       c.filter = `hue-rotate(${hue}deg) saturate(2)`;
     }
 
-    const h = player.h;
-    const isBig = player.powerState !== 'small';
-    c.translate(x+12,y+h/2); c.scale(facing,1); c.translate(-12,-h/2);
-    
-    // Hat
-    c.fillStyle = "#ff4b4b"; 
-    c.fillRect(4,0,16,10);
-    
-    // Overalls
-    if (player.powerState === 'fire') {
-      c.fillStyle = "#fff"; // White overalls for fire Mario
-    } else {
-      c.fillStyle = "#3b3bdc"; // Blue overalls
-    }
-    c.fillRect(6,10,12,isBig?12:10);
-    
-    // Face
-    c.fillStyle="#ffcc99"; 
-    c.fillRect(6,isBig?-6:-4,12,8);
-    
-    // Hair
-    c.fillStyle="#6b3f15"; 
-    c.fillRect(6,0,12,2);
-    
-    // Feet
-    c.fillStyle="#6b3f15"; 
-    c.fillRect(4,h-8,6,6); 
-    c.fillRect(14,h-8,6,6);
-    
-    if (state!=="idle"){ c.translate(0, state==="jump"?-2:2); }
+    // Pick animation by state
+    const anim = SPRITE.anims[state] || SPRITE.anims.idle;
+    const frames = anim.frames.length || 1;
+    const idx = frames > 1 ? Math.floor(player.animTime * (anim.fps||12)) % frames : 0;
+
+    // Source rect in sheet
+    const sx = (anim.frames[idx] ?? 0) * SPRITE.fw;
+    const sy = (anim.row ?? 0) * SPRITE.fh;
+
+    // Scale so sprite height matches collision box height (28 small, 32 big)
+    const scale = player.h / SPRITE.fh;
+    const dw = SPRITE.fw * scale;
+    const dh = SPRITE.fh * scale;
+
+    // Flip around the center of the collision box
+    c.translate(x + player.w/2, y + player.h/2);
+    c.scale(facing, 1);
+    c.translate(-player.w/2, -player.h/2);
+
+    // Small pose shift for motion (like your old draw)
+    if (state !== "idle") c.translate(0, state === "jump" ? -2 : 2);
+
+    // Center inside the hitbox
+    const dx = (player.w - dw) / 2;
+    const dy = (player.h - dh);
+    c.drawImage(SPRITE.img, sx, sy, SPRITE.fw, SPRITE.fh, dx, dy, dw, dh);
+
     c.restore();
   }
 
