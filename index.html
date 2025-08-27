@@ -1,928 +1,220 @@
-<!DOCTYPE html>
+<!--
+Project: Tiny Chat MVP (Lane A)
+Description: Single-file HTML chatbot UI. Works in two modes:
+  - Demo mode (no key): local canned/reflective responses so the page always works.
+  - Real mode (HF Router): paste your HF token; calls /v1/chat/completions.
+
+Controls & Keys:
+  - Top bar: Mode switch, HF Token (only used in Real mode), Model id, Temperature, System Prompt.
+  - Chat box: Enter to send. "Clear" resets the conversation.
+
+Tested:
+  - Chrome on Chromebook.
+  - GitHub Pages (HTTPS) — required for fetch & clipboard APIs.
+
+Known limitations:
+  - If you use Real mode, the token is entered client-side at runtime (not stored in code),
+    which is fine for personal testing but not for production.
+  - CORS/quotas come from Hugging Face; errors will surface in the UI.
+  - No streaming to keep code small.
+
+How to deploy:
+  1) Create a repo with this single file named index.html.
+  2) Enable GitHub Pages (main branch / root).
+  3) Open the Pages URL. Use Demo mode immediately, or switch to Real mode and paste HF token.
+-->
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Super Mini Bros — Sprites + Music (Flag Fix)</title>
-<style>
-  :root { --bg:#87ceeb; --ui:#111; --ui2:#fff; }
-  html,body { height:100%; margin:0; background:#222; color:#eee; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; overflow:hidden; }
-  #game { display:block; width:100vw; height:100vh; background:var(--bg); image-rendering: pixelated; }
-  #hud {
-    position:fixed; left:0; right:0; bottom:12px;
-    display:flex; justify-content:center; gap:16px; pointer-events:none;
-  }
-  .pill { pointer-events:auto; background:#fff; color:#111; padding:6px 10px; border-radius:999px; font-weight:600; box-shadow:0 3px 10px rgba(0,0,0,.25); }
-  .hint { pointer-events:auto; color:#ddd; font-size:12px; display:flex; gap:10px; align-items:center; background:#0006; padding:6px 10px; border-radius:999px; }
-  .sound { background:#fff2; color:#fff; padding:4px 10px; border-radius:999px; font-weight:600; cursor:pointer; }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Tiny Chat MVP — Lane A</title>
+  <style>
+    :root{--bg:#0b0c10;--panel:#111218;--muted:#a3a3a3;--text:#eaeaea;--accent:#6ee7ff;--border:#1f2430}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
+    header{position:sticky;top:0;background:linear-gradient(180deg,var(--panel),rgba(17,18,24,.95));backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid var(--border);padding:10px 12px;z-index:5}
+    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .title{font-weight:700}
+    label{font-size:12px;color:var(--muted)}
+    input,select,textarea,button{background:#0f1117;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
+    input,select{height:40px}
+    input[type="password"]{letter-spacing:0.05em}
+    button{cursor:pointer}
+    button.primary{background:#131a22;border-color:#223;box-shadow:0 0 0 1px rgba(110,231,255,.06) inset}
+    button.primary:hover{box-shadow:0 0 0 1px rgba(110,231,255,.2) inset}
+    main{max-width:840px;margin:0 auto;padding:12px}
+    .bar{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
+    .bar > *{min-width:130px}
+    .span3{grid-column:span 3} .span2{grid-column:span 2} .span4{grid-column:span 4} .span6{grid-column:span 6} .span12{grid-column:span 12}
+    .chat{display:flex;flex-direction:column;gap:10px;margin:14px 0 90px}
+    .msg{display:flex;gap:10px;align-items:flex-start}
+    .bubble{padding:10px 12px;border:1px solid var(--border);border-radius:14px;max-width:85%}
+    .user .bubble{background:#151a22}
+    .assistant .bubble{background:#101418}
+    .sys{font-size:12px;color:var(--muted)}
+    .inputdock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(11,12,16,.2),var(--panel));border-top:1px solid var(--border);padding:12px}
+    .inputrow{max-width:840px;margin:0 auto;display:flex;gap:8px}
+    .inputrow input{flex:1}
+    .small{font-size:12px;color:var(--muted)}
+  </style>
 </head>
 <body>
-<canvas id="game" aria-label="Super Mini Bros"></canvas>
+  <header>
+    <div class="row" style="justify-content:space-between">
+      <div class="title">💬 Tiny Chat MVP — Lane A</div>
+      <div class="row">
+        <button id="clearBtn" title="Reset conversation">Clear</button>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="span2">
+        <label>Mode</label>
+        <select id="mode">
+          <option>Demo (no key)</option>
+          <option>Hugging Face Inference API</option>
+        </select>
+      </div>
+      <div class="span3">
+        <label>HF Token (Real mode)</label>
+        <input id="token" type="password" placeholder="paste HF_TOKEN here"/>
+      </div>
+      <div class="span3">
+        <label>Model (HF Router id)</label>
+        <input id="model" value="openai/gpt-oss-20b" />
+      </div>
+      <div class="span2">
+        <label>Temperature</label>
+        <input id="temp" type="number" step="0.1" min="0" max="1.5" value="0.7"/>
+      </div>
+      <div class="span12">
+        <label>System prompt</label>
+        <input id="system" value="You are a concise, friendly assistant."/>
+      </div>
+    </div>
+    <div class="small">Tip: In Real mode, the token is only used in this session (not stored). For public demos without secrets, stay in Demo mode.</div>
+  </header>
 
-<div id="hud">
-  <div class="pill" id="score">Score: 000000</div>
-  <div class="pill" id="coins">Coins: 0</div>
-  <div class="pill" id="powerup">Small Mario</div>
-  <div class="hint">
-    <span>Move: ← → / A D • Jump: ↑ / Z / Space • Fire: X • Reset: R</span>
-    <span id="soundBadge" class="sound" title="Click to toggle audio">🔇 sound off</span>
+  <main>
+    <div class="chat" id="chat"></div>
+  </main>
+
+  <div class="inputdock">
+    <div class="inputrow">
+      <input id="userInput" placeholder="Type a message and press Enter…"/>
+      <button class="primary" id="sendBtn">Send</button>
+    </div>
   </div>
-</div>
 
-<script>
-(() => {
-  // ---------- CONFIG ----------
-  const TILE = 32;
-  const GRAVITY = 2200;
-  const MOVE_ACC = 1800;
-  const MAX_RUN = 260;
-  const AIR_CONTROL = 0.6;
-  const FRICTION = 1400;
-  const JUMP_V = 650;
-  const COYOTE_MS = 120;
-  const JUMP_BUFFER_MS = 120;
-  const ENEMY_SPEED = 60;
-  const POWERUP_SPEED = 40;
-  const FIREBALL_SPEED = 300;
+  <script>
+    const el = (q) => document.querySelector(q);
+    const chat = el('#chat');
+    const modeEl = el('#mode');
+    const tokenEl = el('#token');
+    const modelEl = el('#model');
+    const tempEl  = el('#temp');
+    const sysEl   = el('#system');
+    const inputEl = el('#userInput');
 
-  // PATHS
-  const PLAYER_SPRITE_URL = "player.png";
-  const MUSIC_URL = "Mario.mp3"; // change to "test/Mario.mp3" if needed
+    let messages = [{ role: "system", content: sysEl.value }];
 
-  // ---------- LEVEL ----------
-  const LEVEL = `
-                                                                                  
-                                                                                  
-                                                                                  
-                                                     o                            
-                                  o          B     BBB           o                
-                     o          BBB         BBB                BBB                
-        S                                                                         
-##############################      ######       ############################   F 
-##############################      ######       ############################### 
-##############################   P  ######   P   ############################### 
-##############################      ######       ############################### 
-##############################      ######       ############################### 
-#################################################################################
-  `.split("\n").slice(1,-1).map(r => r.split(""));
+    function addMessage(role, content){
+      const wrap = document.createElement('div');
+      wrap.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system');
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = content;
+      wrap.appendChild(bubble);
+      chat.appendChild(wrap);
+      chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
+    }
 
-  (function decorate() {
-    const addAt = (x,y,ch)=>{ if (LEVEL[y] && LEVEL[y][x] === ' ') LEVEL[y][x] = ch; };
-    [[20,6],[36,6],[52,6],[70,6],[95,6],[110,6]].forEach(([x,y])=>addAt(x,y,'g'));
-    for (let x=12;x<18;x++) addAt(x,3,'o');
-    for (let x=26;x<31;x++) addAt(x,5,'?');
-    for (let x=60;x<65;x++) addAt(x,4,'?');
-  })();
+    function demoReply(text){
+      const canned = {
+        hello: "Hey! 👋 What would you like to build?",
+        hi: "Hi! Ready to prototype something?",
+        help: "Tell me your goal in one sentence and I’ll outline next steps.",
+        joke: "Why did the developer go broke? They cleared their cache."
+      };
+      const low = text.trim().toLowerCase();
+      for (const k in canned){ if (low.includes(k)) return canned[k]; }
+      return `You said: “${text}”. Next action: state your goal + constraints. I’ll suggest a plan.`;
+    }
 
-  let start = {x:2, y:6};
-  for (let y=0;y<LEVEL.length;y++)
-    for (let x=0;x<LEVEL[0].length;x++)
-      if (LEVEL[y][x]==='S'){ start = {x,y}; LEVEL[y][x]=' '; }
-
-  const SOLIDS = new Set(['#','B','P','?','=', 'F']);
-  const WIDTH = LEVEL[0].length * TILE;
-  const HEIGHT = LEVEL.length    * TILE;
-
-  // ---------- STATE ----------
-  const canvas = document.getElementById("game");
-  const c = canvas.getContext("2d");
-  c.imageSmoothingEnabled = false;
-
-  const uiScore = document.getElementById("score");
-  const uiCoins = document.getElementById("coins");
-  const uiPowerup = document.getElementById("powerup");
-  const soundBadge = document.getElementById("soundBadge");
-
-  let keys = {};
-  let gameState = "playing"; // 'playing' | 'win' | 'dead'
-  let score = 0, coins = 0;
-
-  const player = {
-    x: start.x * TILE + 4,
-    y: (start.y - 1) * TILE,
-    w: 24, h: 28,
-    vx: 0, vy: 0,
-    onGround: false,
-    lastGroundMs: 0,
-    lastJumpPressMs: -9999,
-    facing: 1,
-    powerState: 'small', // 'small', 'big', 'fire'
-    invulnerable: false,
-    invulnerableTime: 0,
-    starTime: 0,
-    animTime: 0 // sprite animation timer
-  };
-
-  const enemies = [];
-  for (let y=0;y<LEVEL.length;y++)
-    for (let x=0;x<LEVEL[0].length;x++){
-      if (LEVEL[y][x] === 'g'){
-        enemies.push({x:x*TILE+4, y:(y-1)*TILE+8, w:24, h:24, vx:-ENEMY_SPEED, alive:true});
-        LEVEL[y][x]=' ';
+    async function hfChat(messages, model, temperature, token){
+      const url = "https://router.huggingface.co/v1/chat/completions";
+      const payload = { model, messages, temperature, stream: false };
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + token,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+      if (!r.ok){
+        const t = await r.text();
+        throw new Error(`HF API error ${r.status}: ${t.slice(0,200)}`);
       }
+      const data = await r.json();
+      return data.choices?.[0]?.message?.content ?? "(no content)";
     }
 
-  const powerups = [];
-  const fireballs = [];
-
-  // ---------- FLAG INFO (for instant win + drop) ----------
-  const flagInfo = {
-    poleX: null,          // world x of the pole line
-    topY: null,           // top of pole in world coords
-    bottomY: null,        // bottom of pole
-    hasWon: false,
-    dropStartMs: 0,
-    dropDuration: 1000    // ms for flag to slide down
-  };
-
-  // ---------- SPRITES ----------
-  const SPRITE = {
-    img: new Image(),
-    loaded: false,
-    fw: 32, fh: 32,
-    autoRunFrames: true,
-    anims: {
-      idle: { row: 0, frames: [0], fps: 1 },
-      run:  { row: 0, frames: [],  fps: 12 },
-      jump: { row: 1, frames: [0], fps: 1 },
-      fall: { row: 1, frames: [1], fps: 1 }
-    }
-  };
-  SPRITE.img.onload = () => {
-    SPRITE.loaded = true;
-    if (SPRITE.autoRunFrames) {
-      const cols = Math.max(1, Math.floor(SPRITE.img.width / SPRITE.fw));
-      SPRITE.anims.run.frames = Array.from({length: cols}, (_,i)=>i);
-    }
-  };
-  SPRITE.img.src = PLAYER_SPRITE_URL;
-
-  // ---------- AUDIO ----------
-  let audioCtx = null;
-  let musicElem = null, musicNode = null, musicGain = null;
-  let musicEnabled = false;
-
-  function ensureMusicNodes(){
-    if (!audioCtx) return;
-    if (!musicElem){
-      musicElem = new Audio(MUSIC_URL);
-      musicElem.loop = true;
-      musicElem.preload = "auto";
-    }
-    if (!musicNode){
-      musicNode = audioCtx.createMediaElementSource(musicElem);
-      musicGain = audioCtx.createGain();
-      musicGain.gain.value = 0.0;
-      musicNode.connect(musicGain).connect(audioCtx.destination);
-    }
-  }
-  function fadeMusic(target=0.5, ms=500){
-    if (!audioCtx || !musicGain) return;
-    const t0 = audioCtx.currentTime;
-    musicGain.gain.setValueAtTime(musicGain.gain.value, t0);
-    musicGain.gain.linearRampToValueAtTime(target, t0 + ms/1000);
-  }
-  async function startMusic(){
-    if (!audioCtx) return;
-    ensureMusicNodes();
-    try { await musicElem.play(); } catch(e) {}
-    fadeMusic(0.5, 600);
-    soundBadge.textContent = "🔊 sound on";
-  }
-  function stopMusic(){ if (!musicElem||!musicGain) return; fadeMusic(0.0, 300); soundBadge.textContent="🔇 sound off"; }
-  function toggleMusic(){ if (!audioCtx) initAudio(); musicEnabled=!musicEnabled; if(musicEnabled) startMusic(); else stopMusic(); }
-  function initAudio(){
-    if (!audioCtx){
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (Ctx){ audioCtx = new Ctx(); }
-    }
-    if (audioCtx){ ensureMusicNodes(); musicEnabled = true; startMusic(); soundBadge.title="Click to toggle audio"; }
-  }
-  window.addEventListener("pointerdown", initAudio, {once:false});
-  window.addEventListener("keydown", initAudio, {once:false});
-  soundBadge.addEventListener("click", (e)=>{ e.stopPropagation(); toggleMusic(); });
-  document.addEventListener("visibilitychange", ()=>{ if (!audioCtx||!musicElem) return; if (document.hidden) fadeMusic(0.0,200); else if (musicEnabled) startMusic(); });
-
-  // SFX
-  function tone({freq=440, type="square", duration=0.08, gain=0.08, attack=0.004, release=0.05, slide=0}){
-    if (!audioCtx || audioCtx.state==="suspended") return;
-    const t0 = audioCtx.currentTime + 0.0005, t1 = t0 + duration;
-    const osc = audioCtx.createOscillator(), g = audioCtx.createGain();
-    osc.type = type; osc.frequency.setValueAtTime(freq, t0);
-    if (slide) osc.frequency.linearRampToValueAtTime(freq + slide, t1);
-    g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + attack); g.gain.linearRampToValueAtTime(0.0001, t1 + release);
-    osc.connect(g).connect(audioCtx.destination); osc.start(t0); osc.stop(t1 + release + 0.02);
-  }
-  function noise({duration=0.06, gain=0.05}={}){ if (!audioCtx||audioCtx.state==="suspended") return;
-    const t0=audioCtx.currentTime+0.0005, buffer=audioCtx.createBuffer(1, audioCtx.sampleRate*duration, audioCtx.sampleRate);
-    const data=buffer.getChannelData(0); for(let i=0;i<data.length;i++) data[i]=(Math.random()*2-1)*(1-i/data.length);
-    const src=audioCtx.createBufferSource(); src.buffer=buffer; const g=audioCtx.createGain(); g.gain.value=gain; src.connect(g).connect(audioCtx.destination); src.start(t0);
-  }
-  function sfxCoin(){ tone({freq:880,type:"square",duration:0.10,gain:0.08,slide:120}); }
-  function sfxBrick(){ tone({freq:520,type:"square",duration:0.05,gain:0.07}); noise({duration:0.03,gain:0.03}); }
-  function sfxStomp(){ tone({freq:180,type:"square",duration:0.06,gain:0.08}); }
-  function sfxPowerup(){ tone({freq:660,type:"triangle",duration:0.15,gain:0.1,slide:220}); }
-  function sfxFireball(){ tone({freq:440,type:"sawtooth",duration:0.08,gain:0.06}); }
-  function sfxDamage(){ tone({freq:220,type:"triangle",duration:0.25,gain:0.1,slide:-100}); }
-  function sfxGameOver(){
-    if (!audioCtx) return;
-    const seq=[{f:440,d:0.12},{f:392,d:0.12},{f:349,d:0.14},{f:330,d:0.18}];
-    let t=0; for (const {f,d} of seq){ setTimeout(()=>tone({freq:f,type:"triangle",duration:d,gain:0.08}), t*1000); t+=d*0.9; }
-  }
-
-  // ---------- INPUT ----------
-  addEventListener("keydown", e=>{
-    if (["ArrowLeft","ArrowRight","ArrowUp"," ","z","Z","a","A","d","D","r","R","x","X"].includes(e.key)) e.preventDefault();
-    keys[e.key] = true;
-    if ((e.key === " " || e.key === "ArrowUp" || e.key === "z" || e.key === "Z") && gameState==="playing"){
-      player.lastJumpPressMs = performance.now();
-    }
-    if ((e.key === "x" || e.key === "X") && gameState==="playing" && player.powerState === 'fire'){
-      shootFireball();
-    }
-    if ((e.key === "r" || e.key === "R") && (gameState!=="playing")) resetLevel();
-  }, {passive:false});
-  addEventListener("keyup",   e=>{ keys[e.key] = false; });
-
-  function shootFireball(){
-    if (fireballs.length >= 2) return;
-    const fb = { x: player.x + (player.facing > 0 ? player.w : -8), y: player.y + player.h/2, w:8, h:8, vx: player.facing * FIREBALL_SPEED, vy: -100, bounces: 0 };
-    fireballs.push(fb); sfxFireball();
-  }
-
-  function resetLevel(){
-    player.x = start.x*TILE+4; player.y=(start.y-1)*TILE; player.vx=0; player.vy=0;
-    player.onGround=false; player.lastGroundMs=0; player.lastJumpPressMs=-9999; player.facing=1;
-    player.powerState='small'; player.invulnerable=false; player.invulnerableTime=0; player.starTime=0;
-    player.w=24; player.h=28; player.animTime=0;
-    score=0; coins=0; gameState="playing"; powerups.length=0; fireballs.length=0;
-
-    const fresh = `
-                                                                                  
-                                                                                  
-                                                                                  
-                                                     o                            
-                                  o          B     BBB           o                
-                     o          BBB         BBB                BBB                
-        S                                                                         
-##############################      ######       ############################   F 
-##############################      ######       ############################### 
-##############################   P  ######   P   ############################### 
-##############################      ######       ############################### 
-##############################      ######       ############################### 
-#################################################################################
-    `.split("\n").slice(1,-1).map(r => r.split(""));
-    for (let y=0;y<LEVEL.length;y++)
-      for (let x=0;x<LEVEL[0].length;x++) LEVEL[y][x]=fresh[y][x];
-    (function decorate() {
-      const addAt = (x,y,ch)=>{ if (LEVEL[y] && LEVEL[y][x] === ' ') LEVEL[y][x] = ch; };
-      [[20,6],[36,6],[52,6],[70,6],[95,6],[110,6]].forEach(([x,y])=>addAt(x,y,'g'));
-      for (let x=12;x<18;x++) addAt(x,3,'o');
-      for (let x=26;x<31;x++) addAt(x,5,'?');
-      for (let x=60;x<65;x++) addAt(x,4,'?');
-    })();
-
-    enemies.length = 0;
-    for (let y=0;y<LEVEL.length;y++)
-      for (let x=0;x<LEVEL[0].length;x++){
-        if (LEVEL[y][x]==='g'){ enemies.push({x:x*TILE+4, y:(y-1)*TILE+8, w:24, h:24, vx:-ENEMY_SPEED, alive:true}); LEVEL[y][x]=' '; }
-        if (LEVEL[y][x]==='S'){ start={x,y}; LEVEL[y][x]=' '; }
-      }
-
-    // recompute flag info
-    computeFlagInfo();
-    updateUI();
-  }
-
-  function updateUI(){
-    uiCoins.textContent = `Coins: ${coins}`;
-    uiScore.textContent = `Score: ${score.toString().padStart(6,'0')}`;
-    const powerText = player.starTime > 0 ? 'Star Mario!' : 
-                     player.powerState === 'fire' ? 'Fire Mario' :
-                     player.powerState === 'big' ? 'Big Mario' : 'Small Mario';
-    uiPowerup.textContent = powerText;
-  }
-
-  // ---------- HELPERS ----------
-  const now = () => performance.now();
-  function rectsOverlap(a,b){ return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y; }
-  function tileAtPx(px,py){
-    if (px<0 || py<0 || px>=WIDTH || py>=HEIGHT) return '#';
-    const tx = (px/TILE)|0, ty = (py/TILE)|0;
-    return LEVEL[ty]?.[tx] ?? '#';
-  }
-  function setTileAtPx(px,py, ch){
-    const tx = (px/TILE)|0, ty = (py/TILE)|0;
-    if (LEVEL[ty]) LEVEL[ty][tx]=ch;
-  }
-  function isSolid(ch){ return SOLIDS.has(ch); }
-
-  function tryBonkBlock(headX, headY){
-    const ch = tileAtPx(headX, headY);
-    if (ch === '?' ){
-      setTileAtPx(headX, headY, '=');
-      const powerupType = Math.random() < 0.4 ? 'mushroom' : Math.random() < 0.7 ? 'flower' : 'star';
-      const blockX = ((headX/TILE|0)*TILE), blockY = ((headY/TILE|0)*TILE);
-      powerups.push({ x:blockX+4, y:blockY, w:24, h:24, vx:POWERUP_SPEED, vy:0, type:powerupType, emerged:false, emergeTime:0, startY:blockY });
-      score += 200;
-      pops.push({x: blockX + TILE/2, y: blockY + 8, t: 0, txt: powerupType === 'mushroom' ? "1UP" : powerupType === 'flower' ? "FIRE" : "STAR"});
-      sfxCoin();
-    } else if (ch === 'B'){
-      if (player.powerState !== 'small') {
-        setTileAtPx(headX, headY, ' ');
-        score += 50; particlesBurst(((headX/TILE|0)*TILE)+TILE/2, ((headY/TILE|0)*TILE)+TILE/2, 10); sfxBrick();
-      } else {
-        sfxBrick();
-      }
-    }
-    updateUI();
-  }
-
-  // ---------- PARTICLES & POPS ----------
-  const particles = [];
-  function particlesBurst(x,y,n){ for (let i=0;i<n;i++){ particles.push({x,y, vx:(Math.random()*2-1)*150, vy:(Math.random()*-1-0.3)*250, life:0.6, t:0}); } }
-  const pops = [];
-
-  // ---------- RESIZE ----------
-  function resizeCanvas(){ canvas.width = Math.floor(window.innerWidth); canvas.height = Math.floor(window.innerHeight); }
-  window.addEventListener("resize", resizeCanvas);
-  resizeCanvas();
-
-  // ---------- FLAG HELPERS ----------
-  function computeFlagInfo(){
-    const fr = findFirstTileRect('F');
-    if (fr){
-      flagInfo.poleX   = fr.x + TILE/2;   // center of the pole
-      flagInfo.topY    = fr.y - 5*TILE;   // matches drawFlag pole height
-      flagInfo.bottomY = fr.y + TILE;
-      flagInfo.hasWon = false;
-      flagInfo.dropStartMs = 0;
-    }
-  }
-  computeFlagInfo();
-
-  function triggerWin(){
-    if (flagInfo.hasWon) return;
-    flagInfo.hasWon = true;
-    flagInfo.dropStartMs = performance.now();
-    gameState = "win";            // stop gameplay immediately
-    // freeze the player where they are
-    player.vx = 0; player.vy = 0;
-  }
-
-  // ---------- GAME LOOP ----------
-  let last = performance.now();
-  function tick(){
-    const t = performance.now();
-    let dt = (t-last)/1000;
-    if (dt>0.033) dt=0.033;
-    last = t;
-
-    if (gameState === "playing") update(dt);
-    render();
-
-    requestAnimationFrame(tick);
-  }
-
-  function update(dt){
-    // Save edges before movement (for pole crossing test)
-    const beforeLeft = player.x, beforeRight = player.x + player.w;
-
-    // Update invulnerability
-    if (player.invulnerable) {
-      player.invulnerableTime -= dt;
-      if (player.invulnerableTime <= 0) player.invulnerable = false;
+    function setSystem(){
+      messages[0] = { role: "system", content: sysEl.value };
+      // update visible sys note
+      const sysNote = document.querySelector('.sysnote');
+      if (sysNote) sysNote.textContent = sysEl.value;
     }
 
-    // Update star power
-    if (player.starTime > 0) {
-      player.starTime -= dt;
-      if (player.starTime <= 0) player.invulnerable = false;
-    }
+    async function send(){
+      const text = inputEl.value.trim();
+      if (!text) return;
+      inputEl.value = "";
+      addMessage("user", text);
+      messages.push({ role: "user", content: text });
 
-    const left  = keys["ArrowLeft"] || keys["a"] || keys["A"];
-    const right = keys["ArrowRight"]|| keys["d"] || keys["D"];
-    const want  = (right?1:0) - (left?1:0);
+      let reply = "";
+      addMessage("assistant", "…");
+      const lastBubble = chat.lastElementChild.querySelector('.bubble');
 
-    const accel = player.onGround ? MOVE_ACC : MOVE_ACC * AIR_CONTROL;
-    player.vx += want * accel * dt;
-
-    if (player.onGround && want===0){
-      const fr = Math.min(Math.abs(player.vx), FRICTION*dt) * Math.sign(player.vx);
-      player.vx -= fr;
-    }
-    player.vx = Math.max(-MAX_RUN, Math.min(MAX_RUN, player.vx));
-    if (player.vx !== 0) player.facing = Math.sign(player.vx);
-
-    player.vy += GRAVITY * dt;
-
-    const jumpPressed = (keys[" "] || keys["ArrowUp"] || keys["z"] || keys["Z"]);
-    if (jumpPressed) player.lastJumpPressMs = now();
-
-    if ((now()-player.lastJumpPressMs)<=JUMP_BUFFER_MS && (player.onGround || (now()-player.lastGroundMs)<=COYOTE_MS)){
-      player.vy = -JUMP_V;
-      player.onGround = false;
-      player.lastJumpPressMs = -9999;
-    }
-
-    moveAndCollide(player, dt);
-
-    // advance sprite animation
-    player.animTime += dt * (player.onGround ? 1 : 0.5);
-
-    // Big Mario brick smash
-    if (player.powerState !== 'small' && Math.abs(player.vx) > 150) {
-      const frontX = player.x + (player.vx > 0 ? player.w : 0);
-      const midY = player.y + player.h/2;
-      if (tileAtPx(frontX, midY) === 'B') {
-        setTileAtPx(frontX, midY, ' ');
-        score += 50; particlesBurst(((frontX/TILE|0)*TILE)+TILE/2, ((midY/TILE|0)*TILE)+TILE/2, 8); sfxBrick(); updateUI();
-      }
-    }
-
-    // Enemies
-    for (const e of enemies){
-      if (!e.alive) continue;
-      const aheadX = e.x + (e.vx>0 ? e.w+2 : -2);
-      const feetY  = e.y + e.h + 1;
-      const tileAhead = tileAtPx(aheadX, feetY);
-      if (!isSolid(tileAhead)) e.vx *= -1;
-      const bumpAhead = tileAtPx(aheadX, e.y+e.h/2);
-      if (isSolid(bumpAhead)) e.vx *= -1;
-
-      e.vy = (e.vy ?? 0) + GRAVITY*dt;
-      const pre = {x:e.x, y:e.y};
-      e.x += e.vx*dt;
-      if (solidAtRect(e)){ e.x = pre.x; e.vx *= -1; }
-      e.y += e.vy*dt;
-      if (solidAtRect(e)){
-        if (e.vy > 0){ e.y = Math.floor((e.y+e.h)/TILE)*TILE - e.h; e.vy = 0; }
-        else { e.y = Math.floor((e.y)/TILE+1)*TILE; e.vy = 0.1; }
-      }
-
-      if (rectsOverlap(player, e)){
-        if (player.starTime > 0) {
-          e.alive = false; score += 200; particlesBurst(e.x+e.w/2, e.y+e.h/2, 12); sfxStomp();
+      try{
+        if (modeEl.value.startsWith("Demo")){
+          await new Promise(r => setTimeout(r, 200));
+          reply = demoReply(text);
         } else {
-          const fromAbove = (player.vy > 120) && (player.y + player.h <= e.y + 8);
-          if (fromAbove){
-            e.alive = false; score += 200; player.vy = -JUMP_V*0.7; particlesBurst(e.x+e.w/2, e.y+e.h/2, 12); sfxStomp();
-          } else {
-            if (!player.invulnerable && player.starTime <= 0) takeDamage();
-          }
+          const token = tokenEl.value.trim();
+          if (!token) throw new Error("No HF token provided. Paste your HF token or switch to Demo mode.");
+          // messages already includes system/user history
+          reply = await hfChat(messages, modelEl.value.trim(), parseFloat(tempEl.value), token);
         }
+        lastBubble.textContent = reply;
+        messages.push({ role: "assistant", content: reply });
+      } catch(err){
+        lastBubble.textContent = "⚠️ " + (err?.message || err);
       }
     }
 
-    // Powerups
-    for (let i = powerups.length - 1; i >= 0; i--) {
-      const p = powerups[i];
-      if (!p.emerged) {
-        p.emergeTime += dt; p.y = p.startY - (p.emergeTime * 30);
-        if (p.emergeTime >= 0.8) { p.emerged = true; p.y = p.startY - TILE; }
-        continue;
-      }
-      p.vy = (p.vy ?? 0) + GRAVITY * dt;
-      const preX = p.x; p.x += p.vx * dt; if (solidAtRect(p)) { p.x = preX; p.vx *= -1; }
-      p.y += p.vy * dt; if (solidAtRect(p)) { if (p.vy > 0) { p.y = Math.floor((p.y + p.h) / TILE) * TILE - p.h; p.vy = 0; } }
-      const aheadX = p.x + (p.vx > 0 ? p.w + 2 : -2); const feetY = p.y + p.h + 1;
-      if (!isSolid(tileAtPx(aheadX, feetY))) p.vx *= -1;
-      if (rectsOverlap(player, p)) { collectPowerup(p.type); powerups.splice(i, 1); }
-      if (p.y > HEIGHT + 100) powerups.splice(i, 1);
-    }
+    // UI bindings
+    el('#sendBtn').addEventListener('click', send);
+    inputEl.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') send(); });
+    el('#clearBtn').addEventListener('click', ()=>{
+      messages = [{ role: "system", content: sysEl.value }];
+      chat.innerHTML = "";
+    });
+    sysEl.addEventListener('change', setSystem);
 
-    // Fireballs
-    for (let i = fireballs.length - 1; i >= 0; i--) {
-      const fb = fireballs[i];
-      fb.vy += GRAVITY * dt; fb.x += fb.vx * dt; fb.y += fb.vy * dt;
-      if (solidAtRect(fb)) {
-        if (fb.vy > 0 && fb.bounces < 3) { fb.y = Math.floor((fb.y + fb.h) / TILE) * TILE - fb.h; fb.vy = -300; fb.bounces++; }
-        else { fireballs.splice(i, 1); continue; }
-      }
-      for (const e of enemies) {
-        if (e.alive && rectsOverlap(fb, e)) { e.alive = false; score += 200; particlesBurst(e.x + e.w/2, e.y + e.h/2, 8); fireballs.splice(i, 1); sfxStomp(); break; }
-      }
-      if (fb.x < -50 || fb.x > WIDTH + 50 || fb.y > HEIGHT + 100 || fb.bounces >= 3) fireballs.splice(i, 1);
-    }
-
-    sweepCoinsUnderPlayer();
-
-    if (player.y > HEIGHT + 200) { die(); return; }
-
-    // --- INSTANT WIN: trigger when crossing the pole line ---
-    if (!flagInfo.hasWon && flagInfo.poleX != null){
-      const afterLeft  = player.x, afterRight = player.x + player.w;
-      const L = flagInfo.poleX;
-      const crossed =
-        (beforeRight < L && afterRight >= L) ||   // moving right across the pole
-        (beforeLeft  > L && afterLeft  <= L) ||   // moving left across the pole
-        rectsOverlap(player, {x:L-2, y:flagInfo.topY, w:4, h:flagInfo.bottomY - flagInfo.topY}); // overlap the pole strip
-      if (crossed) triggerWin();
-    }
-
-    // (OLD) tile overlap win check removed to avoid delayed wins
-    // const flagRect = findFirstTileRect('F');
-    // if (flagRect && rectsOverlap(player, flagRect)){ gameState = "win"; }
-
-    for (const p of particles){ p.t += dt; p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 1200*dt; }
-    while (particles.length && particles[0].t > particles[0].life) particles.shift();
-    for (const pop of pops){ pop.t += dt; }
-    while (pops.length && pops[0].t>0.9) pops.shift();
-
-    updateUI();
-  }
-
-  function collectPowerup(type) {
-    if (type === 'mushroom') {
-      if (player.powerState === 'small') {
-        player.powerState = 'big'; player.h = 32; player.y -= 4; score += 1000; sfxPowerup();
-      }
-    } else if (type === 'flower') {
-      if (player.powerState === 'small') { player.powerState = 'big'; player.h = 32; player.y -= 4; }
-      player.powerState = 'fire'; score += 1000; sfxPowerup();
-    } else if (type === 'star') {
-      player.starTime = 8; player.invulnerable = true; score += 1000; sfxPowerup();
-    }
-  }
-
-  function takeDamage() {
-    if (player.powerState === 'fire') {
-      player.powerState = 'big'; player.invulnerable = true; player.invulnerableTime = 2; sfxDamage();
-    } else if (player.powerState === 'big') {
-      player.powerState = 'small'; player.h = 28; player.invulnerable = true; player.invulnerableTime = 2; sfxDamage();
-    } else {
-      die();
-    }
-  }
-
-  function die(){
-    gameState = "dead";
-    pops.push({x: player.x+player.w/2, y: player.y, t:0, txt:"Oops!"});
-    sfxGameOver();
-  }
-
-  function moveAndCollide(o, dt){
-    let newX = o.x + o.vx*dt;
-    const stepX = Math.sign(newX - o.x) || 0;
-    if (stepX !== 0){
-      const ahead = newX + (stepX>0 ? o.w : 0);
-      const top   = o.y + 4;
-      const mid   = o.y + o.h/2;
-      const bot   = o.y + o.h - 2;
-      if (isSolid(tileAtPx(ahead, top)) || isSolid(tileAtPx(ahead, mid)) || isSolid(tileAtPx(ahead, bot))){
-        const tileEdge = (Math.floor(ahead/TILE) + (stepX>0?0:1)) * TILE;
-        newX = tileEdge - (stepX>0 ? o.w : 0);
-        if (o===player) o.vx = 0;
-      }
-    }
-    o.x = newX;
-
-    let newY = o.y + o.vy*dt;
-    const stepY = Math.sign(newY - o.y) || 0;
-    o.onGround = false;
-    if (stepY !== 0){
-      if (stepY < 0){
-        const headX1 = o.x + 6;
-        const headX2 = o.x + o.w - 6;
-        const headY  = newY;
-        const t1 = tileAtPx(headX1, headY);
-        const t2 = tileAtPx(headX2, headY);
-        if (isSolid(t1) || isSolid(t2)){
-          if (o===player){ tryBonkBlock(headX1, headY); tryBonkBlock(headX2, headY); }
-          newY = Math.floor(headY/TILE + 1)*TILE;
-          if (o===player) o.vy = 0;
-        }
-      } else {
-        const feetX1 = o.x + 4;
-        const feetX2 = o.x + o.w - 4;
-        const feetY  = newY + o.h;
-        const t1 = tileAtPx(feetX1, feetY);
-        const t2 = tileAtPx(feetX2, feetY);
-        if (isSolid(t1) || isSolid(t2)){
-          newY = Math.floor(feetY/TILE)*TILE - o.h;
-          if (o===player){ o.vy = 0; o.onGround = true; o.lastGroundMs = now(); }
-          else o.vy = 0;
-        }
-        if (tileAtPx((o.x+o.w/2)|0, (o.y+o.h/2)|0) === 'o' && o===player){
-          setTileAtPx(o.x+o.w/2, o.y+o.h/2, ' ');
-          coins++; score += 100;
-          pops.push({x:o.x+o.w/2, y:o.y, t:0, txt:"+1"}); sfxCoin();
-        }
-      }
-    }
-    o.y = newY;
-  }
-
-  function solidAtRect(r){
-    const pts = [
-      [r.x+2, r.y+2], [r.x+r.w-2, r.y+2],
-      [r.x+2, r.y+r.h-2], [r.x+r.w-2, r.y+r.h-2]
-    ];
-    return pts.some(([px,py])=> isSolid(tileAtPx(px,py)));
-  }
-
-  function sweepCoinsUnderPlayer(){
-    const cx = ((player.x+player.w/2)/TILE)|0;
-    const cy = ((player.y+player.h/2)/TILE)|0;
-    for (let y=cy-1;y<=cy+1;y++)
-      for (let x=cx-1;x<=cx+1;x++){
-        if (LEVEL[y] && LEVEL[y][x]==='o'){
-          const coinRect = {x:x*TILE+8, y:y*TILE+8, w:16, h:16};
-          if (rectsOverlap(player, coinRect)){
-            LEVEL[y][x]=' ';
-            coins++; score += 100;
-            pops.push({x:coinRect.x+8, y:coinRect.y, t:0, txt:"+1"}); sfxCoin();
-          }
-        }
-      }
-  }
-
-  function findFirstTileRect(ch){
-    for (let y=0;y<LEVEL.length;y++)
-      for (let x=0;x<LEVEL[0].length;x++)
-        if (LEVEL[y][x]===ch) return {x:x*TILE, y:y*TILE, w:TILE, h:TILE};
-    return null;
-  }
-
-  // ---------- RENDER ----------
-  function render(){
-    const viewW = canvas.width, viewH = canvas.height;
-
-    // Camera X follows player, clamped to world
-    let camX = player.x + player.w/2 - viewW/2;
-    camX = Math.max(0, Math.min(WIDTH - viewW, camX));
-
-    // Camera Y aligned so world bottom sits on screen bottom
-    const targetY = player.y + player.h/2 - viewH/2;
-    const maxCamY = Math.max(0, HEIGHT - viewH);
-    let camY = Math.max(0, Math.min(maxCamY, targetY));
-    camY -= Math.max(0, viewH - HEIGHT);
-
-    c.save();
-    c.fillStyle = "#87ceeb";
-    c.fillRect(0,0,viewW,viewH);
-    drawClouds(camX);
-
-    // tiles, deferring pipes
-    const x0 = Math.floor((camX<0?0:camX) / TILE), x1 = Math.ceil((camX + viewW)/TILE);
-    const y0 = Math.floor((camY<0?0:camY) / TILE), y1 = Math.ceil((camY + viewH)/TILE);
-    const pendingPipes = [];
-
-    for (let y=y0; y<y1; y++){
-      for (let x=x0; x<x1; x++){
-        const ch = LEVEL[y]?.[x];
-        if (!ch || ch===' ') continue;
-        const px = x*TILE - camX, py = y*TILE - camY;
-        switch(ch){
-          case '#': drawBlock(px,py,"#7f5a3a"); break;
-          case 'B': drawBrick(px,py); break;
-          case '?': drawQuestion(px,py); break;
-          case '=': drawUsed(px,py); break;
-          case 'o': drawCoin(px+8,py+8); break;
-          case 'F': drawFlag(px,py); break;   // flag draws with drop if hasWon
-          case 'P': pendingPipes.push({tx:x, ty:y}); break;
-        }
-      }
-    }
-    for (const {tx,ty} of pendingPipes){ drawPipeStack(tx, ty, camX, camY); }
-
-    // Powerups
-    for (const p of powerups) {
-      if (!p.emerged) continue;
-      const px = Math.floor(p.x - camX), py = Math.floor(p.y - camY);
-      drawPowerup(px, py, p.type);
-    }
-
-    // Fireballs
-    for (const fb of fireballs) {
-      const px = Math.floor(fb.x - camX), py = Math.floor(fb.y - camY);
-      drawFireball(px, py);
-    }
-
-    // Enemies
-    for (const e of enemies){
-      if (!e.alive) continue;
-      const px = Math.floor(e.x - camX), py = Math.floor(e.y - camY);
-      drawGoomba(px, py, e.vx<0);
-    }
-
-    // Player
-    const px = Math.floor(player.x - camX), py = Math.floor(player.y - camY);
-    const playerState = player.vy<0 ? "jump" : (player.onGround ? (Math.abs(player.vx)>10?"run":"idle") : "fall");
-    drawPlayer(px, py, playerState, player.facing);
-
-    // Pops/particles
-    c.font = "12px monospace";
-    c.textAlign = "center"; c.textBaseline = "middle";
-    for (const pop of pops){
-      const y = pop.y - camY - pop.t*40;
-      c.fillStyle = "black"; c.globalAlpha = 0.2; c.fillText(pop.txt, pop.x - camX +1, y+1);
-      c.globalAlpha = 1; c.fillStyle = "white"; c.fillText(pop.txt, pop.x - camX, y);
-    }
-    for (const p of particles){
-      c.fillStyle = "#d4b18b";
-      c.fillRect(Math.floor(p.x - camX), Math.floor(p.y - camY), 3,3);
-    }
-
-    if (gameState==="win"){
-      banner("YOU WIN!  Press R to play again");
-    } else if (gameState==="dead"){
-      banner("Ouch!  Press R to retry");
-    }
-
-    c.restore();
-  }
-
-  function banner(text){
-    c.save();
-    c.fillStyle = "rgba(0,0,0,.5)"; c.fillRect(0,0,canvas.width,canvas.height);
-    c.fillStyle = "#fff"; c.font = "28px system-ui, sans-serif"; c.textAlign = "center"; c.textBaseline="middle";
-    c.fillText(text, canvas.width/2, canvas.height/2);
-    c.restore();
-  }
-
-  // ---------- DRAW HELPERS ----------
-  function drawBlock(x,y,color){
-    c.fillStyle = color; c.fillRect(x,y,TILE,TILE);
-    c.strokeStyle = "#00000022"; c.strokeRect(x+0.5,y+0.5,TILE-1,TILE-1);
-  }
-  function drawBrick(x,y){
-    drawBlock(x,y,"#8b5a2b");
-    c.fillStyle="#00000022";
-    for (let i=1;i<4;i++){ c.fillRect(x, y+i*8, TILE, 1); }
-    c.fillRect(x+16, y, 1, TILE);
-  }
-  function drawQuestion(x,y){
-    c.fillStyle="#d9a441"; c.fillRect(x,y,TILE,TILE);
-    c.fillStyle="#7a4e15"; c.fillRect(x,y+TILE-6,TILE,6);
-    c.fillStyle="#fff"; c.font="20px monospace"; c.textAlign="center"; c.textBaseline="middle";
-    c.fillText("?", x+TILE/2, y+TILE/2);
-  }
-  function drawUsed(x,y){
-    c.fillStyle="#9e8d7a"; c.fillRect(x,y,TILE,TILE);
-    c.fillStyle="#6e5f50"; c.fillRect(x,y+TILE-6,TILE,6);
-  }
-  function drawCoin(x,y){
-    c.save();
-    c.translate(x+8,y+8);
-    const t = performance.now()/500;
-    const k = Math.sin(t)*4;
-    c.fillStyle="#ffd34d";
-    c.beginPath(); c.ellipse(0,0,8,8+k,0,0,Math.PI*2); c.fill();
-    c.fillStyle="#a37900"; c.fillRect(-1, -6, 2, 12);
-    c.restore();
-  }
-
-  // Flag pole + dropping flag (uses flagInfo.hasWon/timing)
-  function drawFlag(x,y){
-    // Pole
-    c.fillStyle="#dcdcdc";
-    c.fillRect(x+TILE/2-2, y-5*TILE, 4, 6*TILE);
-
-    // Flag triangle position
-    const startY = y - TILE*4;  // original flag anchor
-    const endY   = y - TILE;    // where it drops to
-    let drop = 0;
-    if (flagInfo.hasWon) {
-      const t = (performance.now() - flagInfo.dropStartMs) / flagInfo.dropDuration;
-      drop = Math.max(0, Math.min(1, t));
-    }
-    const flagY = startY + (endY - startY) * drop;
-
-    // Waving triangle
-    c.fillStyle="#ff3b3b";
-    const wave = Math.sin(performance.now()/250)*3;
-    c.beginPath();
-    c.moveTo(x+TILE/2, flagY);
-    c.lineTo(x+TILE/2+20+wave, flagY+8);
-    c.lineTo(x+TILE/2, flagY+16);
-    c.closePath(); c.fill();
-  }
-
-  function drawPowerup(x, y, type) {
-    c.save();
-    if (type === 'mushroom') {
-      c.fillStyle = "#ff4b4b"; c.fillRect(x+2, y+8, 20, 16);
-      c.fillStyle = "#fff"; c.fillRect(x+4, y+10, 4, 4); c.fillRect(x+12, y+10, 4, 4); c.fillRect(x+8, y+14, 8, 4);
-    } else if (type === 'flower') {
-      c.fillStyle = "#ff8c42";
-      for (let i = 0; i < 4; i++) {
-        const angle = (i * Math.PI/2) + performance.now()/500;
-        const petX = x + 12 + Math.cos(angle) * 8;
-        const petY = y + 12 + Math.sin(angle) * 6;
-        c.fillRect(petX-2, petY-2, 4, 4);
-      }
-      c.fillStyle = "#fff200"; c.fillRect(x+10, y+10, 4, 4);
-    } else if (type === 'star') {
-      c.fillStyle = "#ffff00";
-      c.save(); c.translate(x+12, y+12); c.rotate(performance.now()/200);
-      c.beginPath();
-      for (let i = 0; i < 5; i++) {
-        const angle = (i * 4 * Math.PI) / 5;
-        const outerRadius = 10, innerRadius = 4;
-        const x1 = Math.cos(angle) * outerRadius, y1 = Math.sin(angle) * outerRadius;
-        const x2 = Math.cos(angle + Math.PI/5) * innerRadius, y2 = Math.sin(angle + Math.PI/5) * innerRadius;
-        if (i === 0) c.moveTo(x1, y1); else c.lineTo(x1, y1);
-        c.lineTo(x2, y2);
-      }
-      c.closePath(); c.fill(); c.restore();
-    }
-    c.restore();
-  }
-
-  function drawFireball(x, y) {
-    c.save();
-    c.fillStyle = "#ff6b00"; c.fillRect(x, y, 8, 8);
-    c.fillStyle = "#ffff00"; c.fillRect(x+2, y+2, 4, 4);
-    c.restore();
-  }
-
-  function drawPipeStack(tx, ty, camX, camY){
-    const px = tx*TILE - camX, py = ty*TILE - camY;
-    c.fillStyle="#1faa59"; c.fillRect(px,py,TILE,TILE);
-    c.fillStyle="#158a43"; c.fillRect(px,py, TILE, 6);
-    c.fillStyle="#c9ffd1"; c.fillRect(px+4,py+2, 8,2);
-    for (let yy = ty+1; yy < LEVEL.length; yy++){
-      const bodyY = yy*TILE - camY;
-      c.fillStyle="#188a45"; c.fillRect(px, bodyY, TILE, TILE);
-      c.fillStyle="#106436"; c.fillRect(px+2, bodyY, 2, TILE);
-      const belowCh = LEVEL[yy]?.[tx]; if (belowCh === '#') break;
-    }
-  }
-
-  function drawGoomba(x,y,flip){
-    c.save();
-    c.translate(x+12,y+12); if (flip) c.scale(-1,1); c.translate(-12,-12);
-    c.fillStyle="#b5762b"; c.fillRect(0,4,24,16);
-    c.fillStyle="#6b3f15"; c.fillRect(2,18,8,6); c.fillRect(14,18,8,6);
-    c.fillStyle="#fff"; c.fillRect(4,8,6,6); c.fillRect(14,8,6,6);
-    c.fillStyle="#000"; c.fillRect(7,10,2,2); c.fillRect(17,10,2,2);
-    c.restore();
-  }
-
-  function drawPlayer(x,y,state,facing){
-    if (!SPRITE.loaded) {
-      c.save();
-      const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
-      if (isFlashing) c.globalAlpha = 0.5;
-      if (player.starTime > 0) { const hue=(performance.now()/100)%360; c.filter=`hue-rotate(${hue}deg) saturate(2)`; }
-      const h = player.h, isBig = player.powerState !== 'small';
-      c.translate(x+12,y+h/2); c.scale(facing,1); c.translate(-12,-h/2);
-      c.fillStyle = "#ff4b4b"; c.fillRect(4,0,16,10);
-      c.fillStyle = (player.powerState === 'fire') ? "#fff" : "#3b3bdc";
-      c.fillRect(6,10,12,isBig?12:10);
-      c.fillStyle="#ffcc99"; c.fillRect(6,isBig?-6:-4,12,8);
-      c.fillStyle="#6b3f15"; c.fillRect(6,0,12,2);
-      c.fillStyle="#6b3f15"; c.fillRect(4,h-8,6,6); c.fillRect(14,h-8,6,6);
-      if (state!=="idle"){ c.translate(0, state==="jump"?-2:2); }
-      c.restore();
-      return;
-    }
-
-    c.save();
-    const isFlashing = player.invulnerable && Math.floor(performance.now()/100) % 2;
-    if (isFlashing) c.globalAlpha = 0.6;
-    if (player.starTime > 0) { const hue=(performance.now()/100)%360; c.filter=`hue-rotate(${hue}deg) saturate(2)`; }
-
-    const anim = SPRITE.anims[state] || SPRITE.anims.idle;
-    const frames = anim.frames.length || 1;
-    const idx = frames > 1 ? Math.floor(player.animTime * (anim.fps||12)) % frames : 0;
-    const sx = (anim.frames[idx] ?? 0) * SPRITE.fw;
-    const sy = (anim.row ?? 0) * SPRITE.fh;
-
-    const scale = player.h / SPRITE.fh;
-    const dw = SPRITE.fw * scale, dh = SPRITE.fh * scale;
-
-    c.translate(x + player.w/2, y + player.h/2);
-    c.scale(facing, 1);
-    c.translate(-player.w/2, -player.h/2);
-    if (state !== "idle") c.translate(0, state === "jump" ? -2 : 2);
-    const dx = (player.w - dw) / 2, dy = (player.h - dh);
-    c.drawImage(SPRITE.img, sx, sy, SPRITE.fw, SPRITE.fh, dx, dy, dw, dh);
-    c.restore();
-  }
-
-  function drawClouds(camX){
-    c.save();
-    c.globalAlpha = 0.5;
-    for (let i=0;i<6;i++){
-      const x = ((i*300 - (camX*0.4)) % (canvas.width+320)) - 160;
-      const y = 40 + (i%3)*30;
-      c.fillStyle="#ffffff";
-      c.beginPath();
-      c.ellipse(x, y, 40, 18, 0, 0, Math.PI*2);
-      c.ellipse(x+30, y+5, 28, 14, 0, 0, Math.PI*2);
-      c.ellipse(x-30, y+5, 28, 14, 0, 0, Math.PI*2);
-      c.fill();
-    }
-    c.restore();
-  }
-
-  // ---------- START ----------
-  updateUI();
-  tick();
-})();
-</script>
+    // boot with a friendly note
+    const sysNote = document.createElement('div');
+    sysNote.className = 'sys';
+    sysNote.classList.add('sysnote');
+    sysNote.textContent = sysEl.value;
+    const sysWrap = document.createElement('div');
+    sysWrap.className = 'msg';
+    const sysBubble = document.createElement('div');
+    sysBubble.className = 'bubble';
+    sysBubble.appendChild(sysNote);
+    sysWrap.appendChild(sysBubble);
+    chat.appendChild(sysWrap);
+  </script>
 </body>
 </html>
