@@ -1,220 +1,247 @@
 <!--
-Project: Tiny Chat MVP (Lane A)
-Description: Single-file HTML chatbot UI. Works in two modes:
-  - Demo mode (no key): local canned/reflective responses so the page always works.
-  - Real mode (HF Router): paste your HF token; calls /v1/chat/completions.
-
-Controls & Keys:
-  - Top bar: Mode switch, HF Token (only used in Real mode), Model id, Temperature, System Prompt.
-  - Chat box: Enter to send. "Clear" resets the conversation.
-
-Tested:
-  - Chrome on Chromebook.
-  - GitHub Pages (HTTPS) — required for fetch & clipboard APIs.
-
-Known limitations:
-  - If you use Real mode, the token is entered client-side at runtime (not stored in code),
-    which is fine for personal testing but not for production.
-  - CORS/quotas come from Hugging Face; errors will surface in the UI.
-  - No streaming to keep code small.
-
-How to deploy:
-  1) Create a repo with this single file named index.html.
-  2) Enable GitHub Pages (main branch / root).
-  3) Open the Pages URL. Use Demo mode immediately, or switch to Real mode and paste HF token.
+Project: Harmonic Rings — a one-file VR toy
+Description: Float through a minimal space, move with left thumbstick, fire glowing rings with right trigger to "ping" harmonic orbs.
+Controls:
+  Desktop: WASD to move (head), mouse click to shoot from camera.
+  VR (Quest 2): Left thumbstick to move the rig; Right trigger to shoot; Left trigger to spawn a new orb; Any grip to clear rings/orbs.
+Tested: Chrome (Chromebook), Meta Quest 2 browser. A-Frame 1.5.0.
+Notes: No external assets beyond A-Frame CDN. Collision is radius-based; rings auto-cleanup. Keep frame time light: ~15 orbs max.
+How to deploy: Save as index.html → commit to GitHub Pages repo → open your Pages URL (or load locally with a static server).
 -->
 <!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Tiny Chat MVP — Lane A</title>
+  <title>Harmonic Rings — VIBE Toy</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no"/>
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
   <style>
-    :root{--bg:#0b0c10;--panel:#111218;--muted:#a3a3a3;--text:#eaeaea;--accent:#6ee7ff;--border:#1f2430}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,Segoe UI,Roboto,Helvetica,Arial}
-    header{position:sticky;top:0;background:linear-gradient(180deg,var(--panel),rgba(17,18,24,.95));backdrop-filter:saturate(140%) blur(6px);border-bottom:1px solid var(--border);padding:10px 12px;z-index:5}
-    .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-    .title{font-weight:700}
-    label{font-size:12px;color:var(--muted)}
-    input,select,textarea,button{background:#0f1117;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px}
-    input,select{height:40px}
-    input[type="password"]{letter-spacing:0.05em}
-    button{cursor:pointer}
-    button.primary{background:#131a22;border-color:#223;box-shadow:0 0 0 1px rgba(110,231,255,.06) inset}
-    button.primary:hover{box-shadow:0 0 0 1px rgba(110,231,255,.2) inset}
-    main{max-width:840px;margin:0 auto;padding:12px}
-    .bar{display:grid;grid-template-columns:repeat(12,1fr);gap:8px}
-    .bar > *{min-width:130px}
-    .span3{grid-column:span 3} .span2{grid-column:span 2} .span4{grid-column:span 4} .span6{grid-column:span 6} .span12{grid-column:span 12}
-    .chat{display:flex;flex-direction:column;gap:10px;margin:14px 0 90px}
-    .msg{display:flex;gap:10px;align-items:flex-start}
-    .bubble{padding:10px 12px;border:1px solid var(--border);border-radius:14px;max-width:85%}
-    .user .bubble{background:#151a22}
-    .assistant .bubble{background:#101418}
-    .sys{font-size:12px;color:var(--muted)}
-    .inputdock{position:fixed;left:0;right:0;bottom:0;background:linear-gradient(180deg,rgba(11,12,16,.2),var(--panel));border-top:1px solid var(--border);padding:12px}
-    .inputrow{max-width:840px;margin:0 auto;display:flex;gap:8px}
-    .inputrow input{flex:1}
-    .small{font-size:12px;color:var(--muted)}
+    html, body { margin:0; height:100%; background:#0a0c12; font-family:system-ui, sans-serif; }
+    #hud {
+      position: fixed; left: 12px; bottom: 12px; color: #cfe8ff; opacity:.9;
+      background: rgba(12,16,24,.55); padding:10px 12px; border:1px solid #2a3244; border-radius:10px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.25); backdrop-filter: blur(4px); max-width: 420px;
+    }
+    #hud b{color:#9ad0ff}
+    #badge { position: fixed; right: 12px; top: 12px; color: #7aa7ff; opacity:.75; font-size:12px; letter-spacing:.04em;}
+    a-scene { background: radial-gradient(1200px 600px at 30% 10%, #141a25, #0a0c12); }
   </style>
 </head>
 <body>
-  <header>
-    <div class="row" style="justify-content:space-between">
-      <div class="title">💬 Tiny Chat MVP — Lane A</div>
-      <div class="row">
-        <button id="clearBtn" title="Reset conversation">Clear</button>
-      </div>
-    </div>
-    <div class="bar">
-      <div class="span2">
-        <label>Mode</label>
-        <select id="mode">
-          <option>Demo (no key)</option>
-          <option>Hugging Face Inference API</option>
-        </select>
-      </div>
-      <div class="span3">
-        <label>HF Token (Real mode)</label>
-        <input id="token" type="password" placeholder="paste HF_TOKEN here"/>
-      </div>
-      <div class="span3">
-        <label>Model (HF Router id)</label>
-        <input id="model" value="openai/gpt-oss-20b" />
-      </div>
-      <div class="span2">
-        <label>Temperature</label>
-        <input id="temp" type="number" step="0.1" min="0" max="1.5" value="0.7"/>
-      </div>
-      <div class="span12">
-        <label>System prompt</label>
-        <input id="system" value="You are a concise, friendly assistant."/>
-      </div>
-    </div>
-    <div class="small">Tip: In Real mode, the token is only used in this session (not stored). For public demos without secrets, stay in Demo mode.</div>
-  </header>
-
-  <main>
-    <div class="chat" id="chat"></div>
-  </main>
-
-  <div class="inputdock">
-    <div class="inputrow">
-      <input id="userInput" placeholder="Type a message and press Enter…"/>
-      <button class="primary" id="sendBtn">Send</button>
-    </div>
+  <div id="hud">
+    <div><b>Harmonic Rings</b> — left stick = move • right trigger = shoot • left trigger = spawn orb • grip = clear • click = shoot (desktop)</div>
   </div>
+  <div id="badge">VIBE build · single file</div>
 
-  <script>
-    const el = (q) => document.querySelector(q);
-    const chat = el('#chat');
-    const modeEl = el('#mode');
-    const tokenEl = el('#token');
-    const modelEl = el('#model');
-    const tempEl  = el('#temp');
-    const sysEl   = el('#system');
-    const inputEl = el('#userInput');
+  <a-scene renderer="colorManagement: true; physicallyCorrectLights: true; antialias: true"
+           xr-mode-ui="enabled: true"
+           background="color: #0b0f17">
+    <!-- Lighting -->
+    <a-entity light="type: ambient; intensity: 0.35; color: #6ab0ff"></a-entity>
+    <a-entity light="type: directional; intensity: 0.8; castShadow: false" position="2 4 2"></a-entity>
 
-    let messages = [{ role: "system", content: sysEl.value }];
+    <!-- Floor -->
+    <a-plane rotation="-90 0 0" width="80" height="80"
+             material="color: #0f141e; metalness:.1; roughness:.9; opacity:.95"></a-plane>
 
-    function addMessage(role, content){
-      const wrap = document.createElement('div');
-      wrap.className = 'msg ' + (role === 'user' ? 'user' : role === 'assistant' ? 'assistant' : 'system');
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = content;
-      wrap.appendChild(bubble);
-      chat.appendChild(wrap);
-      chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
-    }
+    <!-- A subtle glowing ring as a horizon -->
+    <a-ring position="0 1.6 -12" radius-inner="7.5" radius-outer="8"
+            material="color:#1f5bff; emissive:#1f5bff; emissiveIntensity:.15; opacity:.25; transparent:true"></a-ring>
 
-    function demoReply(text){
-      const canned = {
-        hello: "Hey! 👋 What would you like to build?",
-        hi: "Hi! Ready to prototype something?",
-        help: "Tell me your goal in one sentence and I’ll outline next steps.",
-        joke: "Why did the developer go broke? They cleared their cache."
-      };
-      const low = text.trim().toLowerCase();
-      for (const k in canned){ if (low.includes(k)) return canned[k]; }
-      return `You said: “${text}”. Next action: state your goal + constraints. I’ll suggest a plan.`;
-    }
+    <!-- Camera rig with hands -->
+    <a-entity id="rig" position="0 1.6 4" thumbstick-move="hand:#leftHand; speed: 2.0">
+      <a-entity id="head" camera look-controls wasd-controls="acceleration:18"></a-entity>
+      <a-entity id="leftHand"  oculus-touch-controls="hand: left"></a-entity>
+      <a-entity id="rightHand" oculus-touch-controls="hand: right"></a-entity>
+    </a-entity>
 
-    async function hfChat(messages, model, temperature, token){
-      const url = "https://router.huggingface.co/v1/chat/completions";
-      const payload = { model, messages, temperature, stream: false };
-      const r = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Authorization": "Bearer " + token,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-      });
-      if (!r.ok){
-        const t = await r.text();
-        throw new Error(`HF API error ${r.status}: ${t.slice(0,200)}`);
-      }
-      const data = await r.json();
-      return data.choices?.[0]?.message?.content ?? "(no content)";
-    }
+    <!-- Container for dynamic stuff -->
+    <a-entity id="orbField"></a-entity>
+    <a-entity id="fx"></a-entity>
 
-    function setSystem(){
-      messages[0] = { role: "system", content: sysEl.value };
-      // update visible sys note
-      const sysNote = document.querySelector('.sysnote');
-      if (sysNote) sysNote.textContent = sysEl.value;
-    }
+    <a-sky color="#0a0e16"></a-sky>
+  </a-scene>
 
-    async function send(){
-      const text = inputEl.value.trim();
-      if (!text) return;
-      inputEl.value = "";
-      addMessage("user", text);
-      messages.push({ role: "user", content: text });
+<script>
+/* ===== Small helpers ===== */
+const THREEV = () => AFRAME.THREE;
 
-      let reply = "";
-      addMessage("assistant", "…");
-      const lastBubble = chat.lastElementChild.querySelector('.bubble');
+// Micro beep (WebAudio) for hits
+function beep(freq=420, dur=0.08, gain=0.04){
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.frequency.value = freq; osc.type = 'sine';
+    g.gain.value = gain; osc.connect(g); g.connect(ctx.destination);
+    osc.start(); setTimeout(()=>{osc.stop(); ctx.close();}, dur*1000);
+  } catch(e){}
+}
 
-      try{
-        if (modeEl.value.startsWith("Demo")){
-          await new Promise(r => setTimeout(r, 200));
-          reply = demoReply(text);
-        } else {
-          const token = tokenEl.value.trim();
-          if (!token) throw new Error("No HF token provided. Paste your HF token or switch to Demo mode.");
-          // messages already includes system/user history
-          reply = await hfChat(messages, modelEl.value.trim(), parseFloat(tempEl.value), token);
-        }
-        lastBubble.textContent = reply;
-        messages.push({ role: "assistant", content: reply });
-      } catch(err){
-        lastBubble.textContent = "⚠️ " + (err?.message || err);
-      }
-    }
+/* ===== Components ===== */
 
-    // UI bindings
-    el('#sendBtn').addEventListener('click', send);
-    inputEl.addEventListener('keydown', (e)=>{ if (e.key === 'Enter') send(); });
-    el('#clearBtn').addEventListener('click', ()=>{
-      messages = [{ role: "system", content: sysEl.value }];
-      chat.innerHTML = "";
+// Move the whole rig using left thumbstick (relative to head yaw)
+AFRAME.registerComponent('thumbstick-move', {
+  schema: { hand: {type:'selector'}, speed: {default: 2.0} },
+  init(){
+    this.vec = {x:0,y:0};
+    this.head = document.getElementById('head');
+    if (!this.data.hand) return;
+    this.data.hand.addEventListener('axismove', (e)=>{
+      const ax = e.detail.axis || e.detail; // fallback
+      const x = +(ax[0] || 0), y = +(ax[1] || 0);
+      // Deadzone
+      this.vec.x = Math.abs(x) > 0.12 ? x : 0;
+      this.vec.y = Math.abs(y) > 0.12 ? y : 0;
     });
-    sysEl.addEventListener('change', setSystem);
+  },
+  tick(time, dt){
+    const dts = dt/1000; if (!this.head) return;
+    const yaw = this.head.object3D.rotation.y;
+    const sp = this.data.speed * dts;
+    const strafe = this.vec.x * sp, forward = -this.vec.y * sp;
+    if (strafe || forward){
+      const rig = this.el.object3D.position;
+      rig.x += (forward*Math.sin(yaw)) + (strafe*Math.cos(yaw));
+      rig.z += (forward*Math.cos(yaw)) - (strafe*Math.sin(yaw));
+    }
+  }
+});
 
-    // boot with a friendly note
-    const sysNote = document.createElement('div');
-    sysNote.className = 'sys';
-    sysNote.classList.add('sysnote');
-    sysNote.textContent = sysEl.value;
-    const sysWrap = document.createElement('div');
-    sysWrap.className = 'msg';
-    const sysBubble = document.createElement('div');
-    sysBubble.className = 'bubble';
-    sysBubble.appendChild(sysNote);
-    sysWrap.appendChild(sysBubble);
-    chat.appendChild(sysWrap);
-  </script>
+// Decorative / interactive floating orb
+AFRAME.registerComponent('harmonic-orb', {
+  schema:{ hue:{default:200}, amp:{default:.3}, speed:{default:.6}, baseY:{default:1.4} },
+  init(){
+    this.t0 = performance.now() * 0.001 * (0.8 + Math.random()*0.4);
+    this.r = 0.28 + Math.random()*0.07;
+    this.el.setAttribute('geometry', `primitive: sphere; radius: ${this.r}`);
+    const c = `hsl(${this.data.hue}, 85%, 62%)`;
+    this.el.setAttribute('material', `color:${c}; emissive:${c}; emissiveIntensity:.25; metalness:.1; roughness:.4`);
+    this.el.classList.add('orb');
+  },
+  tick(time, dt){
+    const t = (time*0.001 - this.t0);
+    const y = this.data.baseY + Math.sin(t * this.data.speed) * this.data.amp;
+    const o3d = this.el.object3D; o3d.position.y = y;
+  }
+});
+
+// Simple forward-moving projectile ring with lifespan + orb collision
+AFRAME.registerComponent('projectile', {
+  schema:{ dir: {type:'vec3'}, speed:{default:9}, life:{default:3500} },
+  init(){
+    this.start = null;
+    this.pos = new THREEV().Vector3();
+    this.dir = new THREEV().Vector3(this.data.dir.x, this.data.dir.y, this.data.dir.z).normalize();
+    this.el.classList.add('ring');
+    // subtle scale pulse
+    this.el.setAttribute('animation__pulse', 'property: scale; dir: alternate; dur: 260; easing: easeInOutSine; loop: true; to: 1.1 1.1 1.1');
+  },
+  tick(time, dt){
+    if (this.start === null) this.start = time;
+    const o3d = this.el.object3D;
+    o3d.getWorldPosition(this.pos);
+    const step = (this.data.speed * dt/1000);
+    this.pos.addScaledVector(this.dir, step);
+    o3d.position.copy(this.pos);
+
+    // collision with nearest orb (radius check)
+    const orbs = document.querySelectorAll('.orb');
+    for (let i=0;i<orbs.length;i++){
+      const p = new THREEV().Vector3(); orbs[i].object3D.getWorldPosition(p);
+      if (this.pos.distanceTo(p) < 0.35){
+        // fx: flash orb, beep, and re-seed somewhere else
+        try{
+          orbs[i].setAttribute('material','emissiveIntensity', .9);
+          setTimeout(()=>orbs[i].setAttribute('material','emissiveIntensity', .25), 90);
+        }catch(e){}
+        beep(380 + Math.random()*180, 0.07, 0.06);
+        // relocate orb
+        relocateOrb(orbs[i]);
+        this.el.parentNode && this.el.parentNode.removeChild(this.el);
+        return;
+      }
+    }
+    // cleanup
+    if (time - this.start > this.data.life){
+      this.el.parentNode && this.el.parentNode.removeChild(this.el);
+    }
+  }
+});
+
+/* ===== Scene wiring ===== */
+const sceneReady = () => new Promise(res => {
+  const sc = document.querySelector('a-scene');
+  if (sc.hasLoaded) return res();
+  sc.addEventListener('loaded', res);
+});
+
+function shoot(fromEl){
+  const scene = document.querySelector('a-scene');
+  const ring = document.createElement('a-entity');
+  ring.setAttribute('geometry','primitive: torus; radius: 0.14; tube: 0.02; segmentsTubular: 40');
+  ring.setAttribute('material','color:#59b6ff; emissive:#59b6ff; emissiveIntensity:.4; metalness:.2; roughness:.6; opacity:.95; transparent:true');
+
+  // origin + direction
+  const dir = new THREEV().Vector3();
+  const pos = new THREEV().Vector3();
+  fromEl.object3D.getWorldDirection(dir); // forward
+  fromEl.object3D.getWorldPosition(pos);
+  ring.setAttribute('position', `${pos.x} ${pos.y} ${pos.z}`);
+  ring.setAttribute('projectile', `speed: 10; dir: ${dir.x} ${dir.y} ${dir.z}; life: 3200`);
+  document.getElementById('fx').appendChild(ring);
+}
+
+function spawnOrbAround(originEl, radius=3.5){
+  const orb = document.createElement('a-entity');
+  const angle = Math.random()*Math.PI*2;
+  const dist = radius + Math.random()*3.5;
+  const o = new THREEV().Vector3();
+  originEl.object3D.getWorldPosition(o);
+  const x = o.x + Math.sin(angle)*dist;
+  const z = o.z + Math.cos(angle)*dist;
+  const y = 1.4 + (Math.random()*0.8 - 0.4);
+  orb.setAttribute('position', `${x} ${y} ${z}`);
+  orb.setAttribute('harmonic-orb', `hue:${180 + Math.floor(Math.random()*120)}; baseY:${y}`);
+  document.getElementById('orbField').appendChild(orb);
+  return orb;
+}
+function relocateOrb(orb){
+  const head = document.getElementById('head');
+  const angle = Math.random()*Math.PI*2;
+  const dist = 5 + Math.random()*6;
+  const o = new THREEV().Vector3(); head.object3D.getWorldPosition(o);
+  const x = o.x + Math.sin(angle)*dist;
+  const z = o.z + Math.cos(angle)*dist;
+  const y = 1.3 + (Math.random()*0.9 - 0.45);
+  orb.setAttribute('position', `${x} ${y} ${z}`);
+}
+
+function clearAll(){
+  const nuke = sel => document.querySelectorAll(sel).forEach(el => el.parentNode && el.parentNode.removeChild(el));
+  nuke('.ring'); nuke('.orb');
+}
+
+/* ===== Boot ===== */
+sceneReady().then(()=>{
+  const head = document.getElementById('head');
+  const left = document.getElementById('leftHand');
+  const right = document.getElementById('rightHand');
+
+  // Seed a few orbs out front
+  for (let i=0;i<7;i++) spawnOrbAround(head, 4 + i*0.3);
+
+  // Desktop click shoots from camera
+  document.body.addEventListener('mousedown', ()=> shoot(head));
+
+  // VR input
+  right.addEventListener('triggerdown', ()=> shoot(right));
+  left.addEventListener('triggerdown',  ()=> spawnOrbAround(head, 4));
+
+  // Any grip clears scene
+  right.addEventListener('gripdown', clearAll);
+  left.addEventListener('gripdown', clearAll);
+});
+</script>
 </body>
 </html>
